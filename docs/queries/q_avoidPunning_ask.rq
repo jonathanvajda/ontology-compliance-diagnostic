@@ -16,10 +16,10 @@ ASK WHERE {
     (owl:ObjectProperty owl:AnnotationProperty)
 
     (owl:DatatypeProperty owl:AnnotationProperty)
-    # add more pairs if you want (see next section)
   }
 
   ?resource rdf:type ?t1 ;
             rdf:type ?t2 .
   FILTER(isIRI(?resource))
+  FILTER NOT EXISTS { ?resource rdf:type owl:Ontology }
 }
