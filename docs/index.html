@@ -7,25 +7,14 @@
 </head>
 <body>
   <div class="ocq-app ocq-theme-light" id="appRoot">
-
-    <div class="ocq-theme-toggle-bar">
-      <button id="ocqThemeToggleBtn"
-              class="ocq-btn"
-              type="button"
-              aria-label="Toggle light and dark theme">
-        Toggle theme
-      </button>
-    </div>
-
-<div class="ocq-header">
-      <div class="ocq-header-left">
-        <h1 class="ocq-h1">Ontology Checks</h1>
-        <p class="ocq-lede">
-    Select an ontology file (e.g., TTL) and click "Run checks".<br />
-    Results will be logged to the browser console, and a per-resource curation table will appear below.
-  </p></p>
-      </div>
-
+    <div class="ocq-header">
+        <div class="ocq-header-left">
+          <h1 class="ocq-h1">Ontology Checks</h1>
+          <p class="ocq-lede">
+            Select an ontology file (e.g., TTL) and click "Run checks".<br />
+            Results will be logged to the browser console, and a per-resource curation table will appear below.
+          </p></p>
+        </div>
       <div class="ocq-header-right">
         <button id="ocqThemeToggleBtn"
                 class="ocq-btn ocq-btn-secondary"
@@ -76,37 +65,37 @@
       </div>
     </div>
 
-  <div id="status" class="ocq-status" aria-live="polite"></div>
+    <div id="status" class="ocq-status" aria-live="polite"></div>
 
-  <div id="dashboardContainer" class="ocq-section ocq-card"></div>
+    <div id="dashboardContainer" class="ocq-section ocq-card"></div>
 
-    <!-- Container for the ontology-level report -->
-    <div id="ontologyReportContainer" class="ocq-section ocq-card"></div>
+      <!-- Container for the ontology-level report -->
+      <div id="ontologyReportContainer" class="ocq-section ocq-card"></div>
 
-      <div id="curationFilters">
-      <label>
-        Curation status:
-        <select id="statusFilter">
-          <option value="">All</option>
-          <option value="uncurated">Uncurated</option>
-          <option value="metadata incomplete">Metadata incomplete</option>
-          <option value="metadata complete">Metadata complete</option>
-          <option value="pending final vetting">Pending final vetting</option>
-        </select>
-      </label>
+        <div id="curationFilters">
+        <label>
+          Curation status:
+          <select id="statusFilter">
+            <option value="">All</option>
+            <option value="uncurated">Uncurated</option>
+            <option value="metadata incomplete">Metadata incomplete</option>
+            <option value="metadata complete">Metadata complete</option>
+            <option value="pending final vetting">Pending final vetting</option>
+          </select>
+        </label>
 
-      <label>
-        Fails requirement/recommendation:
-        <select id="requirementFilter">
-          <option value="">Any</option>
-          <!-- dynamically populate with manifest.requirements IDs + labels -->
-        </select>
-      </label>
-    </div>
-  <!-- Container for the per-resource curation table -->
-  <div id="curationTableContainer" class="ocq-section ocq-card"></div>
+        <label>
+          Fails requirement/recommendation:
+          <select id="requirementFilter">
+            <option value="">Any</option>
+            <!-- dynamically populate with manifest.requirements IDs + labels -->
+          </select>
+        </label>
+      </div>
+    <!-- Container for the per-resource curation table -->
+    <div id="curationTableContainer" class="ocq-section ocq-card"></div>
 
-  <div id="requirementDetailContainer" class="ocq-section ocq-card"></div>
+    <div id="requirementDetailContainer" class="ocq-section ocq-card"></div>
  
   </div>
 

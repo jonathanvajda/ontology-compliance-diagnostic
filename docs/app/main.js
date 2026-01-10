@@ -39,7 +39,7 @@ function toggleTheme() {
   setTheme(isDark ? 'ocq-theme-light' : 'ocq-theme-dark');
 }
 
-addEventListener.getElementById(themeToggleBtn)?.addEventListener('click', toggleTheme);
+document.getElementById(themeToggleBtn)?.addEventListener('click', toggleTheme);
 
 // Init on load
 (function initTheme() {
