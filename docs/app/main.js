@@ -439,10 +439,10 @@ function renderCurationTable(perResource) {
   html += '<table class="ocq-table">';
   html += '<thead class="ocq-table-head"><tr>' +
           '<th class="ocq-table-th">Resource</th>' +
-          '<th class="ocq-table-th">Details</th>' +
           '<th class="ocq-table-th">Curation Status</th>' +
           '<th class="ocq-table-th">Failed Requirements</th>' +
           '<th class="ocq-table-th">Failed Recommendations</th>' +
+          '<th class="ocq-table-th">Details</th>' +
           '</tr></thead><tbody>';
 
   for (const row of perResource) {
