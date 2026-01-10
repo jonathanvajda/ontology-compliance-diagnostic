@@ -3,7 +3,36 @@
    Scoped UX styles
    ========================= */
 
+
+/* ===== Full page theming root ===== */
+
+.ocq-body {
+  margin: 0;
+  background: #ffffff; /* fallback before appRoot loads */
+}
+
+/* Ensure all “card/section” containers explicitly inherit readable text */
+.ocq-app .ocq-section,
+.ocq-app .ocq-card,
+.ocq-app .ocq-detail {
+  color: var(--ocq-text);
+}
+
+/* If you have any plain containers without classes, add this class to them */
+.ocq-app .ocq-text {
+  color: var(--ocq-text);
+}
+
+.ocq-app .ocq-muted {
+  color: var(--ocq-text-muted);
+}
+
 .ocq-app {
+  /* Full viewport height */
+  min-height: 100vh;
+  background: var(--ocq-bg);
+  color: var(--ocq-text);
+
   /* Typography */
   --ocq-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji";
   --ocq-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -99,7 +128,9 @@
    Base layout utilities
    ========================= */
 
+/* Your page padding area also inherits theme */
 .ocq-app .ocq-page {
+  min-height: 100vh;
   background: var(--ocq-bg);
   color: var(--ocq-text);
   padding: var(--ocq-space-4);

@@ -26,19 +26,23 @@ let lastOntologyReport = null;
 let lastManifest = null; // if you want it
 
 const appRoot = document.getElementById('appRoot');
+const themeToggleBtn = document.getElementById('ocqThemeToggleBtn');
 
-function setTheme(theme) {
+function setTheme(themeClass) {
+  if (!appRoot) return;
+
   appRoot.classList.remove('ocq-theme-light', 'ocq-theme-dark');
-  appRoot.classList.add(theme);
-  localStorage.setItem('ocq-theme', theme);
+  appRoot.classList.add(themeClass);
+
+  localStorage.setItem('ocq-theme', themeClass);
 }
 
 function toggleTheme() {
+  if (!appRoot) return;
+
   const isDark = appRoot.classList.contains('ocq-theme-dark');
   setTheme(isDark ? 'ocq-theme-light' : 'ocq-theme-dark');
 }
-
-document.getElementById('ocqThemeToggleBtn')?.addEventListener('click', toggleTheme);
 
 // Init on load
 (function initTheme() {
@@ -47,6 +51,10 @@ document.getElementById('ocqThemeToggleBtn')?.addEventListener('click', toggleTh
     setTheme(saved);
   }
 })();
+
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener('click', toggleTheme);
+}
 
 
 function escapeHtml(str) {
