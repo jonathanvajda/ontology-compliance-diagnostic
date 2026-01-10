@@ -699,37 +699,5 @@ btnYaml.addEventListener('click', () => {
   downloadTextFile('ontology-report.yaml', yaml, 'text/yaml');
 });
 
-function populateRequirementFilter(manifest) {
-  const select = document.getElementById('requirementFilter');
-  manifest.requirements.forEach(req => {
-    const opt = document.createElement('option');
-    opt.value = req.id;
-    opt.textContent = req.id; // or `${req.id} (${req.type})`
-    select.appendChild(opt);
-  });
-}
-
-function applyResourceFilters() {
-  if (!lastPerResource) return;
-  const statusValue = document.getElementById('statusFilter').value;
-  const reqValue = document.getElementById('requirementFilter').value;
-
-  let filtered = lastPerResource;
-
-  if (statusValue) {
-    filtered = filtered.filter(row => row.statusLabel === statusValue);
-  }
-
-  if (reqValue) {
-    filtered = filtered.filter(row => {
-      // row.failedRequirements and row.failedRecommendations are arrays of IDs
-      return row.failedRequirements.includes(reqValue) ||
-             row.failedRecommendations.includes(reqValue);
-    });
-  }
-
-  renderCurationTable(filtered);
-}
-
 document.getElementById('statusFilter').addEventListener('change', applyResourceFilters);
 document.getElementById('requirementFilter').addEventListener('change', applyResourceFilters);
