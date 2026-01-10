@@ -14,16 +14,129 @@ const runBatchBtn = document.getElementById('runBatchBtn');
 const btnCsv = document.getElementById('downloadResultsCsvBtn');
 const btnYaml = document.getElementById('downloadOntologyYamlBtn');
 const statusEl = document.getElementById('status');
-const tableContainer = document.getElementById('curationTableContainer');
+const curationTableContainer = document.getElementById('curationTableContainer');
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
 const requirementDetailContainer = document.getElementById('requirementDetailContainer');
 const dashboardContainer = document.getElementById('dashboardContainer');
 
+if (curationTableContainer) {
+  curationTableContainer.addEventListener('click', function (event) {
+    const btn = event.target.closest('button[data-toggle-resource-detail]');
+    if (!btn) return;
+
+    const resourceIri = btn.getAttribute('data-toggle-resource-detail');
+    if (!resourceIri) return;
+
+    toggleResourceDetail(resourceIri);
+  });
+}
+
 
 let lastResults = null;
 let lastPerResource = null;
+let lastFailuresIndex = null; 
 let lastOntologyReport = null;
-let lastManifest = null; // if you want it
+
+function buildFailuresIndex(results) {
+  const byResource = new Map();
+
+  if (!Array.isArray(results)) return byResource;
+
+  for (const row of results) {
+    if (!row || row.status !== 'fail') continue;
+
+    const { resource, requirementId, queryId } = row;
+    if (!resource || !requirementId || !queryId) continue;
+
+    if (!byResource.has(resource)) byResource.set(resource, new Map());
+    const byReq = byResource.get(resource);
+
+    if (!byReq.has(requirementId)) byReq.set(requirementId, new Set());
+    byReq.get(requirementId).add(queryId);
+  }
+
+  return byResource;
+}
+
+function safeIdFromIri(iri) {
+  return String(iri || '')
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .slice(0, 80);
+}
+
+function cssEscapeAttr(value) {
+  return String(value).replace(/"/g, '\\"');
+}
+
+let lastManifest = null;
+let lastPerResourceFull = null; // unfiltered source of truth
+
+const statusFilterEl = document.getElementById('statusFilter');
+const requirementFilterEl = document.getElementById('requirementFilter');
+const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+const curationFiltersSummaryEl = document.getElementById('curationFiltersSummary');
+
+function populateRequirementFilter(manifest) {
+  if (!requirementFilterEl) return;
+
+  // Reset to default
+  requirementFilterEl.innerHTML = '<option value="">Any</option>';
+
+  if (!manifest || !Array.isArray(manifest.requirements)) return;
+
+  for (const req of manifest.requirements) {
+    if (!req || !req.id) continue;
+
+    const opt = document.createElement('option');
+    opt.value = req.id;
+
+    // Keep label simple and diff-friendly; you can enrich later
+    opt.textContent = req.id + (req.type ? ` (${req.type})` : '');
+
+    requirementFilterEl.appendChild(opt);
+  }
+}
+
+function applyResourceFilters() {
+  if (!lastPerResourceFull) return;
+
+  const statusValue = statusFilterEl ? statusFilterEl.value : '';
+  const requirementValue = requirementFilterEl ? requirementFilterEl.value : '';
+
+  let filtered = lastPerResourceFull;
+
+  if (statusValue) {
+    filtered = filtered.filter(r => r.statusLabel === statusValue);
+  }
+
+  if (requirementValue) {
+    filtered = filtered.filter(r => {
+      const fr = Array.isArray(r.failedRequirements) ? r.failedRequirements : [];
+      const frec = Array.isArray(r.failedRecommendations) ? r.failedRecommendations : [];
+      return fr.includes(requirementValue) || frec.includes(requirementValue);
+    });
+  }
+
+  if (curationFiltersSummaryEl) {
+    const total = lastPerResourceFull.length;
+    const shown = filtered.length;
+    curationFiltersSummaryEl.textContent =
+      `Showing ${shown} of ${total} resources.`;
+  }
+
+  renderCurationTable(filtered);
+}
+
+function clearResourceFilters() {
+  if (statusFilterEl) statusFilterEl.value = '';
+  if (requirementFilterEl) requirementFilterEl.value = '';
+  applyResourceFilters();
+}
+
+if (statusFilterEl) statusFilterEl.addEventListener('change', applyResourceFilters);
+if (requirementFilterEl) requirementFilterEl.addEventListener('change', applyResourceFilters);
+if (clearFiltersBtn) clearFiltersBtn.addEventListener('click', clearResourceFilters);
+
 
 const appRoot = document.getElementById('appRoot');
 const themeToggleBtn = document.getElementById('ocqThemeToggleBtn');
@@ -162,11 +275,11 @@ function renderRequirementDetail(requirementId) {
   if (!entries.length) {
     html += `<p>No failing resources found in details.</p>`;
   } else {
-    html += `<table border="1" cellspacing="0" cellpadding="4">
-      <thead>
+    html += `<table class="ocq-table">
+      <thead class="ocq-table-head">
         <tr>
-          <th>Resource IRI</th>
-          <th>Failing query IDs</th>
+          <th class="ocq-table-th">Resource IRI</th>
+          <th class="ocq-table-th">Failing query IDs</th>
         </tr>
       </thead>
       <tbody>
@@ -185,6 +298,66 @@ function renderRequirementDetail(requirementId) {
   }
 
   requirementDetailContainer.innerHTML = html;
+}
+
+function toggleResourceDetail(resourceIri) {
+  if (!curationTableContainer) return;
+
+  const detailRow = curationTableContainer.querySelector(
+    'tr[data-resource-detail-row="' + cssEscapeAttr(resourceIri) + '"]'
+  );
+  if (!detailRow) return;
+
+  const isOpen = detailRow.style.display !== 'none';
+
+  if (isOpen) {
+    detailRow.style.display = 'none';
+    return;
+  }
+
+  detailRow.style.display = '';
+
+  const panel = detailRow.querySelector('.ocq-resource-detail');
+  if (!panel) return;
+
+  panel.innerHTML = renderResourceFailureDetailHtml(resourceIri);
+}
+
+function renderResourceFailureDetailHtml(resourceIri) {
+  if (!lastFailuresIndex) {
+    return '<div class="ocq-muted">No failure index available.</div>';
+  }
+
+  const byReq = lastFailuresIndex.get(resourceIri);
+  if (!byReq || byReq.size === 0) {
+    return '<div class="ocq-muted">No failing queries for this resource.</div>';
+  }
+
+  let html = '';
+
+  html += '<div class="ocq-kv">';
+  html += '<div class="ocq-kv-label">Resource</div>';
+  html += '<div class="ocq-kv-value ocq-mono">' + escapeHtml(resourceIri) + '</div>';
+  html += '</div>';
+
+  html += '<table class="ocq-table" style="margin-top:10px;">';
+  html += '<thead class="ocq-table-head"><tr>' +
+          '<th class="ocq-table-th">Requirement ID</th>' +
+          '<th class="ocq-table-th">Failing query IDs</th>' +
+          '</tr></thead><tbody>';
+
+  for (const [reqId, qSet] of byReq.entries()) {
+    html +=
+      '<tr class="ocq-table-tr">' +
+        '<td class="ocq-table-td ocq-mono">' + escapeHtml(reqId) + '</td>' +
+        '<td class="ocq-table-td ocq-mono">' +
+          escapeHtml(Array.from(qSet).join(', ')) +
+        '</td>' +
+      '</tr>';
+  }
+
+  html += '</tbody></table>';
+  return html;
 }
 
 function onOntologyReportRowClick(event) {
@@ -226,13 +399,13 @@ function renderDashboard(batchReports) {
   }
 
   let html = '<h2 class="ocq-title">Ontology dashboard</h2>';
-  html += '<table border="1" cellpadding="4" cellspacing="0">';
-  html += '<thead><tr>' +
-          '<th>File</th>' +
-          '<th>Ontology IRI</th>' +
-          '<th>Status</th>' +
-          '<th># Failed Requirements</th>' +
-          '<th># Failed Recommendations</th>' +
+  html += '<table class="ocq-table">';
+  html += '<thead class="ocq-table-head"><tr>' +
+          '<th class="ocq-table-th">File</th>' +
+          '<th class="ocq-table-th">Ontology IRI</th>' +
+          '<th class="ocq-table-th">Status</th>' +
+          '<th class="ocq-table-th"># Failed Requirements</th>' +
+          '<th class="ocq-table-th"># Failed Recommendations</th>' +
           '</tr></thead><tbody>';
 
   for (const item of batchReports) {
@@ -258,17 +431,18 @@ function renderDashboard(batchReports) {
 // --- Per-resource table ---
 function renderCurationTable(perResource) {
   if (!perResource || perResource.length === 0) {
-    tableContainer.innerHTML = '<p>No curation results to display.</p>';
+    curationTableContainer.innerHTML = '<p>No curation results to display.</p>';
     return;
   }
 
   let html = '<h2 class="ocq-title">Per-resource curation</h2>';
-  html += '<table border="1" cellpadding="4" cellspacing="0">';
-  html += '<thead><tr>' +
-          '<th>Resource</th>' +
-          '<th>Curation Status</th>' +
-          '<th>Failed Requirements</th>' +
-          '<th>Failed Recommendations</th>' +
+  html += '<table class="ocq-table">';
+  html += '<thead class="ocq-table-head"><tr>' +
+          '<th class="ocq-table-th">Resource</th>' +
+          '<th class="ocq-table-th">Details</th>'; +
+          '<th class="ocq-table-th">Curation Status</th>' +
+          '<th class="ocq-table-th">Failed Requirements</th>' +
+          '<th class="ocq-table-th">Failed Recommendations</th>' +
           '</tr></thead><tbody>';
 
   for (const row of perResource) {
@@ -288,10 +462,27 @@ function renderCurationTable(perResource) {
             '<td>' + escapeHtml(reqs) + '</td>' +
             '<td>' + escapeHtml(recs) + '</td>' +
             '</tr>';
+    html +=
+            '<td class="ocq-table-td">' +
+              '<button class="ocq-btn ocq-btn-tertiary ocq-btn-small" ' +
+                      'type="button" ' +
+                      'data-toggle-resource-detail="' + escapeHtml(row.resource) + '">' +
+                'View' +
+              '</button>' +
+            '</td>' +
+          '</tr>';
+    html +=
+          '<tr class="ocq-table-tr ocq-resource-detail-row" ' +
+              'data-resource-detail-row="' + escapeHtml(row.resource) + '" ' +
+              'style="display:none;">' +
+            '<td class="ocq-table-td" colspan="999">' +
+              '<div class="ocq-resource-detail"></div>' +
+            '</td>' +
+          '</tr>';
   }
 
   html += '</tbody></table>';
-  tableContainer.innerHTML = html;
+  curationTableContainer.innerHTML = html;
 }
 
 // --- Ontology report card ---
@@ -421,9 +612,10 @@ btnRun.addEventListener('click', async () => {
   }
 
   statusEl.textContent = 'Reading file…';
-  tableContainer.innerHTML = '';
+  curationTableContainer.innerHTML = '';
   ontologyReportContainer.innerHTML = '';
   dashboardContainer.innerHTML = '';
+
   lastResults = null;
   lastPerResource = null;
   lastOntologyReport = null;
@@ -440,8 +632,14 @@ btnRun.addEventListener('click', async () => {
     const ontologyReport = computeOntologyReport(results, manifest, ontologyIri);
 
     lastResults = results;
-    lastPerResource = perResource;
+    lastFailuresIndex = buildFailuresIndex(lastResults);
+    lastPerResourceFull = perResource; // source of truth for filtering
+    lastPerResource = perResource;      // keep if you use it elsewhere
     lastOntologyReport = ontologyReport;
+    lastManifest = manifest;
+
+    populateRequirementFilter(manifest);
+    applyResourceFilters(); // renders filtered (initially “all”)
 
     renderOntologyReport(ontologyReport);
     renderCurationTable(perResource);
@@ -468,7 +666,7 @@ runBatchBtn.addEventListener('click', async () => {
   }
 
   statusEl.textContent = 'Running batch checks…';
-  tableContainer.innerHTML = '';
+  curationTableContainer.innerHTML = '';
   ontologyReportContainer.innerHTML = '';
 
   const batch = [];
