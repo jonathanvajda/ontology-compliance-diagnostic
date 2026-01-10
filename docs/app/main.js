@@ -336,7 +336,7 @@ function renderResourceFailureDetailHtml(resourceIri) {
   let html = '';
   html += '<table class="ocq-table" style="margin-top:10px;">';
   html += '<thead class="ocq-table-head"><tr>' +
-          '<th class="ocq-table-th">Requirement ID</th>' +
+          '<th class="ocq-table-th">Standardization Code</th>' +
           '<th class="ocq-table-th">Failing query IDs</th>' +
           '</tr></thead><tbody>';
 
@@ -496,7 +496,7 @@ function renderOntologyReport(report) {
 
   html += '<table class="ocq-table">';
   html += '<thead class="ocq-table-head"><tr>' +
-          '<th class="ocq-table-th">Requirement ID</th>' +
+          '<th class="ocq-table-th">Standardization Code</th>' +
           '<th class="ocq-table-th">Type</th>' +
           '<th class="ocq-table-th">Status</th>' +
           '<th class="ocq-table-th">Failed Resources</th>' +
