@@ -16,11 +16,14 @@ const btnYaml = document.getElementById('downloadOntologyYamlBtn');
 const statusEl = document.getElementById('status');
 const tableContainer = document.getElementById('curationTableContainer');
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
+const requirementDetailContainer = document.getElementById('requirementDetailContainer');
 const dashboardContainer = document.getElementById('dashboardContainer');
+
 
 let lastResults = null;
 let lastPerResource = null;
 let lastOntologyReport = null;
+let lastManifest = null; // if you want it
 
 function escapeHtml(str) {
   if (str == null) return '';
@@ -50,6 +53,100 @@ async function evaluateFile(file) {
     results
   };
 }
+
+function renderRequirementDetail(requirementId) {
+  // Make sure we have somewhere to render
+  if (!requirementDetailContainer) {
+    console.warn('requirementDetailContainer element not found.');
+    return;
+  }
+
+  // Make sure we have data to work with
+  if (!lastOntologyReport || !lastResults) {
+    console.warn('No ontology report or results available for requirement detail.');
+    requirementDetailContainer.innerHTML = '<p>No data available for requirement details.</p>';
+    return;
+  }
+
+  // 1) Find the requirement object in the ontology-level report
+  const req = lastOntologyReport.requirements.find(r => r.id === requirementId);
+  if (!req) {
+    console.warn('Requirement not found in lastOntologyReport:', requirementId);
+    requirementDetailContainer.innerHTML = `<p>No details found for ${requirementId}.</p>`;
+    return;
+  }
+
+  // 2) Compute failing rows for this requirement
+  const failingRows = lastResults.filter(
+    r => r.requirementId === requirementId && r.status === 'fail'
+  );
+
+  const queryIds = Array.from(new Set(failingRows.map(r => r.queryId)));
+  const resources = Array.from(new Set(failingRows.map(r => r.resource)));
+
+  // Optional: group by resource → [queryIds]
+  const failuresByResource = new Map();
+  for (const row of failingRows) {
+    if (!failuresByResource.has(row.resource)) {
+      failuresByResource.set(row.resource, new Set());
+    }
+    failuresByResource.get(row.resource).add(row.queryId);
+  }
+
+  // Turn Set into arrays for rendering
+  const entries = Array.from(failuresByResource.entries()).map(([resource, qSet]) => ({
+    resource,
+    queryIds: Array.from(qSet)
+  }));
+
+  // 3) Render into the detail container
+  let html = '';
+  html += `<h3>Requirement: ${req.id}</h3>`;
+  html += `<p>Status: <strong>${req.status}</strong> (${req.type})</p>`;
+  html += `<p>Failing resources: ${resources.length}</p>`;
+
+  if (queryIds.length) {
+    html += `<p>Queries involved: ${queryIds.join(', ')}</p>`;
+  }
+
+  if (!entries.length) {
+    html += `<p>No failing resources found in details.</p>`;
+  } else {
+    html += `<table border="1" cellspacing="0" cellpadding="4">
+      <thead>
+        <tr>
+          <th>Resource IRI</th>
+          <th>Failing query IDs</th>
+        </tr>
+      </thead>
+      <tbody>
+    `;
+
+    for (const item of entries) {
+      html += `
+        <tr>
+          <td>${item.resource}</td>
+          <td>${item.queryIds.join(', ')}</td>
+        </tr>
+      `;
+    }
+
+    html += `</tbody></table>`;
+  }
+
+  requirementDetailContainer.innerHTML = html;
+}
+
+function onOntologyReportRowClick(event) {
+  const row = event.target.closest('tr[data-requirement-id]');
+  if (!row) return;
+
+  const requirementId = row.getAttribute('data-requirement-id');
+  if (!requirementId) return;
+
+  renderRequirementDetail(requirementId);
+}
+
 
 // --- Dashboard for batch mode ---
 function renderDashboard(batchReports) {
@@ -149,7 +246,7 @@ function renderOntologyReport(report) {
     const typeLabel = r.type === 'recommendation' ? 'recommendation' : 'requirement';
     const failedCount = r.failedResourcesCount || 0;
 
-    html += '<tr>' +
+    html += '<tr data-requirement-id="${r.id}">' +
             '<td>' + escapeHtml(r.id) + '</td>' +
             '<td>' + escapeHtml(typeLabel) + '</td>' +
             '<td>' + escapeHtml(r.status) + '</td>' +
@@ -159,6 +256,9 @@ function renderOntologyReport(report) {
 
   html += '</tbody></table>';
   ontologyReportContainer.innerHTML = html;
+  // after innerHTML assignment:
+  ontologyReportContainer.addEventListener('click', onOntologyReportRowClick);
+
 }
 
 // --- Download helpers ---
