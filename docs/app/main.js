@@ -39,6 +39,8 @@ function toggleTheme() {
   setTheme(isDark ? 'ocq-theme-light' : 'ocq-theme-dark');
 }
 
+addEventListener.getElementById(themeToggleBtn)?.addEventListener('click', toggleTheme);
+
 // Init on load
 (function initTheme() {
   const saved = localStorage.getItem('ocq-theme');

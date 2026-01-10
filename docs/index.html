@@ -17,52 +17,97 @@
       </button>
     </div>
 
-  <h1>Ontology Checks - Phase 5</h1>
-
-  <p>
+<div class="ocq-header">
+      <div class="ocq-header-left">
+        <h1 class="ocq-h1">Ontology Checks</h1>
+        <p class="ocq-lede">
     Select an ontology file (e.g., TTL) and click "Run checks".<br />
     Results will be logged to the browser console, and a per-resource curation table will appear below.
-  </p>
+  </p></p>
+      </div>
 
-  <input type="file" id="ontologyFiles" accept=".ttl,.rdf,.owl,.nt,.nq,.trig,.jsonld" multiple />
-  <button id="runChecksBtn">Run checks</button>
-  <button id="runBatchBtn">Run batch checks</button>
-  <div id="dashboardContainer"></div>
-  <div id="requirementDetailContainer"></div>
-  <button id="downloadResultsCsvBtn">Download Results CSV</button>
-  <button id="downloadOntologyYamlBtn">Download Ontology Report YAML</button>
+      <div class="ocq-header-right">
+        <button id="ocqThemeToggleBtn"
+                class="ocq-btn ocq-btn-secondary"
+                type="button"
+                aria-label="Toggle light and dark theme">
+          Toggle theme
+        </button>
+      </div>
+    </div>
 
-  <pre id="status"></pre>
+    <div class="ocq-section ocq-card">
+      <div class="ocq-toolbar">
+        <div class="ocq-toolbar-left">
+          <label class="ocq-label" for="ontologyFiles">Ontology files</label>
 
-  <!-- Container for the ontology-level report -->
-  <div class="ocq-app ocq-theme-light" id="ontologyReportContainer"></div>
+          <div class="ocq-file-row">
+            <input class="ocq-input ocq-input-file"
+                   type="file"
+                   id="ontologyFiles"
+                   accept=".ttl,.rdf,.owl,.nt,.nq,.trig,.jsonld"
+                   multiple />
 
-    <div id="curationFilters">
-    <label>
-      Curation status:
-      <select id="statusFilter">
-        <option value="">All</option>
-        <option value="uncurated">Uncurated</option>
-        <option value="metadata incomplete">Metadata incomplete</option>
-        <option value="metadata complete">Metadata complete</option>
-        <option value="pending final vetting">Pending final vetting</option>
-      </select>
-    </label>
+            <div class="ocq-actions">
+              <button id="runChecksBtn" class="ocq-btn ocq-btn-primary" type="button">
+                Run checks
+              </button>
+              <button id="runBatchBtn" class="ocq-btn ocq-btn-secondary" type="button">
+                Run batch checks
+              </button>
+            </div>
+          </div>
 
-    <label>
-      Fails requirement/recommendation:
-      <select id="requirementFilter">
-        <option value="">Any</option>
-        <!-- dynamically populate with manifest.requirements IDs + labels -->
-      </select>
-    </label>
-  </div>
+          <p class="ocq-help">
+            Tip: For keyboard users, requirement rows are focusable — press Enter/Space to open details.
+          </p>
+        </div>
+
+        <div class="ocq-toolbar-right">
+          <div class="ocq-export">
+            <button id="downloadResultsCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">
+              Download Results CSV
+            </button>
+            <button id="downloadOntologyYamlBtn" class="ocq-btn ocq-btn-tertiary" type="button">
+              Download Ontology Report YAML
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <div id="status" class="ocq-status" aria-live="polite"></div>
+
+  <div id="dashboardContainer" class="ocq-section ocq-card"></div>
+
+    <!-- Container for the ontology-level report -->
+    <div id="ontologyReportContainer" class="ocq-section ocq-card"></div>
+
+      <div id="curationFilters">
+      <label>
+        Curation status:
+        <select id="statusFilter">
+          <option value="">All</option>
+          <option value="uncurated">Uncurated</option>
+          <option value="metadata incomplete">Metadata incomplete</option>
+          <option value="metadata complete">Metadata complete</option>
+          <option value="pending final vetting">Pending final vetting</option>
+        </select>
+      </label>
+
+      <label>
+        Fails requirement/recommendation:
+        <select id="requirementFilter">
+          <option value="">Any</option>
+          <!-- dynamically populate with manifest.requirements IDs + labels -->
+        </select>
+      </label>
+    </div>
   <!-- Container for the per-resource curation table -->
-  <div id="curationTableContainer"></div>
+  <div id="curationTableContainer" class="ocq-section ocq-card"></div>
 
-  <div id="requirementDetailContainer"></div>
-
-
+  <div id="requirementDetailContainer" class="ocq-section ocq-card"></div>
+ 
   </div>
 
   <script src="app/n3.min.js"></script>

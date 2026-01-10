@@ -152,7 +152,7 @@
    ========================= */
 
 .ocq-app .ocq-table {
-  width: 100%;
+  width: 70%;
   border-collapse: separate;
   border-spacing: 0;
   border: var(--ocq-border);
