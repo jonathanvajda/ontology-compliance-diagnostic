@@ -25,6 +25,29 @@ let lastPerResource = null;
 let lastOntologyReport = null;
 let lastManifest = null; // if you want it
 
+const appRoot = document.getElementById('appRoot');
+const themeToggleBtn = document.getElementById('ocqThemeToggleBtn');
+
+function setTheme(theme) {
+  appRoot.classList.remove('ocq-theme-light', 'ocq-theme-dark');
+  appRoot.classList.add(theme);
+  localStorage.setItem('ocq-theme', theme);
+}
+
+function toggleTheme() {
+  const isDark = appRoot.classList.contains('ocq-theme-dark');
+  setTheme(isDark ? 'ocq-theme-light' : 'ocq-theme-dark');
+}
+
+// Init on load
+(function initTheme() {
+  const saved = localStorage.getItem('ocq-theme');
+  if (saved === 'ocq-theme-dark' || saved === 'ocq-theme-light') {
+    setTheme(saved);
+  }
+})();
+
+
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str)
@@ -99,11 +122,29 @@ function renderRequirementDetail(requirementId) {
     queryIds: Array.from(qSet)
   }));
 
-  // 3) Render into the detail container
+  // 3) Render into the detail container 
+
+  function clearRequirementDetail() { // this is called in the table header below
+    if (lastSelectedRequirementRow) {
+      lastSelectedRequirementRow.classList.remove('ocq-row-selected');
+    }
+    lastSelectedRequirementRow = null;
+    lastSelectedRequirementId = null;
+    requirementDetailContainer.innerHTML = '';
+  }
+
   let html = '';
-  html += `<h3>Requirement: ${req.id}</h3>`;
-  html += `<p>Status: <strong>${req.status}</strong> (${req.type})</p>`;
-  html += `<p>Failing resources: ${resources.length}</p>`;
+  html += '<div class="ocq-detail">';
+    html += '<div class="ocq-detail-header">';
+      html += '<h3 class="ocq-detail-title">Requirement: ' + escapeHtml(req.id) + '</h3><button class="ocq-btn" type="button" onclick="clearRequirementDetail()"> Close </button>';
+    html += '</div>';
+    html += '<div class="ocq-detail-meta">Status: <strong>' + escapeHtml(req.status) + '</strong> (' + escapeHtml(req.type) + ')</div>';
+    html += '<div class="ocq-detail-meta">Failing resources: <strong>' + escapeHtml(resources.length) + '</strong></div>';
+  html += '</div>';
+
+
+
+
 
   if (queryIds.length) {
     html += `<p>Queries involved: ${queryIds.join(', ')}</p>`;
@@ -143,6 +184,26 @@ function onOntologyReportRowClick(event) {
 
   const requirementId = row.getAttribute('data-requirement-id');
   if (!requirementId) return;
+
+  // Toggle behavior: same row clicked again
+  if (lastSelectedRequirementId === requirementId) {
+    // Unselect
+    row.classList.remove('ocq-row-selected');
+    requirementDetailContainer.innerHTML = '';
+    lastSelectedRequirementId = null;
+    lastSelectedRequirementRow = null;
+    return;
+  }
+
+  // Clear previous selection
+  if (lastSelectedRequirementRow) {
+    lastSelectedRequirementRow.classList.remove('ocq-row-selected');
+  }
+
+  // Select new row
+  row.classList.add('ocq-row-selected');
+  lastSelectedRequirementRow = row;
+  lastSelectedRequirementId = requirementId;
 
   renderRequirementDetail(requirementId);
 }
@@ -205,9 +266,16 @@ function renderCurationTable(perResource) {
     const reqs = row.failedRequirements.join(', ') || '—';
     const recs = row.failedRecommendations.join(', ') || '—';
 
+    const statusBadgeClass = {
+      'uncurated': 'ocq-badge ocq-badge-danger',
+      'metadata incomplete': 'ocq-badge ocq-badge-warn',
+      'metadata complete': 'ocq-badge ocq-badge-success',
+      'pending final vetting': 'ocq-badge ocq-badge-info'
+    }[row.statusLabel] || 'ocq-badge';
+
     html += '<tr>' +
             '<td>' + escapeHtml(row.resource) + '</td>' +
-            '<td>' + escapeHtml(row.statusLabel) + '</td>' +
+            '<td><span class="' + statusBadgeClass + '">' + escapeHtml(row.statusLabel) + '</span></td>' +
             '<td>' + escapeHtml(reqs) + '</td>' +
             '<td>' + escapeHtml(recs) + '</td>' +
             '</tr>';
@@ -234,30 +302,42 @@ function renderOntologyReport(report) {
     return;
   }
 
-  html += '<table border="1" cellpadding="4" cellspacing="0">';
-  html += '<thead><tr>' +
-          '<th>Requirement ID</th>' +
-          '<th>Type</th>' +
-          '<th>Status</th>' +
-          '<th>Failed Resources</th>' +
+  html += '<table class="ocq-table">';
+  html += '<thead class="ocq-table-head"><tr>' +
+          '<th class="ocq-table-th">Requirement ID</th>' +
+          '<th class="ocq-table-th">Type</th>' +
+          '<th class="ocq-table-th">Status</th>' +
+          '<th class="ocq-table-th">Failed Resources</th>' +
           '</tr></thead><tbody>';
 
   for (const r of report.requirements) {
     const typeLabel = r.type === 'recommendation' ? 'recommendation' : 'requirement';
     const failedCount = r.failedResourcesCount || 0;
-
-    html += '<tr data-requirement-id="${r.id}">' +
-            '<td>' + escapeHtml(r.id) + '</td>' +
-            '<td>' + escapeHtml(typeLabel) + '</td>' +
-            '<td>' + escapeHtml(r.status) + '</td>' +
-            '<td>' + escapeHtml(String(failedCount)) + '</td>' +
-            '</tr>';
-  }
+    const statusBadgeClass =
+    r.status === 'pass'
+      ? 'ocq-badge ocq-badge-success'
+      : 'ocq-badge ocq-badge-danger';
+    html += '<tr class="ocq-table-tr ocq-row-clickable" tabindex="0" data-requirement-id="' + escapeHtml(r.id) + '">' +
+      '<td class="ocq-table-td">' + escapeHtml(r.id) + '</td>' +
+      '<td class="ocq-table-td">' + escapeHtml(typeLabel) + '</td>' +
+      '<td class="ocq-table-td"><span class="' + statusBadgeClass + '">' + escapeHtml(r.status) + '</span></td>' +
+      '<td class="ocq-table-td">' + escapeHtml(String(failedCount)) + '</td>' +
+      '</tr>';
+    }
 
   html += '</tbody></table>';
   ontologyReportContainer.innerHTML = html;
   // after innerHTML assignment:
   ontologyReportContainer.addEventListener('click', onOntologyReportRowClick);
+  ontologyReportContainer.addEventListener('keydown', function (event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+
+    const row = event.target.closest('tr[data-requirement-id]');
+    if (!row) return;
+
+    event.preventDefault(); // prevent space scroll
+    row.click();
+  });
 
 }
 

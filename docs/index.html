@@ -2,10 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Ontology Checks - Phase 3</title>
+  <title>Ontology Checks - Phase 5</title>
 </head>
 <body>
-  <h1>Ontology Checks - Phase 3</h1>
+  <div class="ocq-app ocq-theme-light" id="appRoot">
+
+    <div class="ocq-theme-toggle-bar">
+      <button id="ocqThemeToggleBtn"
+              class="ocq-btn"
+              type="button"
+              aria-label="Toggle light and dark theme">
+        Toggle theme
+      </button>
+    </div>
+
+  <h1>Ontology Checks - Phase 5</h1>
 
   <p>
     Select an ontology file (e.g., TTL) and click "Run checks".<br />
@@ -23,7 +34,7 @@
   <pre id="status"></pre>
 
   <!-- Container for the ontology-level report -->
-  <div id="ontologyReportContainer"></div>
+  <div class="ocq-app ocq-theme-light" id="ontologyReportContainer"></div>
 
     <div id="curationFilters">
     <label>
@@ -49,6 +60,9 @@
   <div id="curationTableContainer"></div>
 
   <div id="requirementDetailContainer"></div>
+
+
+  </div>
 
   <script src="app/n3.min.js"></script>
   <script src="app/comunica-browser.js"></script>
