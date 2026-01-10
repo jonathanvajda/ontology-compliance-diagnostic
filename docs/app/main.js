@@ -288,8 +288,8 @@ function renderRequirementDetail(requirementId) {
     for (const item of entries) {
       html += `
         <tr>
-          <td>${item.resource}</td>
-          <td>${item.queryIds.join(', ')}</td>
+          <td class="ocq-table-td ocq-mono">${item.resource}</td>
+          <td class="ocq-table-td ocq-mono">${item.queryIds.join(', ')}</td>
         </tr>
       `;
     }
@@ -416,11 +416,11 @@ function renderDashboard(batchReports) {
       .filter(r => r.type === 'recommendation' && r.status === 'fail').length;
 
     html += '<tr>' +
-            `<td>${escapeHtml(item.fileName)}</td>` +
-            `<td>${escapeHtml(report.ontologyIri)}</td>` +
-            `<td>${escapeHtml(report.statusLabel)}</td>` +
-            `<td>${failedReqs}</td>` +
-            `<td>${failedRecs}</td>` +
+            `<td class="ocq-table-td ocq-mono">${escapeHtml(item.fileName)}</td>` +
+            `<td class="ocq-table-td ocq-mono">${escapeHtml(report.ontologyIri)}</td>` +
+            `<td class="ocq-table-td ocq-mono">${escapeHtml(report.statusLabel)}</td>` +
+            `<td class="ocq-table-td ocq-mono">${failedReqs}</td>` +
+            `<td class="ocq-table-td ocq-mono">${failedRecs}</td>` +
             '</tr>';
   }
 
@@ -439,7 +439,7 @@ function renderCurationTable(perResource) {
   html += '<table class="ocq-table">';
   html += '<thead class="ocq-table-head"><tr>' +
           '<th class="ocq-table-th">Resource</th>' +
-          '<th class="ocq-table-th">Details</th>'; +
+          '<th class="ocq-table-th">Details</th>' +
           '<th class="ocq-table-th">Curation Status</th>' +
           '<th class="ocq-table-th">Failed Requirements</th>' +
           '<th class="ocq-table-th">Failed Recommendations</th>' +
@@ -457,10 +457,10 @@ function renderCurationTable(perResource) {
     }[row.statusLabel] || 'ocq-badge';
 
     html += '<tr>' +
-            '<td>' + escapeHtml(row.resource) + '</td>' +
-            '<td><span class="' + statusBadgeClass + '">' + escapeHtml(row.statusLabel) + '</span></td>' +
-            '<td>' + escapeHtml(reqs) + '</td>' +
-            '<td>' + escapeHtml(recs) + '</td>' +
+            '<td class="ocq-table-td ocq-mono">' + escapeHtml(row.resource) + '</td>' +
+            '<td class="ocq-table-td ocq-mono"><span class="' + statusBadgeClass + '">' + escapeHtml(row.statusLabel) + '</span></td>' +
+            '<td class="ocq-table-td ocq-mono">' + escapeHtml(reqs) + '</td>' +
+            '<td class="ocq-table-td ocq-mono">' + escapeHtml(recs) + '</td>' +
             '</tr>';
     html +=
             '<td class="ocq-table-td">' +
