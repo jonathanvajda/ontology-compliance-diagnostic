@@ -26,7 +26,6 @@ let lastOntologyReport = null;
 let lastManifest = null; // if you want it
 
 const appRoot = document.getElementById('appRoot');
-const themeToggleBtn = document.getElementById('ocqThemeToggleBtn');
 
 function setTheme(theme) {
   appRoot.classList.remove('ocq-theme-light', 'ocq-theme-dark');
@@ -39,7 +38,7 @@ function toggleTheme() {
   setTheme(isDark ? 'ocq-theme-light' : 'ocq-theme-dark');
 }
 
-document.getElementById(themeToggleBtn)?.addEventListener('click', toggleTheme);
+document.getElementById('ocqThemeToggleBtn')?.addEventListener('click', toggleTheme);
 
 // Init on load
 (function initTheme() {
