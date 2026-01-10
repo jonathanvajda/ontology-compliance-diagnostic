@@ -225,7 +225,7 @@ function renderDashboard(batchReports) {
     return;
   }
 
-  let html = '<h2>Ontology dashboard</h2>';
+  let html = '<h2 class="ocq-title">Ontology dashboard</h2>';
   html += '<table border="1" cellpadding="4" cellspacing="0">';
   html += '<thead><tr>' +
           '<th>File</th>' +
@@ -262,7 +262,7 @@ function renderCurationTable(perResource) {
     return;
   }
 
-  let html = '<h2>Per-resource curation</h2>';
+  let html = '<h2 class="ocq-title">Per-resource curation</h2>';
   html += '<table border="1" cellpadding="4" cellspacing="0">';
   html += '<thead><tr>' +
           '<th>Resource</th>' +
@@ -301,7 +301,7 @@ function renderOntologyReport(report) {
     return;
   }
 
-  let html = '<h2>Ontology report card</h2>';
+  let html = '<h2 class="ocq-title">Ontology report card</h2>';
   html += '<p><strong>Ontology IRI:</strong> ' + escapeHtml(report.ontologyIri) + '</p>';
   html += '<p><strong>Ontology curation status:</strong> ' + escapeHtml(report.statusLabel) + '</p>';
 
