@@ -334,12 +334,6 @@ function renderResourceFailureDetailHtml(resourceIri) {
   }
 
   let html = '';
-
-  html += '<div class="ocq-kv">';
-  html += '<div class="ocq-kv-label">Resource</div>';
-  html += '<div class="ocq-kv-value ocq-mono">' + escapeHtml(resourceIri) + '</div>';
-  html += '</div>';
-
   html += '<table class="ocq-table" style="margin-top:10px;">';
   html += '<thead class="ocq-table-head"><tr>' +
           '<th class="ocq-table-th">Requirement ID</th>' +
@@ -439,7 +433,7 @@ function renderCurationTable(perResource) {
   html += '<table class="ocq-table">';
   html += '<thead class="ocq-table-head"><tr>' +
           '<th class="ocq-table-th">Resource</th>' +
-          '<th class="ocq-table-th">Curation Status</th>' +
+          '<th class="ocq-table-th">Suggested Curation Status</th>' +
           '<th class="ocq-table-th">Failed Requirements</th>' +
           '<th class="ocq-table-th">Failed Recommendations</th>' +
           '<th class="ocq-table-th">Details</th>' +
@@ -461,9 +455,7 @@ function renderCurationTable(perResource) {
             '<td class="ocq-table-td ocq-mono"><span class="' + statusBadgeClass + '">' + escapeHtml(row.statusLabel) + '</span></td>' +
             '<td class="ocq-table-td ocq-mono">' + escapeHtml(reqs) + '</td>' +
             '<td class="ocq-table-td ocq-mono">' + escapeHtml(recs) + '</td>' +
-            '</tr>';
-    html +=
-            '<td class="ocq-table-td">' +
+            '<td class="ocq-table-td ocq-mono">' +
               '<button class="ocq-btn ocq-btn-tertiary ocq-btn-small" ' +
                       'type="button" ' +
                       'data-toggle-resource-detail="' + escapeHtml(row.resource) + '">' +
