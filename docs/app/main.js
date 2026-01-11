@@ -37,6 +37,10 @@ let lastPerResource = null;
 let lastFailuresIndex = null; 
 let lastOntologyReport = null;
 
+let ontologyReportEventsWired = false;
+let lastBatchReports = null;     // Array of { fileName, ontologyIri, ontologyReport, perResource, results }
+let selectedBatchKey = null;     // stable selection key for dashboard rows
+
 function buildFailuresIndex(results) {
   const byResource = new Map();
 
@@ -178,6 +182,78 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// Phase 6.1 — stable key for batch row selection
+function getBatchKey(item) {
+  const fn = item?.fileName ?? '';
+  const oi = item?.ontologyIri ?? (item?.ontologyReport?.ontologyIri ?? '');
+  return `${fn}::${oi}`;
+}
+
+function loadBatchSelection(reportObj) {
+  // Assign to existing single-run globals so existing UI works unchanged
+  lastResults = reportObj.results || [];
+  lastFailuresIndex = buildFailuresIndex(lastResults);
+
+  lastPerResourceFull = reportObj.perResource || [];
+  lastPerResource = reportObj.perResource || [];
+
+  lastOntologyReport = reportObj.ontologyReport || null;
+
+  // Ensure the filters are wired to the current manifest (shared)
+  if (lastManifest) populateRequirementFilter(lastManifest);
+
+  // Render single-run view panes using existing codepaths
+  renderOntologyReport(lastOntologyReport);
+  applyResourceFilters(); // will call renderCurationTable(filtered)
+}
+
+function onBatchRowSelected(batchKey) {
+  if (!Array.isArray(lastBatchReports) || !lastBatchReports.length) return;
+
+  // Toggle-close behavior (click same row again)
+  if (selectedBatchKey === batchKey) {
+    selectedBatchKey = null;
+    renderDashboard(lastBatchReports);
+    return;
+  }
+
+  selectedBatchKey = batchKey;
+
+  const reportObj = lastBatchReports.find(r => getBatchKey(r) === batchKey);
+  if (!reportObj) return;
+
+  loadBatchSelection(reportObj);
+  renderDashboard(lastBatchReports); // keep dashboard visible + highlight selected row
+
+  if (statusEl) {
+    statusEl.textContent = `Selected: ${reportObj.fileName}`;
+  }
+}
+
+function wireBatchDashboardSelection() {
+  if (!dashboardContainer) return;
+
+  // Click selection (event delegation)
+  dashboardContainer.addEventListener('click', (event) => {
+    const row = event.target.closest('tr[data-batch-key]');
+    if (!row) return;
+    const key = row.getAttribute('data-batch-key');
+    if (!key) return;
+    onBatchRowSelected(key);
+  });
+
+  // Keyboard selection (Enter / Space)
+  dashboardContainer.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const row = event.target.closest('tr[data-batch-key]');
+    if (!row) return;
+    event.preventDefault();
+    const key = row.getAttribute('data-batch-key');
+    if (!key) return;
+    onBatchRowSelected(key);
+  });
 }
 
 // Run all queries + grading for a single File object
@@ -387,6 +463,8 @@ function onOntologyReportRowClick(event) {
 
 // --- Dashboard for batch mode ---
 function renderDashboard(batchReports) {
+  if (!dashboardContainer) return;
+
   if (!batchReports || !batchReports.length) {
     dashboardContainer.innerHTML = '<p>No ontologies evaluated.</p>';
     return;
@@ -409,13 +487,20 @@ function renderDashboard(batchReports) {
     const failedRecs = report.requirements
       .filter(r => r.type === 'recommendation' && r.status === 'fail').length;
 
-    html += '<tr>' +
-            `<td class="ocq-table-td ocq-mono">${escapeHtml(item.fileName)}</td>` +
-            `<td class="ocq-table-td ocq-mono">${escapeHtml(report.ontologyIri)}</td>` +
-            `<td class="ocq-table-td ocq-mono">${escapeHtml(report.statusLabel)}</td>` +
-            `<td class="ocq-table-td ocq-mono">${failedReqs}</td>` +
-            `<td class="ocq-table-td ocq-mono">${failedRecs}</td>` +
-            '</tr>';
+    const key = getBatchKey(item);
+    const isSelected = (selectedBatchKey === key);
+
+    html +=
+      '<tr class="ocq-table-tr ocq-row-clickable ocq-batch-row' + (isSelected ? ' ocq-batch-row--selected' : '') + '"' +
+          ' tabindex="0"' +
+          ' role="button"' +
+          ' data-batch-key="' + escapeHtml(key) + '">' +
+        `<td class="ocq-table-td ocq-mono">${escapeHtml(item.fileName)}</td>` +
+        `<td class="ocq-table-td ocq-mono">${escapeHtml(report.ontologyIri)}</td>` +
+        `<td class="ocq-table-td ocq-mono">${escapeHtml(report.statusLabel)}</td>` +
+        `<td class="ocq-table-td ocq-mono">${failedReqs}</td>` +
+        `<td class="ocq-table-td ocq-mono">${failedRecs}</td>` +
+      '</tr>';
   }
 
   html += '</tbody></table>';
@@ -519,18 +604,21 @@ function renderOntologyReport(report) {
 
   html += '</tbody></table>';
   ontologyReportContainer.innerHTML = html;
-  // after innerHTML assignment:
-  ontologyReportContainer.addEventListener('click', onOntologyReportRowClick);
-  ontologyReportContainer.addEventListener('keydown', function (event) {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
 
-    const row = event.target.closest('tr[data-requirement-id]');
-    if (!row) return;
+  // Phase 6.1 — wire listeners once (avoid multiplying handlers on re-render)
+  if (!ontologyReportEventsWired) {
+    ontologyReportContainer.addEventListener('click', onOntologyReportRowClick);
+    ontologyReportContainer.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
 
-    event.preventDefault(); // prevent space scroll
-    row.click();
-  });
+      const row = event.target.closest('tr[data-requirement-id]');
+      if (!row) return;
 
+      event.preventDefault(); // prevent space scroll
+      row.click();
+    });
+    ontologyReportEventsWired = true;
+  }
 }
 
 // --- Download helpers ---
@@ -667,9 +755,20 @@ runBatchBtn.addEventListener('click', async () => {
     batch.push(report);
   }
 
-  renderDashboard(batch);
-  statusEl.textContent = `Completed ${batch.length} ontology checks.`;
-});
+  // Phase 6.1 — store batch results so dashboard can drill-down without re-running
+  lastBatchReports = batch;
+  selectedBatchKey = null;
+
+  // Ensure manifest exists for filters during drill-down
+  if (!lastManifest) {
+    const manifestRes = await fetch('queries/manifest.json');
+    lastManifest = await manifestRes.json();
+  }
+  populateRequirementFilter(lastManifest);
+
+  renderDashboard(lastBatchReports);
+  statusEl.textContent = `Completed ${batch.length} ontology checks. Click a row to drill down.`;
+  });
 
 // --- Export buttons (use last single-run results) ---
 btnCsv.addEventListener('click', () => {
@@ -690,6 +789,9 @@ btnYaml.addEventListener('click', () => {
   const yaml = ontologyReportToYaml(lastOntologyReport);
   downloadTextFile('ontology-report.yaml', yaml, 'text/yaml');
 });
+
+// Phase 6.1 — enable batch drill-down selection
+wireBatchDashboardSelection();
 
 document.getElementById('statusFilter').addEventListener('change', applyResourceFilters);
 document.getElementById('requirementFilter').addEventListener('change', applyResourceFilters);

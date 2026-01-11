@@ -511,3 +511,9 @@
 .ocq-app .ocq-select {
   padding-right: 34px;
 }
+
+.ocq-app .ocq-batch-row--selected {
+  outline: 2px solid var(--ocq-accent-border);
+  outline-offset: -2px;
+  background: var(--ocq-accent-bg);
+}
