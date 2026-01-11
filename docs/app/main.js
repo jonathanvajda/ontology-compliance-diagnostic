@@ -6,6 +6,8 @@ import {
   computeOntologyReport
 } from './grader.js';
 
+import { saveRun, listRuns, getRun, deleteRun, getLastRunId } from './storage.js';
+
 // --- DOM elements ---
 // Reuse the same input (#ontologyFiles) for both single and batch runs
 const filesInput = document.getElementById('ontologyFiles');
@@ -18,6 +20,11 @@ const curationTableContainer = document.getElementById('curationTableContainer')
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
 const requirementDetailContainer = document.getElementById('requirementDetailContainer');
 const dashboardContainer = document.getElementById('dashboardContainer');
+const savedRunsSelect = document.getElementById('savedRunsSelect');
+const loadSavedRunBtn = document.getElementById('loadSavedRunBtn');
+const deleteSavedRunBtn = document.getElementById('deleteSavedRunBtn');
+const printReportBtn = document.getElementById('printReportBtn');
+
 
 if (curationTableContainer) {
   curationTableContainer.addEventListener('click', function (event) {
@@ -42,11 +49,6 @@ let lastBatchReports = null;     // Array of { fileName, ontologyIri, ontologyRe
 let selectedBatchKey = null;     // stable selection key for dashboard rows
 
 // Phase 6.2 — saved runs UI
-const savedRunsSelect = document.getElementById('savedRunsSelect');
-const loadSavedRunBtn = document.getElementById('loadSavedRunBtn');
-const deleteSavedRunBtn = document.getElementById('deleteSavedRunBtn');
-const printReportBtn = document.getElementById('printReportBtn');
-
 let lastSelectedRequirementId = null;
 let lastSelectedRequirementRow = null;
 
@@ -405,180 +407,6 @@ function wireBatchDashboardSelection() {
   });
 }
 
-// =============================
-// Phase 6.2 — IndexedDB storage
-// =============================
-
-const OCQ_DB = {
-  name: 'ocq-db',
-  version: 1,
-  stores: {
-    runs: 'runs',         // keyPath: id
-    appState: 'appState'  // keyPath: key
-  }
-};
-
-function ocqNowIso() {
-  return new Date().toISOString();
-}
-
-function ocqMakeId(prefix) {
-  // stable enough: timestamp + random
-  const rnd = Math.random().toString(16).slice(2);
-  return `${prefix}_${Date.now()}_${rnd}`;
-}
-
-function openOcqDb() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(OCQ_DB.name, OCQ_DB.version);
-
-    req.onupgradeneeded = () => {
-      const db = req.result;
-
-      if (!db.objectStoreNames.contains(OCQ_DB.stores.runs)) {
-        const runs = db.createObjectStore(OCQ_DB.stores.runs, { keyPath: 'id' });
-        runs.createIndex('byCreatedAt', 'createdAt', { unique: false });
-        runs.createIndex('byKind', 'kind', { unique: false }); // 'single' | 'batch'
-      }
-
-      if (!db.objectStoreNames.contains(OCQ_DB.stores.appState)) {
-        db.createObjectStore(OCQ_DB.stores.appState, { keyPath: 'key' });
-      }
-    };
-
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-function idbTx(db, storeName, mode, fn) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, mode);
-    const store = tx.objectStore(storeName);
-
-    let result;
-    try {
-      result = fn(store);
-    } catch (e) {
-      reject(e);
-      return;
-    }
-
-    tx.oncomplete = () => resolve(result);
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  });
-}
-
-async function idbPut(store, value) {
-  return new Promise((resolve, reject) => {
-    const req = store.put(value);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function idbGet(store, key) {
-  return new Promise((resolve, reject) => {
-    const req = store.get(key);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function idbDelete(store, key) {
-  return new Promise((resolve, reject) => {
-    const req = store.delete(key);
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function idbGetAllFromIndex(store, indexName, direction = 'prev', limit = 50) {
-  return new Promise((resolve, reject) => {
-    const idx = store.index(indexName);
-    const out = [];
-    const req = idx.openCursor(null, direction);
-
-    req.onsuccess = () => {
-      const cursor = req.result;
-      if (!cursor) {
-        resolve(out);
-        return;
-      }
-      out.push(cursor.value);
-      if (out.length >= limit) {
-        resolve(out);
-        return;
-      }
-      cursor.continue();
-    };
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function ocqSaveRunSnapshot({ kind, label, payload, uiState }) {
-  const db = await openOcqDb();
-
-  const run = {
-    id: ocqMakeId(kind),
-    kind,                 // 'single' | 'batch'
-    label: label || '',
-    createdAt: ocqNowIso(),
-    payload,              // report object OR batch array
-    uiState: uiState || null
-  };
-
-  await idbTx(db, OCQ_DB.stores.runs, 'readwrite', (store) => idbPut(store, run));
-
-  // record last-run pointer
-  await idbTx(db, OCQ_DB.stores.appState, 'readwrite', (store) =>
-    idbPut(store, { key: 'last', runId: run.id })
-  );
-
-  db.close();
-  return run.id;
-}
-
-async function ocqListRuns(limit = 50) {
-  const db = await openOcqDb();
-  const runs = await idbTx(db, OCQ_DB.stores.runs, 'readonly', (store) =>
-    idbGetAllFromIndex(store, 'byCreatedAt', 'prev', limit)
-  );
-  db.close();
-  return runs;
-}
-
-async function ocqGetRun(runId) {
-  const db = await openOcqDb();
-  const run = await idbTx(db, OCQ_DB.stores.runs, 'readonly', (store) => idbGet(store, runId));
-  db.close();
-  return run;
-}
-
-async function ocqDeleteRun(runId) {
-  const db = await openOcqDb();
-
-  // If deleting "last", clear pointer
-  const last = await idbTx(db, OCQ_DB.stores.appState, 'readonly', (store) => idbGet(store, 'last'));
-  if (last && last.runId === runId) {
-    await idbTx(db, OCQ_DB.stores.appState, 'readwrite', (store) => idbDelete(store, 'last'));
-  }
-
-  await idbTx(db, OCQ_DB.stores.runs, 'readwrite', (store) => idbDelete(store, runId));
-  db.close();
-  return true;
-}
-
-async function ocqGetLastRunId() {
-  const db = await openOcqDb();
-  const last = await idbTx(db, OCQ_DB.stores.appState, 'readonly', (store) => idbGet(store, 'last'));
-  db.close();
-  return last?.runId || null;
-}
-
-
-
 // Run all queries + grading for a single File object
 async function evaluateFile(file) {
   const text = await file.text();
@@ -598,6 +426,56 @@ async function evaluateFile(file) {
   };
 }
 
+// ==============================
+// Requirement detail: FIXED
+// - No inline onclick
+// - Delegated close handler wired once (no multiplying listeners)
+// - Uses a single clearRequirementDetailPanel() in global scope
+// - Close button uses data-requirement-close
+// - Escapes rendered values
+// - Keeps all content inside .ocq-detail
+// ==============================
+
+// Wire-once flag
+let requirementDetailEventsWired = false;
+
+/**
+ * Clears requirement detail panel + clears any selected requirement row highlight.
+ */
+function clearRequirementDetailPanel() {
+  if (lastSelectedRequirementRow) {
+    lastSelectedRequirementRow.classList.remove('ocq-row-selected');
+  }
+  lastSelectedRequirementRow = null;
+  lastSelectedRequirementId = null;
+
+  if (requirementDetailContainer) {
+    requirementDetailContainer.innerHTML = '';
+  }
+}
+
+/**
+ * Wires the close button handler once using event delegation.
+ * Call this once during init (top-level), or before first renderRequirementDetail().
+ */
+function wireRequirementDetailCloseOnce() {
+  if (!requirementDetailContainer || requirementDetailEventsWired) return;
+
+  requirementDetailContainer.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-requirement-close]');
+    if (!btn) return;
+    clearRequirementDetailPanel();
+  });
+
+  requirementDetailEventsWired = true;
+}
+
+// Call once during startup (safe to call multiple times)
+wireRequirementDetailCloseOnce();
+
+/**
+ * Renders the requirement detail panel for a selected requirementId.
+ */
 function renderRequirementDetail(requirementId) {
   // Make sure we have somewhere to render
   if (!requirementDetailContainer) {
@@ -616,7 +494,7 @@ function renderRequirementDetail(requirementId) {
   const req = lastOntologyReport.requirements.find(r => r.id === requirementId);
   if (!req) {
     console.warn('Requirement not found in lastOntologyReport:', requirementId);
-    requirementDetailContainer.innerHTML = `<p>No details found for ${requirementId}.</p>`;
+    requirementDetailContainer.innerHTML = `<p>No details found for ${escapeHtml(requirementId)}.</p>`;
     return;
   }
 
@@ -625,8 +503,8 @@ function renderRequirementDetail(requirementId) {
     r => r.requirementId === requirementId && r.status === 'fail'
   );
 
-  const queryIds = Array.from(new Set(failingRows.map(r => r.queryId)));
-  const resources = Array.from(new Set(failingRows.map(r => r.resource)));
+  const queryIds = Array.from(new Set(failingRows.map(r => r.queryId))).sort();
+  const resources = Array.from(new Set(failingRows.map(r => r.resource))).sort();
 
   // Optional: group by resource → [queryIds]
   const failuresByResource = new Map();
@@ -637,67 +515,56 @@ function renderRequirementDetail(requirementId) {
     failuresByResource.get(row.resource).add(row.queryId);
   }
 
-  // Turn Set into arrays for rendering
-  const entries = Array.from(failuresByResource.entries()).map(([resource, qSet]) => ({
-    resource,
-    queryIds: Array.from(qSet)
-  }));
+  const entries = Array.from(failuresByResource.entries())
+    .map(([resource, qSet]) => ({
+      resource,
+      queryIds: Array.from(qSet).sort()
+    }))
+    .sort((a, b) => String(a.resource).localeCompare(String(b.resource)));
 
-  // 3) Render into the detail container 
-
-  function clearRequirementDetail() { // this is called in the table header below
-    if (lastSelectedRequirementRow) {
-      lastSelectedRequirementRow.classList.remove('ocq-row-selected');
-    }
-    lastSelectedRequirementRow = null;
-    lastSelectedRequirementId = null;
-    requirementDetailContainer.innerHTML = '';
-  }
-
+  // 3) Render into the detail container (everything inside .ocq-detail)
   let html = '';
   html += '<div class="ocq-detail">';
-    html += '<div class="ocq-detail-header">';
-      html += '<h3 class="ocq-detail-title">Requirement: ' + escapeHtml(req.id) + '</h3><button class="ocq-btn" type="button" onclick="clearRequirementDetail()"> Close </button>';
-    html += '</div>';
-    html += '<div class="ocq-detail-meta">Status: <strong>' + escapeHtml(req.status) + '</strong> (' + escapeHtml(req.type) + ')</div>';
-    html += '<div class="ocq-detail-meta">Failing resources: <strong>' + escapeHtml(resources.length) + '</strong></div>';
-  html += '</div>';
+  html += '  <div class="ocq-detail-header">';
+  html += '    <h3 class="ocq-detail-title">Requirement: ' + escapeHtml(req.id) + '</h3>';
+  html += '    <button class="ocq-btn" type="button" data-requirement-close>Close</button>';
+  html += '  </div>';
 
-
-
-
+  html += '  <div class="ocq-detail-meta">Status: <strong>' + escapeHtml(req.status) + '</strong> (' + escapeHtml(req.type) + ')</div>';
+  html += '  <div class="ocq-detail-meta">Failing resources: <strong>' + escapeHtml(resources.length) + '</strong></div>';
 
   if (queryIds.length) {
-    html += `<p>Queries involved: ${queryIds.join(', ')}</p>`;
+    html += '  <div class="ocq-detail-meta">Queries involved: <span class="ocq-mono">' + escapeHtml(queryIds.join(', ')) + '</span></div>';
   }
 
   if (!entries.length) {
-    html += `<p>No failing resources found in details.</p>`;
+    html += '  <p>No failing resources found in details.</p>';
   } else {
-    html += `<table class="ocq-table">
-      <thead class="ocq-table-head">
-        <tr>
-          <th class="ocq-table-th">Resource IRI</th>
-          <th class="ocq-table-th">Failing query IDs</th>
-        </tr>
-      </thead>
-      <tbody>
-    `;
+    html += '  <table class="ocq-table">';
+    html += '    <thead class="ocq-table-head">';
+    html += '      <tr>';
+    html += '        <th class="ocq-table-th">Resource IRI</th>';
+    html += '        <th class="ocq-table-th">Failing query IDs</th>';
+    html += '      </tr>';
+    html += '    </thead>';
+    html += '    <tbody>';
 
     for (const item of entries) {
-      html += `
-        <tr>
-          <td class="ocq-table-td ocq-mono">${item.resource}</td>
-          <td class="ocq-table-td ocq-mono">${item.queryIds.join(', ')}</td>
-        </tr>
-      `;
+      html += '      <tr>';
+      html += '        <td class="ocq-table-td ocq-mono">' + escapeHtml(item.resource) + '</td>';
+      html += '        <td class="ocq-table-td ocq-mono">' + escapeHtml(item.queryIds.join(', ')) + '</td>';
+      html += '      </tr>';
     }
 
-    html += `</tbody></table>`;
+    html += '    </tbody>';
+    html += '  </table>';
   }
+
+  html += '</div>';
 
   requirementDetailContainer.innerHTML = html;
 }
+
 
 function toggleResourceDetail(resourceIri) {
   if (!curationTableContainer) return;
@@ -1028,6 +895,7 @@ btnRun.addEventListener('click', async () => {
 
   try {
     const { results, resources, ontologyIri } = await evaluateAllQueries(text, file.name);
+
     const manifestRes = await fetch('queries/manifest.json');
     const manifest = await manifestRes.json();
 
@@ -1041,9 +909,8 @@ btnRun.addEventListener('click', async () => {
     lastOntologyReport = ontologyReport;
     lastManifest = manifest;
 
-    // Phase 6.2 — persist snapshot to IndexedDB
-    await ensureManifestLoaded();
-    await ocqSaveRunSnapshot({
+    // Phase 6.2 — persist snapshot to IndexedDB (via storage.js)
+    await saveRun({
       kind: 'single',
       label: file.name,
       payload: {
@@ -1053,7 +920,7 @@ btnRun.addEventListener('click', async () => {
         perResource,
         results
       },
-      uiState: ocqGetUiStateSnapshot()
+      uiState: getUiStateSnapshot() // or your actual snapshot fn name
     });
     await refreshSavedRunsUi();
 
@@ -1087,6 +954,10 @@ runBatchBtn.addEventListener('click', async () => {
   statusEl.textContent = 'Running batch checks…';
   curationTableContainer.innerHTML = '';
   ontologyReportContainer.innerHTML = '';
+  requirementDetailContainer.innerHTML = '';
+
+  // Ensure manifest exists for filters/drill-down
+  await ensureManifestLoaded(); // loads + populateRequirementFilter(lastManifest)
 
   const batch = [];
   for (const file of files) {
@@ -1098,26 +969,19 @@ runBatchBtn.addEventListener('click', async () => {
   lastBatchReports = batch;
   selectedBatchKey = null;
 
-  // Ensure manifest exists for filters during drill-down
-  if (!lastManifest) {
-    const manifestRes = await fetch('queries/manifest.json');
-    lastManifest = await manifestRes.json();
-  }
-  populateRequirementFilter(lastManifest);
-
   renderDashboard(lastBatchReports);
-  // Phase 6.2 — persist batch snapshot to IndexedDB
-  await ensureManifestLoaded();
-  await ocqSaveRunSnapshot({
+
+  // Phase 6.2 — persist batch snapshot to IndexedDB (via storage.js)
+  await saveRun({
     kind: 'batch',
     label: `${batch.length} file(s)`,
     payload: lastBatchReports,
-    uiState: ocqGetUiStateSnapshot()
+    uiState: getUiStateSnapshot() // or ocqGetUiStateSnapshot() if that's your function name
   });
   await refreshSavedRunsUi();
 
   statusEl.textContent = `Completed ${batch.length} ontology checks. Click a row to drill down.`;
-  });
+});
 
 // --- Export buttons (use last single-run results) ---
 btnCsv.addEventListener('click', () => {
@@ -1171,6 +1035,19 @@ if (deleteSavedRunBtn) {
   });
 }
 
+
+// Phase 6.2 — initial load: populate dropdown + restore last run if present
+(async function initSavedRuns() {
+  await refreshSavedRunsUi();
+
+  const lastId = await ocqGetLastRunId();
+  if (lastId) {
+    const run = await ocqGetRun(lastId);
+    if (run) {
+      await ocqHydrateRun(run);
+    }
+  }
+})();
 
 document.getElementById('statusFilter').addEventListener('change', applyResourceFilters);
 document.getElementById('requirementFilter').addEventListener('change', applyResourceFilters);
