@@ -268,7 +268,7 @@ function ocqFormatRunOption(run) {
 async function refreshSavedRunsUi() {
   if (!savedRunsSelect) return;
 
-  const runs = await ocqListRuns(50);
+  const runs = await listRuns(50);
 
   savedRunsSelect.innerHTML = '<option value="">Saved runs…</option>';
   for (const run of runs) {
@@ -1004,7 +1004,7 @@ if (loadSavedRunBtn) {
       alert('Choose a saved run first.');
       return;
     }
-    const run = await ocqGetRun(id);
+    const run = await getRun(id);
     await ocqHydrateRun(run);
   });
 }
@@ -1016,7 +1016,7 @@ if (deleteSavedRunBtn) {
       alert('Choose a saved run first.');
       return;
     }
-    await ocqDeleteRun(id);
+    await deleteRun(id);
     await refreshSavedRunsUi();
     if (statusEl) statusEl.textContent = 'Deleted saved run.';
   });
@@ -1027,9 +1027,9 @@ if (deleteSavedRunBtn) {
 (async function initSavedRuns() {
   await refreshSavedRunsUi();
 
-  const lastId = await ocqGetLastRunId();
+  const lastId = await getLastRunId();
   if (lastId) {
-    const run = await ocqGetRun(lastId);
+    const run = await getRun(lastId);
     if (run) {
       await ocqHydrateRun(run);
     }
