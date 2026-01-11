@@ -176,19 +176,6 @@ function ocqApplyUiStateSnapshot(state) {
   if (requirementFilterEl) requirementFilterEl.value = state.requirementFilter || '';
 }
 
-
-function clearRequirementDetailPanel() {
-  if (lastSelectedRequirementRow) {
-    lastSelectedRequirementRow.classList.remove('ocq-row-selected');
-  }
-  lastSelectedRequirementRow = null;
-  lastSelectedRequirementId = null;
-
-  if (requirementDetailContainer) {
-    requirementDetailContainer.innerHTML = '';
-  }
-}
-
 async function ocqHydrateRun(run) {
   if (!run) return;
 
@@ -920,7 +907,7 @@ btnRun.addEventListener('click', async () => {
         perResource,
         results
       },
-      uiState: getUiStateSnapshot() // or your actual snapshot fn name
+      uiState: ocqGetUiStateSnapshot()
     });
     await refreshSavedRunsUi();
 
@@ -976,7 +963,7 @@ runBatchBtn.addEventListener('click', async () => {
     kind: 'batch',
     label: `${batch.length} file(s)`,
     payload: lastBatchReports,
-    uiState: getUiStateSnapshot() // or ocqGetUiStateSnapshot() if that's your function name
+    uiState: ocqGetUiStateSnapshot()
   });
   await refreshSavedRunsUi();
 
