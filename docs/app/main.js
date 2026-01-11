@@ -41,6 +41,23 @@ let ontologyReportEventsWired = false;
 let lastBatchReports = null;     // Array of { fileName, ontologyIri, ontologyReport, perResource, results }
 let selectedBatchKey = null;     // stable selection key for dashboard rows
 
+// Phase 6.2 — saved runs UI
+const savedRunsSelect = document.getElementById('savedRunsSelect');
+const loadSavedRunBtn = document.getElementById('loadSavedRunBtn');
+const deleteSavedRunBtn = document.getElementById('deleteSavedRunBtn');
+const printReportBtn = document.getElementById('printReportBtn');
+
+let lastSelectedRequirementId = null;
+let lastSelectedRequirementRow = null;
+
+async function ensureManifestLoaded() {
+  if (lastManifest) return lastManifest;
+  const manifestRes = await fetch('queries/manifest.json');
+  lastManifest = await manifestRes.json();
+  populateRequirementFilter(lastManifest);
+  return lastManifest;
+}
+
 function buildFailuresIndex(results) {
   const byResource = new Map();
 
@@ -140,6 +157,138 @@ function clearResourceFilters() {
 if (statusFilterEl) statusFilterEl.addEventListener('change', applyResourceFilters);
 if (requirementFilterEl) requirementFilterEl.addEventListener('change', applyResourceFilters);
 if (clearFiltersBtn) clearFiltersBtn.addEventListener('click', clearResourceFilters);
+
+function ocqGetUiStateSnapshot() {
+  return {
+    statusFilter: statusFilterEl ? statusFilterEl.value : '',
+    requirementFilter: requirementFilterEl ? requirementFilterEl.value : '',
+    selectedBatchKey: selectedBatchKey || null,
+    selectedRequirementId: lastSelectedRequirementId || null
+  };
+}
+
+function ocqApplyUiStateSnapshot(state) {
+  if (!state) return;
+
+  if (statusFilterEl) statusFilterEl.value = state.statusFilter || '';
+  if (requirementFilterEl) requirementFilterEl.value = state.requirementFilter || '';
+}
+
+
+function clearRequirementDetailPanel() {
+  if (lastSelectedRequirementRow) {
+    lastSelectedRequirementRow.classList.remove('ocq-row-selected');
+  }
+  lastSelectedRequirementRow = null;
+  lastSelectedRequirementId = null;
+
+  if (requirementDetailContainer) {
+    requirementDetailContainer.innerHTML = '';
+  }
+}
+
+async function ocqHydrateRun(run) {
+  if (!run) return;
+
+  await ensureManifestLoaded();
+
+  // Apply stored UI filters first
+  ocqApplyUiStateSnapshot(run.uiState);
+
+  // Reset view containers (optional; keeps things tidy)
+  // dashboardContainer.innerHTML = '';
+  // ontologyReportContainer.innerHTML = '';
+  // curationTableContainer.innerHTML = '';
+  clearRequirementDetailPanel();
+
+  if (run.kind === 'batch') {
+    // payload is batchReports[]
+    lastBatchReports = Array.isArray(run.payload) ? run.payload : [];
+    selectedBatchKey = run.uiState?.selectedBatchKey || null;
+
+    renderDashboard(lastBatchReports);
+
+    // if we had a selected batch row, load it into panes
+    if (selectedBatchKey) {
+      const match = lastBatchReports.find(r => getBatchKey(r) === selectedBatchKey);
+      if (match) {
+        loadBatchSelection(match);
+        renderDashboard(lastBatchReports);
+      }
+    }
+
+    // Now apply filters to whatever is loaded in panes
+    applyResourceFilters();
+
+    // restore requirement selection if possible
+    const reqId = run.uiState?.selectedRequirementId || null;
+    if (reqId && lastOntologyReport?.requirements?.some(r => r.id === reqId)) {
+      lastSelectedRequirementId = reqId;
+      renderRequirementDetail(reqId);
+
+      const row = ontologyReportContainer?.querySelector(
+        'tr[data-requirement-id="' + cssEscapeAttr(reqId) + '"]'
+      );
+      if (row) {
+        row.classList.add('ocq-row-selected');
+        lastSelectedRequirementRow = row;
+      }
+    }
+
+    if (statusEl) statusEl.textContent = `Loaded saved batch run (${run.createdAt}).`;
+    return;
+  }
+
+  // single
+  const reportObj = run.payload;
+
+  lastResults = reportObj?.results || [];
+  lastFailuresIndex = buildFailuresIndex(lastResults);
+  lastOntologyReport = reportObj?.ontologyReport || null;
+  lastPerResourceFull = reportObj?.perResource || [];
+  lastPerResource = reportObj?.perResource || [];
+  selectedBatchKey = null;
+  lastBatchReports = null;
+
+  renderOntologyReport(lastOntologyReport);
+  applyResourceFilters();
+
+  const reqId = run.uiState?.selectedRequirementId || null;
+  if (reqId && lastOntologyReport?.requirements?.some(r => r.id === reqId)) {
+    lastSelectedRequirementId = reqId;
+    renderRequirementDetail(reqId);
+
+    const row = ontologyReportContainer?.querySelector(
+      'tr[data-requirement-id="' + cssEscapeAttr(reqId) + '"]'
+    );
+    if (row) {
+      row.classList.add('ocq-row-selected');
+      lastSelectedRequirementRow = row;
+    }
+  }
+
+  if (statusEl) statusEl.textContent = `Loaded saved single run (${run.createdAt}).`;
+}
+
+function ocqFormatRunOption(run) {
+  const kind = run.kind === 'batch' ? 'Batch' : 'Single';
+  const label = run.label ? ` — ${run.label}` : '';
+  return `${kind} — ${run.createdAt}${label}`;
+}
+
+async function refreshSavedRunsUi() {
+  if (!savedRunsSelect) return;
+
+  const runs = await ocqListRuns(50);
+
+  savedRunsSelect.innerHTML = '<option value="">Saved runs…</option>';
+  for (const run of runs) {
+    const opt = document.createElement('option');
+    opt.value = run.id;
+    opt.textContent = ocqFormatRunOption(run);
+    savedRunsSelect.appendChild(opt);
+  }
+}
 
 
 const appRoot = document.getElementById('appRoot');
@@ -255,6 +404,180 @@ function wireBatchDashboardSelection() {
     onBatchRowSelected(key);
   });
 }
+
+// =============================
+// Phase 6.2 — IndexedDB storage
+// =============================
+
+const OCQ_DB = {
+  name: 'ocq-db',
+  version: 1,
+  stores: {
+    runs: 'runs',         // keyPath: id
+    appState: 'appState'  // keyPath: key
+  }
+};
+
+function ocqNowIso() {
+  return new Date().toISOString();
+}
+
+function ocqMakeId(prefix) {
+  // stable enough: timestamp + random
+  const rnd = Math.random().toString(16).slice(2);
+  return `${prefix}_${Date.now()}_${rnd}`;
+}
+
+function openOcqDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(OCQ_DB.name, OCQ_DB.version);
+
+    req.onupgradeneeded = () => {
+      const db = req.result;
+
+      if (!db.objectStoreNames.contains(OCQ_DB.stores.runs)) {
+        const runs = db.createObjectStore(OCQ_DB.stores.runs, { keyPath: 'id' });
+        runs.createIndex('byCreatedAt', 'createdAt', { unique: false });
+        runs.createIndex('byKind', 'kind', { unique: false }); // 'single' | 'batch'
+      }
+
+      if (!db.objectStoreNames.contains(OCQ_DB.stores.appState)) {
+        db.createObjectStore(OCQ_DB.stores.appState, { keyPath: 'key' });
+      }
+    };
+
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbTx(db, storeName, mode, fn) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, mode);
+    const store = tx.objectStore(storeName);
+
+    let result;
+    try {
+      result = fn(store);
+    } catch (e) {
+      reject(e);
+      return;
+    }
+
+    tx.oncomplete = () => resolve(result);
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+async function idbPut(store, value) {
+  return new Promise((resolve, reject) => {
+    const req = store.put(value);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbGet(store, key) {
+  return new Promise((resolve, reject) => {
+    const req = store.get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbDelete(store, key) {
+  return new Promise((resolve, reject) => {
+    const req = store.delete(key);
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbGetAllFromIndex(store, indexName, direction = 'prev', limit = 50) {
+  return new Promise((resolve, reject) => {
+    const idx = store.index(indexName);
+    const out = [];
+    const req = idx.openCursor(null, direction);
+
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (!cursor) {
+        resolve(out);
+        return;
+      }
+      out.push(cursor.value);
+      if (out.length >= limit) {
+        resolve(out);
+        return;
+      }
+      cursor.continue();
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function ocqSaveRunSnapshot({ kind, label, payload, uiState }) {
+  const db = await openOcqDb();
+
+  const run = {
+    id: ocqMakeId(kind),
+    kind,                 // 'single' | 'batch'
+    label: label || '',
+    createdAt: ocqNowIso(),
+    payload,              // report object OR batch array
+    uiState: uiState || null
+  };
+
+  await idbTx(db, OCQ_DB.stores.runs, 'readwrite', (store) => idbPut(store, run));
+
+  // record last-run pointer
+  await idbTx(db, OCQ_DB.stores.appState, 'readwrite', (store) =>
+    idbPut(store, { key: 'last', runId: run.id })
+  );
+
+  db.close();
+  return run.id;
+}
+
+async function ocqListRuns(limit = 50) {
+  const db = await openOcqDb();
+  const runs = await idbTx(db, OCQ_DB.stores.runs, 'readonly', (store) =>
+    idbGetAllFromIndex(store, 'byCreatedAt', 'prev', limit)
+  );
+  db.close();
+  return runs;
+}
+
+async function ocqGetRun(runId) {
+  const db = await openOcqDb();
+  const run = await idbTx(db, OCQ_DB.stores.runs, 'readonly', (store) => idbGet(store, runId));
+  db.close();
+  return run;
+}
+
+async function ocqDeleteRun(runId) {
+  const db = await openOcqDb();
+
+  // If deleting "last", clear pointer
+  const last = await idbTx(db, OCQ_DB.stores.appState, 'readonly', (store) => idbGet(store, 'last'));
+  if (last && last.runId === runId) {
+    await idbTx(db, OCQ_DB.stores.appState, 'readwrite', (store) => idbDelete(store, 'last'));
+  }
+
+  await idbTx(db, OCQ_DB.stores.runs, 'readwrite', (store) => idbDelete(store, runId));
+  db.close();
+  return true;
+}
+
+async function ocqGetLastRunId() {
+  const db = await openOcqDb();
+  const last = await idbTx(db, OCQ_DB.stores.appState, 'readonly', (store) => idbGet(store, 'last'));
+  db.close();
+  return last?.runId || null;
+}
+
+
 
 // Run all queries + grading for a single File object
 async function evaluateFile(file) {
@@ -718,6 +1041,22 @@ btnRun.addEventListener('click', async () => {
     lastOntologyReport = ontologyReport;
     lastManifest = manifest;
 
+    // Phase 6.2 — persist snapshot to IndexedDB
+    await ensureManifestLoaded();
+    await ocqSaveRunSnapshot({
+      kind: 'single',
+      label: file.name,
+      payload: {
+        fileName: file.name,
+        ontologyIri,
+        ontologyReport,
+        perResource,
+        results
+      },
+      uiState: ocqGetUiStateSnapshot()
+    });
+    await refreshSavedRunsUi();
+
     populateRequirementFilter(manifest);
     applyResourceFilters(); // renders filtered (initially “all”)
 
@@ -767,6 +1106,16 @@ runBatchBtn.addEventListener('click', async () => {
   populateRequirementFilter(lastManifest);
 
   renderDashboard(lastBatchReports);
+  // Phase 6.2 — persist batch snapshot to IndexedDB
+  await ensureManifestLoaded();
+  await ocqSaveRunSnapshot({
+    kind: 'batch',
+    label: `${batch.length} file(s)`,
+    payload: lastBatchReports,
+    uiState: ocqGetUiStateSnapshot()
+  });
+  await refreshSavedRunsUi();
+
   statusEl.textContent = `Completed ${batch.length} ontology checks. Click a row to drill down.`;
   });
 
@@ -792,6 +1141,36 @@ btnYaml.addEventListener('click', () => {
 
 // Phase 6.1 — enable batch drill-down selection
 wireBatchDashboardSelection();
+
+if (printReportBtn) {
+  printReportBtn.addEventListener('click', () => window.print());
+}
+
+if (loadSavedRunBtn) {
+  loadSavedRunBtn.addEventListener('click', async () => {
+    const id = savedRunsSelect ? savedRunsSelect.value : '';
+    if (!id) {
+      alert('Choose a saved run first.');
+      return;
+    }
+    const run = await ocqGetRun(id);
+    await ocqHydrateRun(run);
+  });
+}
+
+if (deleteSavedRunBtn) {
+  deleteSavedRunBtn.addEventListener('click', async () => {
+    const id = savedRunsSelect ? savedRunsSelect.value : '';
+    if (!id) {
+      alert('Choose a saved run first.');
+      return;
+    }
+    await ocqDeleteRun(id);
+    await refreshSavedRunsUi();
+    if (statusEl) statusEl.textContent = 'Deleted saved run.';
+  });
+}
+
 
 document.getElementById('statusFilter').addEventListener('change', applyResourceFilters);
 document.getElementById('requirementFilter').addEventListener('change', applyResourceFilters);
