@@ -14,6 +14,9 @@ const filesInput = document.getElementById('ontologyFiles');
 const btnRun = document.getElementById('runChecksBtn');
 const runBatchBtn = document.getElementById('runBatchBtn');
 const btnCsv = document.getElementById('downloadResultsCsvBtn');
+const btnCsvFiltered = document.getElementById('downloadFilteredResourcesCsvBtn');
+const btnCsvReqDetail = document.getElementById('downloadRequirementDetailCsvBtn');
+const btnCsvBatchSummary = document.getElementById('downloadBatchSummaryCsvBtn');
 const btnYaml = document.getElementById('downloadOntologyYamlBtn');
 const statusEl = document.getElementById('status');
 const curationTableContainer = document.getElementById('curationTableContainer');
@@ -853,6 +856,164 @@ function ontologyReportToYaml(report) {
   }
   return lines.join('\n') + '\n';
 }
+
+// -------------------------------
+// Phase 6.3 CSV helpers (no clash)
+// -------------------------------
+
+function csvEscape(value) {
+  const s = value == null ? '' : String(value);
+  const needsWrap = /[",\n\r]/.test(s);
+  const escaped = s.replace(/"/g, '""');
+  return needsWrap ? `"${escaped}"` : escaped;
+}
+
+function rowsToCsv(rows) {
+  return rows.map(r => r.map(csvEscape).join(',')).join('\n') + '\n';
+}
+
+function buildFilteredResourcesCsv() {
+  const data = Array.isArray(lastPerResource) ? lastPerResource : [];
+
+  const header = [
+    'resource',
+    'statusIri',
+    'statusLabel',
+    'failedRequirementsCount',
+    'failedRecommendationsCount',
+    'failedRequirements',
+    'failedRecommendations'
+  ];
+
+  const rows = [header];
+
+  for (const r of data) {
+    const failedReqs = Array.isArray(r.failedRequirements) ? r.failedRequirements : [];
+    const failedRecs = Array.isArray(r.failedRecommendations) ? r.failedRecommendations : [];
+
+    rows.push([
+      r.resource || '',
+      r.statusIri || '',
+      r.statusLabel || '',
+      String(failedReqs.length),
+      String(failedRecs.length),
+      failedReqs.join(' | '),
+      failedRecs.join(' | ')
+    ]);
+  }
+
+  return rowsToCsv(rows);
+}
+
+function buildRequirementDetailCsv(requirementId) {
+  const reqId = requirementId || lastSelectedRequirementId || '';
+  if (!reqId) throw new Error('No requirement selected.');
+  if (!Array.isArray(lastResults)) throw new Error('No results loaded.');
+
+  const failingRows = lastResults.filter(r => r.requirementId === reqId && r.status === 'fail');
+
+  const failuresByResource = new Map();
+  for (const row of failingRows) {
+    const res = row.resource || '';
+    const qid = row.queryId || '';
+    if (!res) continue;
+
+    if (!failuresByResource.has(res)) failuresByResource.set(res, new Set());
+    if (qid) failuresByResource.get(res).add(qid);
+  }
+
+  const entries = Array.from(failuresByResource.entries())
+    .map(([resource, qSet]) => ({ resource, queryIds: Array.from(qSet).sort() }))
+    .sort((a, b) => String(a.resource).localeCompare(String(b.resource)));
+
+  const rows = [['requirementId', 'resource', 'queryIds']];
+
+  for (const e of entries) {
+    rows.push([reqId, e.resource, e.queryIds.join(' | ')]);
+  }
+
+  return rowsToCsv(rows);
+}
+
+function buildBatchSummaryCsv(batchReports) {
+  const batch = Array.isArray(batchReports)
+    ? batchReports
+    : (Array.isArray(lastBatchReports) ? lastBatchReports : []);
+
+  if (!batch.length) throw new Error('No batch results available.');
+
+  const rows = [[
+    'fileName',
+    'ontologyIri',
+    'statusIri',
+    'statusLabel',
+    'failedRequirements',
+    'failedRecommendations',
+    'totalRequirements',
+    'totalRecommendations'
+  ]];
+
+  for (const item of batch) {
+    const report = item.ontologyReport;
+    const reqs = Array.isArray(report?.requirements) ? report.requirements : [];
+
+    const failedReqs = reqs.filter(r => r.type === 'requirement' && r.status === 'fail').length;
+    const failedRecs = reqs.filter(r => r.type === 'recommendation' && r.status === 'fail').length;
+
+    const totalReqs = reqs.filter(r => r.type === 'requirement').length;
+    const totalRecs = reqs.filter(r => r.type === 'recommendation').length;
+
+    rows.push([
+      item.fileName || '',
+      report?.ontologyIri || '',
+      report?.statusIri || '',
+      report?.statusLabel || '',
+      String(failedReqs),
+      String(failedRecs),
+      String(totalReqs),
+      String(totalRecs)
+    ]);
+  }
+
+  return rowsToCsv(rows);
+}
+
+
+if (btnCsvFiltered) {
+  btnCsvFiltered.addEventListener('click', () => {
+    try {
+      const csv = buildFilteredResourcesCsv();
+      downloadTextFile(csv, `ocq_filtered_resources_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`, 'text/csv');
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+}
+
+if (btnCsvReqDetail) {
+  btnCsvReqDetail.addEventListener('click', () => {
+    try {
+      const csv = buildRequirementDetailCsv(lastSelectedRequirementId);
+      const safeReq = (lastSelectedRequirementId || 'requirement').replace(/[^\w\-]+/g, '_').slice(0, 60);
+      downloadTextFile(csv, `ocq_requirement_detail_${safeReq}_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`, 'text/csv');
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+}
+
+if (btnCsvBatchSummary) {
+  btnCsvBatchSummary.addEventListener('click', () => {
+    try {
+      const csv = buildBatchSummaryCsv(lastBatchReports);
+      downloadTextFile(csv, `ocq_batch_summary_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`, 'text/csv');
+    } catch (e) {
+      alert(e.message);
+    }
+  });
+}
+
+
 
 // --- Single-file run ("Run checks") ---
 btnRun.addEventListener('click', async () => {
