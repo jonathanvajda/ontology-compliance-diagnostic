@@ -13,6 +13,7 @@ const btnRun = document.getElementById('runChecksBtn');
 const runBatchBtn = document.getElementById('runBatchBtn');
 const btnCsv = document.getElementById('downloadResultsCsvBtn');
 const btnYaml = document.getElementById('downloadOntologyYamlBtn');
+const btnCsvFiltered = document.getElementById('downloadFilteredResourcesCsvBtn');
 const statusEl = document.getElementById('status');
 const tableContainer = document.getElementById('curationTableContainer');
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
@@ -23,7 +24,8 @@ const dashboardContainer = document.getElementById('dashboardContainer');
 let lastResults = null;
 let lastPerResource = null;
 let lastOntologyReport = null;
-let lastManifest = null; // if you want it
+let lastManifest = null;
+let requirementFilterPopulated = false;  // prevents duplicate option inserts
 
 function escapeHtml(str) {
   if (str == null) return '';
@@ -39,8 +41,7 @@ function escapeHtml(str) {
 async function evaluateFile(file) {
   const text = await file.text();
   const { results, resources, ontologyIri } = await evaluateAllQueries(text, file.name);
-  const manifestRes = await fetch('queries/manifest.json');
-  const manifest = await manifestRes.json();
+  const manifest = await ensureManifestLoaded();
 
   const perResource = computePerResourceCuration(results, manifest, resources);
   const ontologyReport = computeOntologyReport(results, manifest, ontologyIri);
@@ -344,8 +345,7 @@ btnRun.addEventListener('click', async () => {
 
   try {
     const { results, resources, ontologyIri } = await evaluateAllQueries(text, file.name);
-    const manifestRes = await fetch('queries/manifest.json');
-    const manifest = await manifestRes.json();
+    const manifest = await ensureManifestLoaded();
 
     const perResource = computePerResourceCuration(results, manifest, resources);
     const ontologyReport = computeOntologyReport(results, manifest, ontologyIri);
@@ -412,14 +412,53 @@ btnYaml.addEventListener('click', () => {
   downloadTextFile('ontology-report.yaml', yaml, 'text/yaml');
 });
 
+if (btnCsvFiltered) {
+  btnCsvFiltered.addEventListener('click', () => {
+    try {
+      const csv = buildFilteredResourcesCsv();
+      downloadTextFile(
+        csv,
+        `ocq_filtered_resources_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`,
+        'text/csv'
+      );
+    } catch (e) {
+      console.error(e);
+      alert(e.message || String(e));
+    }
+  });
+}
+
+
+async function ensureManifestLoaded() {
+  if (lastManifest) return lastManifest;
+
+  const res = await fetch('queries/manifest.json');
+  lastManifest = await res.json();
+
+  if (!requirementFilterPopulated) {
+    populateRequirementFilter(lastManifest);
+    requirementFilterPopulated = true;
+  }
+
+  return lastManifest;
+}
+
 function populateRequirementFilter(manifest) {
   const select = document.getElementById('requirementFilter');
-  manifest.requirements.forEach(req => {
+  if (!select) return;
+
+  const reqs = Array.isArray(manifest?.requirements) ? manifest.requirements : [];
+
+  // reset to only the default "Any" option
+  select.innerHTML = '<option value="">Any</option>';
+
+  for (const req of reqs) {
+    if (!req?.id) continue;
     const opt = document.createElement('option');
     opt.value = req.id;
     opt.textContent = req.id; // or `${req.id} (${req.type})`
     select.appendChild(opt);
-  });
+  }
 }
 
 function applyResourceFilters() {

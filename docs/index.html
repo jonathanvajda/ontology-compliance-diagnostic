@@ -19,6 +19,9 @@
   <div id="requirementDetailContainer"></div>
   <button id="downloadResultsCsvBtn">Download Results CSV</button>
   <button id="downloadOntologyYamlBtn">Download Ontology Report YAML</button>
+  <button id="downloadFilteredResourcesCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">Download Filtered Resources CSV</button>
+  <button id="downloadRequirementDetailCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">Download Requirement Detail CSV</button>
+  <button id="downloadBatchSummaryCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">Download Batch Summary CSV</button>
 
   <pre id="status"></pre>
 
@@ -26,25 +29,25 @@
   <div id="ontologyReportContainer"></div>
 
     <div id="curationFilters">
-    <label>
-      Curation status:
-      <select id="statusFilter">
-        <option value="">All</option>
-        <option value="uncurated">Uncurated</option>
-        <option value="metadata incomplete">Metadata incomplete</option>
-        <option value="metadata complete">Metadata complete</option>
-        <option value="pending final vetting">Pending final vetting</option>
-      </select>
-    </label>
+      <label>
+        Curation status:
+        <select id="statusFilter">
+          <option value="">All</option>
+          <option value="uncurated">Uncurated</option>
+          <option value="metadata incomplete">Metadata incomplete</option>
+          <option value="metadata complete">Metadata complete</option>
+          <option value="pending final vetting">Pending final vetting</option>
+        </select>
+      </label>
 
-    <label>
-      Fails requirement/recommendation:
-      <select id="requirementFilter">
-        <option value="">Any</option>
-        <!-- dynamically populate with manifest.requirements IDs + labels -->
-      </select>
-    </label>
-  </div>
+      <label>
+        Fails requirement/recommendation:
+        <select id="requirementFilter">
+          <option value="">Any</option>
+          <!-- dynamically populate with manifest.requirements IDs + labels -->
+        </select>
+      </label>
+    </div>
   <!-- Container for the per-resource curation table -->
   <div id="curationTableContainer"></div>
 
