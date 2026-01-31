@@ -55,14 +55,6 @@ let selectedBatchKey = null;     // stable selection key for dashboard rows
 let lastSelectedRequirementId = null;
 let lastSelectedRequirementRow = null;
 
-async function ensureManifestLoaded() {
-  if (lastManifest) return lastManifest;
-  const manifestRes = await fetch('queries/manifest.json');
-  lastManifest = await manifestRes.json();
-  populateRequirementFilter(lastManifest);
-  return lastManifest;
-}
-
 function buildFailuresIndex(results) {
   const byResource = new Map();
 
@@ -1166,15 +1158,12 @@ if (btnCsvFiltered) {
 
 async function ensureManifestLoaded() {
   if (lastManifest) return lastManifest;
-
   const res = await fetch('queries/manifest.json');
   lastManifest = await res.json();
-
   if (!requirementFilterPopulated) {
     populateRequirementFilter(lastManifest);
     requirementFilterPopulated = true;
   }
-
   return lastManifest;
 }
 
