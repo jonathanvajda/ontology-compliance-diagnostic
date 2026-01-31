@@ -2,9 +2,24 @@ PREFIX owl: <http://www.w3.org/2002/07/owl#>
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 
 ASK WHERE {
-  FILTER NOT EXISTS {
-    ?resource rdf:type owl:Class .
-    ?resource rdf:type owl:NamedIndividual .
+  VALUES (?t1 ?t2) {
+    (owl:Class owl:NamedIndividual)
+    (owl:Class owl:ObjectProperty)
+    (owl:Class owl:DatatypeProperty)
+    (owl:Class owl:AnnotationProperty)
+
+    (owl:NamedIndividual owl:ObjectProperty)
+    (owl:NamedIndividual owl:DatatypeProperty)
+    (owl:NamedIndividual owl:AnnotationProperty)
+
+    (owl:ObjectProperty owl:DatatypeProperty)
+    (owl:ObjectProperty owl:AnnotationProperty)
+
+    (owl:DatatypeProperty owl:AnnotationProperty)
   }
-FILTER(isIRI(?resource))
+
+  ?resource rdf:type ?t1 ;
+            rdf:type ?t2 .
+  FILTER(isIRI(?resource))
+  FILTER NOT EXISTS { ?resource rdf:type owl:Ontology }
 }

@@ -2,7 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Ontology Checks - Phase 3</title>
+  <title>Ontology Checks - Phase 5</title>
+    <meta name="description" content="Curation Status Manager (needs a better name) is a web application for checking an ontology against a variety of quality assurance checks (SPARQL or SHACL based, typically), generating a report for recommending a per-ontology error/warn/info list and per-element curation-status (OBO style) maturity tag. Supports exporting in CSV and YAML" />
+  <meta name="author" content="Jonathan Vajda" />
+  <meta name="dcterms.creator" content="Jonathan Vajda" />
+  <meta name="dcterms.rightsHolder" content="Jonathan Vajda" />
+  <meta name="license" content="CC BY 4.0" />
+  <meta link rel="license" href="https://creativecommons.org/licenses/by/4.0/" />
+  <meta name="dcterms.license" content="https://creativecommons.org/licenses/by/4.0/" />
+  <meta name="version" content="0.2.0" />
+  <link rel="shortcut icon" href="favicon.ico">
+  <link rel="stylesheet" href="styles/ontology-curation-manager.css" />
 </head>
 <body>
   <h1>Ontology Checks - Phase 3</h1>
@@ -25,8 +35,8 @@
 
   <pre id="status"></pre>
 
-  <!-- Container for the ontology-level report -->
-  <div id="ontologyReportContainer"></div>
+      <!-- Container for the ontology-level report -->
+      <div id="ontologyReportContainer" class="ocq-section ocq-card"></div>
 
     <div id="curationFilters">
       <label>
