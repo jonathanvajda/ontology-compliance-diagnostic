@@ -844,7 +844,7 @@ function rowsToCsv(rows) {
 function buildFilteredResourcesCsv() {
   const data = Array.isArray(lastPerResource) ? lastPerResource : [];
 
-  const header = [
+  const rows = [[
     'resource',
     'statusIri',
     'statusLabel',
@@ -852,9 +852,7 @@ function buildFilteredResourcesCsv() {
     'failedRecommendationsCount',
     'failedRequirements',
     'failedRecommendations'
-  ];
-
-  const rows = [header];
+  ]];
 
   for (const r of data) {
     const failedReqs = Array.isArray(r.failedRequirements) ? r.failedRequirements : [];
@@ -947,14 +945,18 @@ function buildBatchSummaryCsv(batchReports) {
   return rowsToCsv(rows);
 }
 
+function isoFileStamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
 
 if (btnCsvFiltered) {
   btnCsvFiltered.addEventListener('click', () => {
     try {
       const csv = buildFilteredResourcesCsv();
-      downloadTextFile(csv, `ocq_filtered_resources_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`, 'text/csv');
+      downloadTextFile(csv, `ocq_filtered_resources_${isoFileStamp()}.csv`, 'text/csv');
     } catch (e) {
-      alert(e.message);
+      console.error(e);
+      alert(e.message || String(e));
     }
   });
 }
@@ -962,11 +964,13 @@ if (btnCsvFiltered) {
 if (btnCsvReqDetail) {
   btnCsvReqDetail.addEventListener('click', () => {
     try {
-      const csv = buildRequirementDetailCsv(lastSelectedRequirementId);
-      const safeReq = (lastSelectedRequirementId || 'requirement').replace(/[^\w\-]+/g, '_').slice(0, 60);
-      downloadTextFile(csv, `ocq_requirement_detail_${safeReq}_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`, 'text/csv');
+      const reqId = lastSelectedRequirementId || '';
+      const csv = buildRequirementDetailCsv(reqId);
+      const safeReq = (reqId || 'requirement').replace(/[^\w\-]+/g, '_').slice(0, 60);
+      downloadTextFile(csv, `ocq_requirement_detail_${safeReq}_${isoFileStamp()}.csv`, 'text/csv');
     } catch (e) {
-      alert(e.message);
+      console.error(e);
+      alert(e.message || String(e));
     }
   });
 }
@@ -975,13 +979,158 @@ if (btnCsvBatchSummary) {
   btnCsvBatchSummary.addEventListener('click', () => {
     try {
       const csv = buildBatchSummaryCsv(lastBatchReports);
-      downloadTextFile(csv, `ocq_batch_summary_${new Date().toISOString().replace(/[:.]/g,'-')}.csv`, 'text/csv');
+      downloadTextFile(csv, `ocq_batch_summary_${isoFileStamp()}.csv`, 'text/csv');
     } catch (e) {
-      alert(e.message);
+      console.error(e);
+      alert(e.message || String(e));
     }
   });
 }
 
+const downloadHtmlReportBtn = document.getElementById('downloadHtmlReportBtn');
+
+function safeText(v) { return escapeHtml(v == null ? '' : String(v)); }
+
+function buildHtmlReport() {
+  const now = new Date();
+  const createdAt = now.toISOString();
+  const statusFilter = statusFilterEl ? statusFilterEl.value : '';
+  const requirementFilter = requirementFilterEl ? requirementFilterEl.value : '';
+  const selectedReq = lastSelectedRequirementId || '';
+
+  const report = lastOntologyReport || null;
+  const perRes = Array.isArray(lastPerResource) ? lastPerResource : [];
+  const resultsCount = Array.isArray(lastResults) ? lastResults.length : 0;
+
+  // If a requirement is selected, reuse the same grouping logic as CSV export
+  let reqDetailRows = [];
+  if (selectedReq && Array.isArray(lastResults)) {
+    const failing = lastResults.filter(r => r.requirementId === selectedReq && r.status === 'fail');
+    const map = new Map();
+    for (const row of failing) {
+      const res = row.resource || '';
+      const qid = row.queryId || '';
+      if (!res) continue;
+      if (!map.has(res)) map.set(res, new Set());
+      if (qid) map.get(res).add(qid);
+    }
+    reqDetailRows = Array.from(map.entries())
+      .map(([resource, qSet]) => ({ resource, queryIds: Array.from(qSet).sort() }))
+      .sort((a, b) => String(a.resource).localeCompare(String(b.resource)));
+  }
+
+  // Minimal inline CSS; does not rely on your app CSS
+  const css = `
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; }
+    h1,h2,h3 { margin: 0.2rem 0 0.6rem; }
+    .meta { color: #333; margin: 0.25rem 0; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; margin: 14px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #fafafa; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+    .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; border: 1px solid #ddd; font-size: 0.9em; }
+    @media print { body { margin: 12mm; } .card { break-inside: avoid; } }
+  `;
+
+  let html = '';
+  html += '<!doctype html><html><head><meta charset="utf-8" />';
+  html += '<meta name="viewport" content="width=device-width, initial-scale=1" />';
+  html += '<title>Ontology Checks Report</title>';
+  html += `<style>${css}</style>`;
+  html += '</head><body>';
+
+  html += `<h1>Ontology Checks Report</h1>`;
+  html += `<div class="meta">Created: <span class="mono">${safeText(createdAt)}</span></div>`;
+  html += `<div class="meta">Results rows: <span class="mono">${safeText(resultsCount)}</span></div>`;
+
+  html += `<div class="card">`;
+  html += `<h2>View state</h2>`;
+  html += `<div class="meta">Curation status filter: <span class="mono">${safeText(statusFilter || 'All')}</span></div>`;
+  html += `<div class="meta">Fails requirement/recommendation filter: <span class="mono">${safeText(requirementFilter || 'Any')}</span></div>`;
+  html += `<div class="meta">Selected requirement: <span class="mono">${safeText(selectedReq || '(none)')}</span></div>`;
+  html += `</div>`;
+
+  // Ontology report card
+  html += `<div class="card"><h2>Ontology report</h2>`;
+  if (!report) {
+    html += `<p>No ontology report loaded.</p>`;
+  } else {
+    html += `<div class="meta">Ontology IRI: <span class="mono">${safeText(report.ontologyIri || '')}</span></div>`;
+    html += `<div class="meta">Overall status: <span class="pill">${safeText(report.statusLabel || '')}</span></div>`;
+
+    const reqs = Array.isArray(report.requirements) ? report.requirements : [];
+    html += `<table><thead><tr>
+      <th>id</th><th>type</th><th>status</th><th>failedResourcesCount</th>
+    </tr></thead><tbody>`;
+    for (const r of reqs) {
+      html += `<tr>
+        <td class="mono">${safeText(r.id)}</td>
+        <td>${safeText(r.type)}</td>
+        <td>${safeText(r.status)}</td>
+        <td class="mono">${safeText(r.failedResourcesCount ?? '')}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  html += `</div>`;
+
+  // Requirement detail (if selected)
+  if (selectedReq) {
+    html += `<div class="card"><h2>Requirement detail</h2>`;
+    if (!reqDetailRows.length) {
+      html += `<p>No failing resources found for selected requirement.</p>`;
+    } else {
+      html += `<table><thead><tr><th>Resource IRI</th><th>Failing query IDs</th></tr></thead><tbody>`;
+      for (const row of reqDetailRows) {
+        html += `<tr>
+          <td class="mono">${safeText(row.resource)}</td>
+          <td class="mono">${safeText(row.queryIds.join(', '))}</td>
+        </tr>`;
+      }
+      html += `</tbody></table>`;
+    }
+    html += `</div>`;
+  }
+
+  // Per-resource curation (filtered)
+  html += `<div class="card"><h2>Per-resource curation (filtered)</h2>`;
+  html += `<div class="meta">Rows: <span class="mono">${safeText(perRes.length)}</span></div>`;
+  if (!perRes.length) {
+    html += `<p>No resources in current view.</p>`;
+  } else {
+    html += `<table><thead><tr>
+      <th>resource</th><th>statusLabel</th><th>failedRequirements</th><th>failedRecommendations</th>
+    </tr></thead><tbody>`;
+    for (const r of perRes) {
+      const fr = Array.isArray(r.failedRequirements) ? r.failedRequirements : [];
+      const frec = Array.isArray(r.failedRecommendations) ? r.failedRecommendations : [];
+      html += `<tr>
+        <td class="mono">${safeText(r.resource || '')}</td>
+        <td>${safeText(r.statusLabel || '')}</td>
+        <td class="mono">${safeText(fr.join(', '))}</td>
+        <td class="mono">${safeText(frec.join(', '))}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  html += `</div>`;
+
+  html += '</body></html>';
+  return html;
+}
+
+if (downloadHtmlReportBtn) {
+  downloadHtmlReportBtn.addEventListener('click', () => {
+    try {
+      const html = buildHtmlReport();
+      downloadTextFile(html, `ocq_report_${isoFileStamp()}.html`, 'text/html');
+    } catch (e) {
+      console.error(e);
+      alert(e.message || String(e));
+    }
+  });
+}
 
 
 // --- Single-file run ("Run checks") ---
