@@ -2,5 +2,32 @@
   "dependencies": {
     "@comunica/query-sparql": "^4.5.0",
     "n3": "^1.26.0"
-  }
+  },
+  "name": "ontology-curation-manager",
+  "version": "1.0.0",
+  "description": "Reports the maturity of an ontology, assigning a curation status on an element and ontology level.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "eslint": "^9.39.2",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-sonarjs": "^3.0.6"
+  },
+  "scripts": {
+    "lint": "eslint . --ext .js,.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jonathanvajda/ontology-curation-manager.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jonathanvajda/ontology-curation-manager/issues"
+  },
+  "homepage": "https://github.com/jonathanvajda/ontology-curation-manager#readme"
 }
