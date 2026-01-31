@@ -14,17 +14,43 @@
   <link rel="shortcut icon" href="favicon.ico">
   <link rel="stylesheet" href="styles/ontology-curation-manager.css" />
 </head>
-<body>
-  <h1>Ontology Checks - Phase 3</h1>
+<body class="ocq-body">
+  <div class="ocq-app ocq-theme-light" id="appRoot">
+    <div class="ocq-header">
+        <div class="ocq-header-left">
+          <h1 class="ocq-h1">Ontology Checks</h1>
+          <p class="ocq-lede">
+            Select an ontology file (e.g., TTL) and click "Run checks".<br />
+            Results will be logged to the browser console, and a per-resource curation table will appear below.
+          </p></p>
+        </div>
+      <div class="ocq-header-right">
+        <button id="ocqThemeToggleBtn"
+                class="ocq-btn ocq-btn-secondary"
+                type="button"
+                aria-label="Toggle light and dark theme">
+          Toggle theme
+        </button>
+      </div>
+    </div>
 
-  <p>
-    Select an ontology file (e.g., TTL) and click "Run checks".<br />
-    Results will be logged to the browser console, and a per-resource curation table will appear below.
-  </p>
+    <div class="ocq-section ocq-card">
+      <div class="ocq-toolbar">
+        <div class="ocq-toolbar-left">
+          <label class="ocq-label" for="ontologyFiles">Ontology files</label>
+          <div class="ocq-file-row"></div>
+            <input class="ocq-input ocq-input-file" type="file" id="ontologyFiles" accept=".ttl,.rdf,.owl,.nt,.nq,.trig,.jsonld" multiple />
+            <p>Select an ontology file (e.g., TTL) and click "Run checks".<br /> Results will be logged to the browser console, and a per-resource curation table will appear below.</p>
+      <div class="ocq-actions">
+              <button id="runChecksBtn" class="ocq-btn ocq-btn-primary" type="button">Run checks</button>
+              <button id="runBatchBtn" class="ocq-btn ocq-btn-secondary" type="button">Run batch checks</button>
+            </div>
+          </div>
 
-  <input type="file" id="ontologyFiles" accept=".ttl,.rdf,.owl,.nt,.nq,.trig,.jsonld" multiple />
-  <button id="runChecksBtn">Run checks</button>
-  <button id="runBatchBtn">Run batch checks</button>
+          <p class="ocq-help">
+            Tip: For keyboard users, requirement rows are focusable — press Enter/Space to open details.
+          </p>
+        </div>
   <div id="dashboardContainer"></div>
   <div id="requirementDetailContainer"></div>
   <button id="downloadResultsCsvBtn">Download Results CSV</button>
@@ -34,10 +60,6 @@
   <button id="downloadBatchSummaryCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">Download Batch Summary CSV</button>
 
   <pre id="status"></pre>
-
-      <!-- Container for the ontology-level report -->
-      <div id="ontologyReportContainer" class="ocq-section ocq-card"></div>
-
     <div id="curationFilters">
       <label>
         Curation status:
@@ -62,6 +84,80 @@
   <div id="curationTableContainer"></div>
 
   <div id="requirementDetailContainer"></div>
+   <div class="ocq-toolbar-right">
+          <div class="ocq-export">
+            <button id="downloadResultsCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">
+              Download Results CSV
+            </button>
+            <button id="downloadOntologyYamlBtn" class="ocq-btn ocq-btn-tertiary" type="button">
+              Download Ontology Report YAML
+            </button>
+            <button id="downloadFilteredResourcesCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">
+              Download Filtered Resources CSV
+            </button>
+            <button id="downloadRequirementDetailCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">
+              Download Requirement Detail CSV
+            </button>
+            <button id="downloadBatchSummaryCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">
+              Download Batch Summary CSV
+            </button>
+
+            <!-- Phase 6.2: Saved runs -->
+            <select id="savedRunsSelect" class="ocq-input ocq-select" aria-label="Saved runs">
+              <option value="">Saved runs…</option>
+            </select>
+            <button id="loadSavedRunBtn" class="ocq-btn ocq-btn-tertiary" type="button">Load</button>
+            <button id="deleteSavedRunBtn" class="ocq-btn ocq-btn-tertiary" type="button">Delete</button>
+            <button id="printReportBtn" class="ocq-btn ocq-btn-tertiary" type="button">Print</button>            
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="status" class="ocq-status" aria-live="polite"></div>
+
+    <div id="dashboardContainer" class="ocq-section ocq-card"></div>
+
+      <!-- Container for the ontology-level report -->
+      <div id="ontologyReportContainer" class="ocq-section ocq-card"></div>
+
+        <div id="curationFiltersContainer" class="ocq-section ocq-card">
+          <h2 class="ocq-title">Resource filters</h2>
+
+          <div class="ocq-filters">
+            <div class="ocq-filter">
+              <label class="ocq-label" for="statusFilter">Curation status</label>
+              <select id="statusFilter" class="ocq-input ocq-select">
+                <option value="">All</option>
+                <option value="uncurated">uncurated</option>
+                <option value="metadata incomplete">metadata incomplete</option>
+                <option value="metadata complete">metadata complete</option>
+                <option value="pending final vetting">pending final vetting</option>
+              </select>
+            </div>
+
+            <div class="ocq-filter">
+              <label class="ocq-label" for="requirementFilter">Fails requirement / recommendation</label>
+              <select id="requirementFilter" class="ocq-input ocq-select">
+                <option value="">Any</option>
+              </select>
+            </div>
+
+            <div class="ocq-filter ocq-filter-actions">
+              <button id="clearFiltersBtn" class="ocq-btn ocq-btn-secondary" type="button">
+                Clear filters
+              </button>
+            </div>
+          </div>
+
+          <div id="curationFiltersSummary" class="ocq-status" aria-live="polite"></div>
+        </div>
+    <!-- Container for the per-resource curation table -->
+    <div id="curationTableContainer" class="ocq-section ocq-card"></div>
+
+    <div id="requirementDetailContainer" class="ocq-section ocq-card"></div>
+ 
+  </div>
 
   <script src="app/n3.min.js"></script>
   <script src="app/comunica-browser.js"></script>

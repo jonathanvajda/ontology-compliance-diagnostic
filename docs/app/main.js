@@ -46,7 +46,7 @@ let lastResults = null;
 let lastPerResource = null;
 let lastFailuresIndex = null; 
 let lastOntologyReport = null;
-
+let requirementFilterPopulated = false;  // prevents duplicate option inserts
 let ontologyReportEventsWired = false;
 let lastBatchReports = null;     // Array of { fileName, ontologyIri, ontologyReport, perResource, results }
 let selectedBatchKey = null;     // stable selection key for dashboard rows
@@ -94,7 +94,6 @@ function cssEscapeAttr(value) {
   return String(value).replace(/"/g, '\\"');
 }
 
-let lastManifest = null;
 let lastPerResourceFull = null; // unfiltered source of truth
 
 const statusFilterEl = document.getElementById('statusFilter');
@@ -1042,9 +1041,7 @@ btnRun.addEventListener('click', async () => {
 
   try {
     const { results, resources, ontologyIri } = await evaluateAllQueries(text, file.name);
-
-    const manifestRes = await fetch('queries/manifest.json');
-    const manifest = await manifestRes.json();
+    const manifest = await ensureManifestLoaded();
 
     const perResource = computePerResourceCuration(results, manifest, resources);
     const ontologyReport = computeOntologyReport(results, manifest, ontologyIri);
@@ -1149,6 +1146,55 @@ btnYaml.addEventListener('click', () => {
   const yaml = ontologyReportToYaml(lastOntologyReport);
   downloadTextFile('ontology-report.yaml', yaml, 'text/yaml');
 });
+
+if (btnCsvFiltered) {
+  btnCsvFiltered.addEventListener('click', () => {
+    try {
+      const csv = buildFilteredResourcesCsv();
+      downloadTextFile(
+        csv,
+        `ocq_filtered_resources_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`,
+        'text/csv'
+      );
+    } catch (e) {
+      console.error(e);
+      alert(e.message || String(e));
+    }
+  });
+}
+
+
+async function ensureManifestLoaded() {
+  if (lastManifest) return lastManifest;
+
+  const res = await fetch('queries/manifest.json');
+  lastManifest = await res.json();
+
+  if (!requirementFilterPopulated) {
+    populateRequirementFilter(lastManifest);
+    requirementFilterPopulated = true;
+  }
+
+  return lastManifest;
+}
+
+function populateRequirementFilter(manifest) {
+  const select = document.getElementById('requirementFilter');
+  if (!select) return;
+
+  const reqs = Array.isArray(manifest?.requirements) ? manifest.requirements : [];
+
+  // reset to only the default "Any" option
+  select.innerHTML = '<option value="">Any</option>';
+
+  for (const req of reqs) {
+    if (!req?.id) continue;
+    const opt = document.createElement('option');
+    opt.value = req.id;
+    opt.textContent = req.id; // or `${req.id} (${req.type})`
+    select.appendChild(opt);
+  }
+};
 
 // Phase 6.1 — enable batch drill-down selection
 wireBatchDashboardSelection();
