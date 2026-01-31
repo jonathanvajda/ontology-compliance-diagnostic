@@ -93,27 +93,6 @@ const requirementFilterEl = document.getElementById('requirementFilter');
 const clearFiltersBtn = document.getElementById('clearFiltersBtn');
 const curationFiltersSummaryEl = document.getElementById('curationFiltersSummary');
 
-function populateRequirementFilter(manifest) {
-  if (!requirementFilterEl) return;
-
-  // Reset to default
-  requirementFilterEl.innerHTML = '<option value="">Any</option>';
-
-  if (!manifest || !Array.isArray(manifest.requirements)) return;
-
-  for (const req of manifest.requirements) {
-    if (!req || !req.id) continue;
-
-    const opt = document.createElement('option');
-    opt.value = req.id;
-
-    // Keep label simple and diff-friendly; you can enrich later
-    opt.textContent = req.id + (req.type ? ` (${req.type})` : '');
-
-    requirementFilterEl.appendChild(opt);
-  }
-}
-
 function applyResourceFilters() {
   if (!lastPerResourceFull) return;
 
@@ -1168,22 +1147,24 @@ async function ensureManifestLoaded() {
 }
 
 function populateRequirementFilter(manifest) {
-  const select = document.getElementById('requirementFilter');
-  if (!select) return;
+  if (!requirementFilterEl) return;
+
+  // Reset to default
+  requirementFilterEl.innerHTML = '<option value="">Any</option>';
 
   const reqs = Array.isArray(manifest?.requirements) ? manifest.requirements : [];
-
-  // reset to only the default "Any" option
-  select.innerHTML = '<option value="">Any</option>';
-
   for (const req of reqs) {
     if (!req?.id) continue;
+
     const opt = document.createElement('option');
     opt.value = req.id;
-    opt.textContent = req.id; // or `${req.id} (${req.type})`
-    select.appendChild(opt);
+
+    // Keep label simple and diff-friendly; enrich later if desired
+    opt.textContent = req.id + (req.type ? ` (${req.type})` : '');
+
+    requirementFilterEl.appendChild(opt);
   }
-};
+}
 
 // Phase 6.1 — enable batch drill-down selection
 wireBatchDashboardSelection();
