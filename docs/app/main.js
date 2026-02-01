@@ -19,6 +19,7 @@ const btnCsvReqDetail = document.getElementById('downloadRequirementDetailCsvBtn
 const btnCsvBatchSummary = document.getElementById('downloadBatchSummaryCsvBtn');
 const btnYaml = document.getElementById('downloadOntologyYamlBtn');
 const statusEl = document.getElementById('status');
+const resourceSearchEl = document.getElementById('resourceSearch');
 const curationTableContainer = document.getElementById('curationTableContainer');
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
 const requirementDetailContainer = document.getElementById('requirementDetailContainer');
@@ -50,6 +51,7 @@ let requirementFilterPopulated = false;  // prevents duplicate option inserts
 let ontologyReportEventsWired = false;
 let lastBatchReports = null;     // Array of { fileName, ontologyIri, ontologyReport, perResource, results }
 let selectedBatchKey = null;     // stable selection key for dashboard rows
+let resourceSearchTimer = null;
 
 // Phase 6.2 — saved runs UI
 let lastSelectedRequirementId = null;
@@ -82,6 +84,15 @@ function safeIdFromIri(iri) {
     .slice(0, 80);
 }
 
+if (resourceSearchEl) {
+  resourceSearchEl.addEventListener('input', () => {
+    if (resourceSearchTimer) clearTimeout(resourceSearchTimer);
+    resourceSearchTimer = setTimeout(() => {
+      applyResourceFilters();
+    }, 150);
+  });
+}
+
 function cssEscapeAttr(value) {
   return String(value).replace(/"/g, '\\"');
 }
@@ -111,6 +122,16 @@ function applyResourceFilters() {
       const frec = Array.isArray(r.failedRecommendations) ? r.failedRecommendations : [];
       return fr.includes(requirementValue) || frec.includes(requirementValue);
     });
+
+  // 6.5.1 — Resource substring search
+  const q = (resourceSearchEl?.value || '').trim().toLowerCase();
+  if (q) {
+    filtered = filtered.filter(r =>
+      String(r?.resource || '').toLowerCase().includes(q)
+    );
+  }
+
+
   }
 
   if (curationFiltersSummaryEl) {

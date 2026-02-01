@@ -41,11 +41,11 @@
           <div class="ocq-file-row"></div>
             <input class="ocq-input ocq-input-file" type="file" id="ontologyFiles" accept=".ttl,.rdf,.owl,.nt,.nq,.trig,.jsonld" multiple />
             <p>Select an ontology file (e.g., TTL) and click "Run checks".<br /> Results will be logged to the browser console, and a per-resource curation table will appear below.</p>
-      <div class="ocq-actions">
-              <button id="runChecksBtn" class="ocq-btn ocq-btn-primary" type="button">Run checks</button>
-              <button id="runBatchBtn" class="ocq-btn ocq-btn-secondary" type="button">Run batch checks</button>
-            </div>
+          <div class="ocq-actions">
+            <button id="runChecksBtn" class="ocq-btn ocq-btn-primary" type="button">Run checks</button>
+            <button id="runBatchBtn" class="ocq-btn ocq-btn-secondary" type="button">Run batch checks</button>
           </div>
+        </div>
 
           <p class="ocq-help">
             Tip: For keyboard users, requirement rows are focusable — press Enter/Space to open details.
@@ -73,6 +73,12 @@
           <!-- dynamically populate with manifest.requirements IDs + labels -->
         </select>
       </label>
+
+      <label>
+        Resource IRI contains:
+        <input id="resourceSearch" class="ocq-input" type="text" placeholder="e.g., obo:IAO_" autocomplete="off" />
+      </label>
+
     </div>
   <!-- Container for the per-resource curation table -->
   <div id="curationTableContainer"></div>
@@ -89,7 +95,7 @@
             <button id="downloadHtmlReportBtn" class="ocq-btn ocq-btn-tertiary" type="button">
               Download HTML report
             </button>
-            
+
             <button id="downloadFilteredResourcesCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">
               Download Filtered Resources CSV
             </button>
