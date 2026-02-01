@@ -43,6 +43,7 @@ if (curationTableContainer) {
 }
 
 
+let lastManifest = null;
 let lastResults = null;
 let lastPerResource = null;
 let lastFailuresIndex = null; 
