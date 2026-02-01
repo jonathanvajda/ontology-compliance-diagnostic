@@ -52,43 +52,44 @@
           </p>
         </div>
   <div id="dashboardContainer" class="ocq-section ocq-card"></div>
-  <div id="requirementDetailContainer"></div>
-  <div id="status" class="ocq-status" aria-live="polite"></div>
-
-
-
   
-  <div id="curationFilters" class="ocq-filters">
-    <div class="ocq-filter">
-      <label class="ocq-label" for="statusFilter">Curation status</label>
-      <select id="statusFilter" class="ocq-input ocq-select">
-        <option value="">All</option>
-        <option value="uncurated">uncurated</option>
-        <option value="metadata incomplete">metadata incomplete</option>
-        <option value="metadata complete">metadata complete</option>
-        <option value="pending final vetting">pending final vetting</option>
-      </select>
-    </div>
-      
-    <div class="ocq-filter">
-      <label class="ocq-label" for="requirementFilter">Fails requirement / recommendation</label>
-      <select id="requirementFilter" class="ocq-input ocq-select">
-        <option value="">Any</option>
-      </select>
-    </div>
-
-    <div class="ocq-filter">
-      <label>
-        Resource IRI contains:
-        <input id="resourceSearch" class="ocq-input" type="text" placeholder="e.g., obo:IAO_" autocomplete="off" />
-      </label>
-    </div>
-  </div>
   <!-- Container for the ontology-level report -->
   <div id="ontologyReportContainer" class="ocq-section ocq-card"></div>
 
+
+  <div id="requirementDetailContainer"></div>
+    <div id="status" class="ocq-status" aria-live="polite"></div>
     <div id="curationFiltersContainer" class="ocq-section ocq-card">
       <h2 class="ocq-title">Resource filters</h2>
+
+  <div id="curationFilters" class="ocq-filters">
+    
+      <div class="ocq-filter">
+        <label class="ocq-label" for="statusFilter">Curation status</label>
+        <select id="statusFilter" class="ocq-input ocq-select">
+          <option value="">All</option>
+          <option value="uncurated">uncurated</option>
+          <option value="metadata incomplete">metadata incomplete</option>
+          <option value="metadata complete">metadata complete</option>
+          <option value="pending final vetting">pending final vetting</option>
+        </select>
+      </div>
+        
+      <div class="ocq-filter">
+        <label class="ocq-label" for="requirementFilter">Fails requirement / recommendation</label>
+        <select id="requirementFilter" class="ocq-input ocq-select">
+          <option value="">Any</option>
+        </select>
+      </div>
+
+      <div class="ocq-filter">
+        <label>
+          Resource IRI contains:
+          <input id="resourceSearch" class="ocq-input" type="text" placeholder="e.g., obo:IAO_" autocomplete="off" />
+        </label>
+      </div>
+    </div>
+    
 
         <div class="ocq-filter ocq-filter-actions">
           <button id="clearFiltersBtn" class="ocq-btn ocq-btn-secondary" type="button">
