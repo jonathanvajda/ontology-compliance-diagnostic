@@ -1,4 +1,4 @@
-// ./scripts/site-header.js
+// ./app/site-header.js
 (() => {
   "use strict";
 
