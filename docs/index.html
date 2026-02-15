@@ -12,9 +12,23 @@
   <meta name="dcterms.license" content="https://creativecommons.org/licenses/by/4.0/" />
   <meta name="version" content="0.2.0" />
   <link rel="shortcut icon" href="favicon.ico">
-  <link rel="stylesheet" href="styles/ontology-curation-manager.css" />
+
+  <!-- Public CSS -->
+  <link rel="stylesheet" href="./styles/normalize.css" />
+  <link rel="stylesheet" href="./styles/skeleton.css" />
+
+  <!-- App Global CSS -->
+  <link rel="stylesheet" href="./styles/site-header.css" />
+  <link rel="stylesheet" href="./styles/app-base.css" />
+
+  <!-- App Local CSS -->
+  <link rel="stylesheet" href="./styles/ontology-curation-manager.css" />
 </head>
-<body class="ocq-body">
+
+<body data-page-id="ontology-curation-manager">
+
+  <header id="siteHeader" class="sitehdr-root table-nova-header" role="banner" aria-label="Site header"></header>
+
   <div class="ocq-app ocq-theme-light" id="appRoot">
     <div class="ocq-header">
         <div class="ocq-header-left">
@@ -150,9 +164,10 @@
  
   </div>
 
-  <script src="app/n3.min.js"></script>
-  <script src="app/comunica-browser.js"></script>
-  <script type="module" src="app/main.js"></script>
+  <script src="./app/n3.min.js"></script>
+  <script src="./app/comunica-browser.js"></script>
+  <script src="./app/site-header.js"></script>
+  <script type="module" src="./app/main.js"></script>
   
 </body>
 </html>
