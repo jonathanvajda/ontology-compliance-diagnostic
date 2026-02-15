@@ -28,7 +28,7 @@
       {
         title: "Data Exploration",
         items: [
-          { label: "OntoEagle", href: "/search.html", pageId: "ontoeagle" },
+          { label: "OntoEagle", href: "https://jonathanvajda.github.io/OntoEagle", pageId: "ontoeagle" },
         //  { label: "IRI Registry", href: "/iri-registry.html", pageId: "iri-registry" },
           { label: "Ontology Tabulator", href: "https://jonathanvajda.github.io/ontology-tabulator/", pageId: "ontology-tabulator" },
         ],
