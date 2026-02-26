@@ -1,48 +1,30 @@
 /* =========================
    Ontology Curation QA (OCQ)
    Scoped UX styles
+   - Relies on global theme tokens: --ont-*
+   - Theme toggled via <html data-theme="dark|light">
    ========================= */
 
-
-/* ===== Full page theming root ===== */
-
+/* Optional page fallback (before app loads) */
 .ocq-body {
   margin: 0;
-  background: #ffffff; /* fallback before appRoot loads */
+  background: var(--ont-bg);
 }
 
-/* Ensure all “card/section” containers explicitly inherit readable text */
-.ocq-app .ocq-section,
-.ocq-app .ocq-card,
-.ocq-app .ocq-detail {
-  color: var(--ocq-text);
-}
-
-/* If you have any plain containers without classes, add this class to them */
-.ocq-app .ocq-text {
-  color: var(--ocq-text);
-}
-
-.ocq-app .ocq-muted {
-  color: var(--ocq-text-muted);
-}
+/* ===== App root ===== */
 
 .ocq-app {
   /* Full viewport height */
   min-height: 100vh;
-  background: var(--ocq-bg);
-  color: var(--ocq-text);
+  background: var(--ont-bg);
+  color: var(--ont-text);
+  font-family: var(--ont-font-body);
 
-  /* Typography */
-  --ocq-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-  --ocq-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-
-  /* Layout + shape */
+  /* OCQ-local shape + elevation */
   --ocq-radius: 12px;
   --ocq-radius-sm: 10px;
-  --ocq-border: 1px solid var(--ocq-border-color);
-  --ocq-shadow: 0 6px 20px rgba(0,0,0,0.08);
-  --ocq-shadow-sm: 0 3px 12px rgba(0,0,0,0.06);
+  --ocq-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  --ocq-shadow-sm: 0 3px 12px rgba(0, 0, 0, 0.06);
 
   /* Spacing */
   --ocq-space-1: 6px;
@@ -50,95 +32,64 @@
   --ocq-space-3: 14px;
   --ocq-space-4: 18px;
 
-  /* Focus ring (high visibility) */
-  --ocq-focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.35); /* muted blue */
+  /* Focus ring */
+  --ocq-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ont-focus) 35%, transparent);
 
-  font-family: var(--ocq-font);
+  /* Derived surfaces */
+  --ocq-surface: var(--ont-panel-bg);
+  --ocq-surface-2: color-mix(in srgb, var(--ont-panel-bg) 92%, var(--ont-text) 8%);
+
+  /* Accent panel (tan/wood vibe -> now token-derived) */
+  --ocq-accent-bg: color-mix(in srgb, var(--ont-accent-soft) 70%, var(--ont-panel-bg));
+  --ocq-accent-border: color-mix(in srgb, var(--ont-border) 60%, var(--ont-accent));
+
+  /* Status palette (kept as local semantic tokens) */
+  --ocq-success-bg: color-mix(in srgb, #22c55e 18%, transparent);
+  --ocq-success-text: color-mix(in srgb, #22c55e 78%, var(--ont-text));
+
+  --ocq-warn-bg: color-mix(in srgb, #f59e0b 18%, transparent);
+  --ocq-warn-text: color-mix(in srgb, #f59e0b 82%, var(--ont-text));
+
+  --ocq-danger-bg: color-mix(in srgb, #ef4444 18%, transparent);
+  --ocq-danger-text: color-mix(in srgb, #ef4444 82%, var(--ont-text));
+
+  --ocq-info-bg: color-mix(in srgb, var(--ont-accent) 18%, transparent);
+  --ocq-info-text: color-mix(in srgb, var(--ont-accent) 80%, var(--ont-text));
 }
 
+/* Ensure “card/section” containers inherit readable text */
+.ocq-app .ocq-section,
+.ocq-app .ocq-card,
+.ocq-app .ocq-detail,
+.ocq-app .ocq-text {
+  color: var(--ont-text);
+}
 
+.ocq-app .ocq-muted {
+  color: var(--ont-muted);
+}
+
+/* Theme toggle bar */
 .ocq-app .ocq-theme-toggle-bar {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 14px;
 }
 
-/* ---- Theme: Light ---- */
-.ocq-app.ocq-theme-light {
-  --ocq-bg: #f7f8fa;
-  --ocq-surface: #ffffff;
-  --ocq-surface-2: #f1f3f6;
-  --ocq-text: #111827;
-  --ocq-text-muted: #4b5563;
-  --ocq-border-color: #d1d5db;
-
-  --ocq-link: #1d4ed8;
-  --ocq-link-hover: #1e40af;
-
-  /* Status palette (muted but readable) */
-  --ocq-success-bg: #e7f5ee;
-  --ocq-success-text: #0f5132;
-
-  --ocq-warn-bg: #fff3cd;
-  --ocq-warn-text: #664d03;
-
-  --ocq-danger-bg: #fde8e8;
-  --ocq-danger-text: #7f1d1d;
-
-  --ocq-info-bg: #e8f0ff;
-  --ocq-info-text: #1e3a8a;
-
-  /* “tan / light wood” accent (subtle) */
-  --ocq-accent-bg: #f5efe6;
-  --ocq-accent-border: #e6d8c3;
-}
-
-/* ---- Theme: Dark ---- */
-.ocq-app.ocq-theme-dark {
-  --ocq-bg: #0b1220;
-  --ocq-surface: #0f172a;
-  --ocq-surface-2: #111c33;
-  --ocq-text: #e5e7eb;
-  --ocq-text-muted: #a1a1aa;
-  --ocq-border-color: #26324a;
-
-  --ocq-link: #93c5fd;
-  --ocq-link-hover: #bfdbfe;
-
-  --ocq-success-bg: #0f2a1e;
-  --ocq-success-text: #9ae6b4;
-
-  --ocq-warn-bg: #2b2313;
-  --ocq-warn-text: #fcd34d;
-
-  --ocq-danger-bg: #2b1212;
-  --ocq-danger-text: #fecaca;
-
-  --ocq-info-bg: #111e3a;
-  --ocq-info-text: #bfdbfe;
-
-  --ocq-accent-bg: #1a2336;
-  --ocq-accent-border: #2c3a55;
-
-  --ocq-shadow: 0 10px 26px rgba(0,0,0,0.35);
-  --ocq-shadow-sm: 0 6px 18px rgba(0,0,0,0.25);
-}
-
 /* =========================
    Base layout utilities
    ========================= */
 
-/* Your page padding area also inherits theme */
 .ocq-app .ocq-page {
   min-height: 100vh;
-  background: var(--ocq-bg);
-  color: var(--ocq-text);
+  background: var(--ont-bg);
+  color: var(--ont-text);
   padding: var(--ocq-space-4);
 }
 
 .ocq-app .ocq-section {
   background: var(--ocq-surface);
-  border: var(--ocq-border);
+  border: 1px solid var(--ont-border);
   border-radius: var(--ocq-radius);
   box-shadow: var(--ocq-shadow-sm);
   padding: var(--ocq-space-4);
@@ -154,7 +105,7 @@
 
 .ocq-app .ocq-subtitle {
   margin: 0 0 var(--ocq-space-3) 0;
-  color: var(--ocq-text-muted);
+  color: var(--ont-muted);
   font-size: 13px;
   line-height: 1.35;
 }
@@ -168,16 +119,15 @@
 }
 
 .ocq-app .ocq-kv-label {
-  color: var(--ocq-text-muted);
+  color: var(--ont-muted);
   font-weight: 600;
 }
 
 .ocq-app .ocq-kv-value {
-  color: var(--ocq-text);
-  font-family: var(--ocq-font-mono);
+  color: var(--ont-text);
+  font-family: var(--ont-font-mono);
   font-size: 12.5px;
 }
-
 
 /* =========================
    Header + layout
@@ -200,7 +150,7 @@
 
 .ocq-app .ocq-lede {
   margin: 8px 0 0 0;
-  color: var(--ocq-text-muted);
+  color: var(--ont-muted);
   font-size: 13.5px;
   line-height: 1.45;
   max-width: 78ch;
@@ -236,7 +186,7 @@
   display: block;
   font-size: 13px;
   font-weight: 700;
-  color: var(--ocq-text);
+  color: var(--ont-text);
   margin-bottom: 8px;
 }
 
@@ -247,13 +197,7 @@
   flex-wrap: wrap;
 }
 
-.ocq-app .ocq-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
+.ocq-app .ocq-actions,
 .ocq-app .ocq-export {
   display: flex;
   align-items: center;
@@ -266,9 +210,9 @@
    ========================= */
 
 .ocq-app .ocq-input {
-  border: 1px solid var(--ocq-border-color);
-  background: var(--ocq-surface);
-  color: var(--ocq-text);
+  border: 1px solid var(--ont-border);
+  background: var(--ont-input-bg);
+  color: var(--ont-input-text);
   border-radius: 10px;
   padding: 8px 10px;
   font-size: 13px;
@@ -283,31 +227,62 @@
   padding: 7px 10px;
 }
 
+.ocq-app .ocq-select {
+  padding-right: 34px;
+}
+
 /* =========================
-   Buttons: variants
+   Links + buttons
    ========================= */
 
-.ocq-app .ocq-btn-primary {
-  border-color: transparent;
-  background: #1d4ed8;  /* muted blue */
-  color: #ffffff;
+.ocq-app .ocq-link {
+  color: var(--ont-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ocq-app .ocq-link:hover {
+  color: var(--ont-link-hover);
+}
+
+.ocq-app .ocq-btn {
+  appearance: none;
+  border: 1px solid var(--ont-btn-border);
+  background: transparent;
+  color: var(--ont-btn-text);
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 650;
+  font-size: 13px;
+  cursor: pointer;
   box-shadow: var(--ocq-shadow-sm);
 }
 
-.ocq-app.ocq-theme-dark .ocq-btn-primary {
-  background: #2563eb;
+.ocq-app .ocq-btn:hover {
+  background: var(--ocq-surface-2);
+  border-color: var(--ont-btn-hover-border);
+  color: var(--ont-btn-hover-text);
+}
+
+.ocq-app .ocq-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--ocq-focus-ring);
+}
+
+/* Button variants */
+.ocq-app .ocq-btn-primary {
+  border-color: transparent;
+  background: var(--ont-accent);
+  color: #fff;
+  box-shadow: var(--ocq-shadow-sm);
 }
 
 .ocq-app .ocq-btn-primary:hover {
-  background: #1e40af;
-}
-
-.ocq-app.ocq-theme-dark .ocq-btn-primary:hover {
-  background: #1d4ed8;
+  background: var(--ont-link-hover);
 }
 
 .ocq-app .ocq-btn-secondary {
-  background: var(--ocq-surface);
+  background: transparent;
 }
 
 .ocq-app .ocq-btn-tertiary {
@@ -320,18 +295,17 @@
 
 .ocq-app .ocq-status {
   margin: 0 0 18px 0;
-  color: var(--ocq-text-muted);
+  color: var(--ont-muted);
   font-size: 13px;
   min-height: 18px;
 }
 
 .ocq-app .ocq-help {
   margin: 10px 0 0 0;
-  color: var(--ocq-text-muted);
+  color: var(--ont-muted);
   font-size: 12.8px;
   line-height: 1.4;
 }
-
 
 /* =========================
    Tables (scoped)
@@ -341,21 +315,23 @@
   width: 70%;
   border-collapse: separate;
   border-spacing: 0;
-  border: var(--ocq-border);
+
+  border: 1px solid var(--ont-border);
   border-radius: var(--ocq-radius-sm);
-  overflow: hidden; /* works with radius in many browsers */
+  overflow: hidden;
+
   background: var(--ocq-surface);
 }
 
 .ocq-app .ocq-table-head {
   background: var(--ocq-surface-2);
-  color: var(--ocq-text);
+  color: var(--ont-text);
 }
 
 .ocq-app .ocq-table-th,
 .ocq-app .ocq-table-td {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--ocq-border-color);
+  border-bottom: 1px solid var(--ont-table-border);
   vertical-align: top;
   font-size: 13px;
   line-height: 1.35;
@@ -364,7 +340,7 @@
 .ocq-app .ocq-table-th {
   text-align: left;
   font-weight: 650;
-  color: var(--ocq-text);
+  color: var(--ont-text);
 }
 
 .ocq-app .ocq-table-tr:last-child .ocq-table-td {
@@ -408,46 +384,16 @@
   border-radius: 999px;
   font-size: 12px;
   font-weight: 650;
-  border: 1px solid var(--ocq-border-color);
+
+  border: 1px solid var(--ont-border);
   background: var(--ocq-surface-2);
-  color: var(--ocq-text);
+  color: var(--ont-text);
 }
 
 .ocq-app .ocq-badge-success { background: var(--ocq-success-bg); color: var(--ocq-success-text); border-color: transparent; }
 .ocq-app .ocq-badge-warn    { background: var(--ocq-warn-bg);    color: var(--ocq-warn-text);    border-color: transparent; }
 .ocq-app .ocq-badge-danger  { background: var(--ocq-danger-bg);  color: var(--ocq-danger-text);  border-color: transparent; }
 .ocq-app .ocq-badge-info    { background: var(--ocq-info-bg);    color: var(--ocq-info-text);    border-color: transparent; }
-
-/* =========================
-   Links + buttons
-   ========================= */
-
-.ocq-app .ocq-link {
-  color: var(--ocq-link);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.ocq-app .ocq-link:hover {
-  color: var(--ocq-link-hover);
-}
-
-.ocq-app .ocq-btn {
-  appearance: none;
-  border: 1px solid var(--ocq-border-color);
-  background: var(--ocq-surface);
-  color: var(--ocq-text);
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-weight: 650;
-  font-size: 13px;
-  cursor: pointer;
-  box-shadow: var(--ocq-shadow-sm);
-}
-
-.ocq-app .ocq-btn:hover {
-  background: var(--ocq-surface-2);
-}
 
 /* =========================
    Requirement detail panel
@@ -476,19 +422,18 @@
 
 .ocq-app .ocq-detail-meta {
   margin-top: var(--ocq-space-2);
-  color: var(--ocq-text-muted);
+  color: var(--ont-muted);
   font-size: 13px;
 }
 
 .ocq-app .ocq-mono {
-  font-family: var(--ocq-font-mono);
+  font-family: var(--ont-font-mono);
   font-size: 12.5px;
 }
 
-/*  =========================
-    Filter controls for per-
-    resource curation table
-    ========================= */
+/* =========================
+   Filter controls
+   ========================= */
 
 .ocq-app .ocq-filters {
   display: flex;
@@ -506,10 +451,6 @@
 
 .ocq-app .ocq-filter-actions {
   min-width: auto;
-}
-
-.ocq-app .ocq-select {
-  padding-right: 34px;
 }
 
 .ocq-app .ocq-batch-row--selected {
