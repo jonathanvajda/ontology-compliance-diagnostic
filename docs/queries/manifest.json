@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "queries": [
     { "id": "q_duplicateLabels",
       "file": "q_duplicateLabels.rq",
@@ -13,9 +13,9 @@
     },
     { "id": "q_avoidPunning",
       "file": "q_avoidPunning_ask.rq",
-      "title": "Ontology avoids class/individual punning",
+      "title": "Ontology has no mixed metatype punning among class / individual / property categories",
       "kind": "ASK",
-      "polarity": "trueMeansPass",
+      "polarity": "falseMeansPass",
       "checksConformityTo": "req_noPunning",
       "scope": "ontology",
       "severity": "error",

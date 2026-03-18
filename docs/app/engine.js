@@ -165,6 +165,9 @@ async function evaluateSingleQuery(store, qMeta, queryText) {
 
   if (qMeta.kind === 'SELECT') {
     const rows = await runSelect(store, queryText);
+    console.log('query id:', qMeta.id);
+    console.log('query text:', queryText);
+    console.log('raw rows:', rows);
     const resourceVar = qMeta.resourceVar || 'resource';
 
     const records = rows.map(row => {
@@ -191,12 +194,23 @@ async function evaluateSingleQuery(store, qMeta, queryText) {
     const ok = await runAsk(store, queryText);
     let status;
 
-    if (qMeta.polarity === 'trueMeansPass') {
-      status = ok ? 'pass' : 'fail';
-    } else if (qMeta.polarity === 'trueMeansFail') {
-      status = ok ? 'fail' : 'pass';
-    } else {
-      status = ok ? 'pass' : 'fail';
+    switch (qMeta.polarity) {
+      case 'trueMeansPass':
+        status = ok ? 'pass' : 'fail';
+        break;
+
+      case 'trueMeansFail':
+      case 'falseMeansPass':
+        status = ok ? 'fail' : 'pass';
+        break;
+
+      case 'falseMeansFail':
+        status = ok ? 'pass' : 'fail';
+        break;
+
+      default:
+        status = 'fail';
+        details = { askResult: ok, error: `Unknown polarity: ${qMeta.polarity}` };
     }
 
     const ontologyIri = guessOntologyIri(store);
