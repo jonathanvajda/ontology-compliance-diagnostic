@@ -1,0 +1,58 @@
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT ?ont ?license
+WHERE {
+  ?ont a owl:Ontology ;
+       dcterms:license ?license .
+
+  BIND(LCASE(REPLACE(STR(?license), "\\s+", " ")) AS ?lic)
+
+  FILTER(
+    (
+      REGEX(?lic, "^https?://creativecommons\\.org/licenses/by/([0-9]+(\\.[0-9]+)?)/*$")
+      &&
+      xsd:decimal(
+        REPLACE(
+          ?lic,
+          "^https?://creativecommons\\.org/licenses/by/([0-9]+(\\.[0-9]+)?)/*$",
+          "$1"
+        )
+      ) >= 3.0
+    )
+    ||
+    (
+      REGEX(?lic, "^cc\\s*by\\s*([0-9]+(\\.[0-9]+)?)$")
+      &&
+      xsd:decimal(
+        REPLACE(
+          ?lic,
+          "^cc\\s*by\\s*([0-9]+(\\.[0-9]+)?)$",
+          "$1"
+        )
+      ) >= 3.0
+    )
+    ||
+    (
+      REGEX(?lic, "attribution\\s*([0-9]+(\\.[0-9]+)?)\\s*international")
+      &&
+      xsd:decimal(
+        REPLACE(
+          ?lic,
+          "^.*attribution\\s*([0-9]+(\\.[0-9]+)?)\\s*international.*$",
+          "$1"
+        )
+      ) >= 3.0
+    )
+    ||
+    REGEX(?lic, "^https?://creativecommons\\.org/publicdomain/zero/1\\.0/*$")
+    ||
+    REGEX(?lic, "^cc0\\s*1\\.0$")
+    ||
+    REGEX(?lic, "cc0\\s*1\\.0\\s*universal")
+    ||
+    REGEX(?lic, "creative\\s+commons\\s+zero\\s*1\\.0")
+  )
+}
+ORDER BY ?ont ?license

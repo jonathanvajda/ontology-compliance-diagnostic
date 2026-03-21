@@ -1,0 +1,21 @@
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+
+SELECT DISTINCT ?ont ?license
+WHERE {
+  ?ont a owl:Ontology ;
+       dcterms:license ?license .
+
+  BIND(LCASE(REPLACE(STR(?license), "\\s+", " ")) AS ?lic)
+
+  FILTER(
+    REGEX(?lic, "^https?://creativecommons\\.org/licenses/by/4\\.0/?$") ||
+    REGEX(?lic, "^cc\\s*by\\s*4\\.0$") ||
+    REGEX(?lic, "attribution\\s*4\\.0\\s*international") ||
+    REGEX(?lic, "^https?://creativecommons\\.org/publicdomain/zero/1\\.0/?$") ||
+    REGEX(?lic, "^cc0\\s*1\\.0$") ||
+    REGEX(?lic, "cc0\\s*1\\.0\\s*universal") ||
+    REGEX(?lic, "creative\\s+commons\\s+zero\\s*1\\.0")
+  )
+}
+ORDER BY ?ont ?license

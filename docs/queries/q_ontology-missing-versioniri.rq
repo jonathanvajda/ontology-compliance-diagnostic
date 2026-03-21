@@ -1,0 +1,8 @@
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+
+ASK {
+  ?ont a owl:Ontology .
+  FILTER NOT EXISTS {
+    ?ont owl:versionIRI ?versionIRI .
+  }
+}
