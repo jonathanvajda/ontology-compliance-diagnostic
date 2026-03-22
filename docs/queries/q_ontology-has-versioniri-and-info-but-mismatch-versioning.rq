@@ -1,0 +1,97 @@
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+
+SELECT DISTINCT
+  ?ont
+  ?versionIRI
+  ?versionInfo
+  ?iriKind
+  ?infoKind
+  ?iriToken
+  ?infoToken
+WHERE {
+  ?ont a owl:Ontology ;
+       owl:versionIRI ?versionIRI ;
+       owl:versionInfo ?versionInfo .
+
+  BIND(CONCAT(" ", STR(?versionIRI), " ") AS ?iriText)
+  BIND(CONCAT(" ", LCASE(STR(?versionInfo)), " ") AS ?infoText)
+
+  BIND(
+    IF(
+      REGEX(?iriText, "[^0-9]([0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))[^0-9]"),
+      "date",
+      IF(
+        REGEX(?iriText, "[^0-9A-Za-z]v?([0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?)($|[^0-9A-Za-z])"),
+        "semver",
+        "other"
+      )
+    ) AS ?iriKind
+  )
+
+  BIND(
+    IF(
+      REGEX(?infoText, "[^0-9]([0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))[^0-9]"),
+      "date",
+      IF(
+        REGEX(?infoText, "[^0-9A-Za-z]v?([0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?)($|[^0-9A-Za-z])"),
+        "semver",
+        "other"
+      )
+    ) AS ?infoKind
+  )
+
+  BIND(
+    IF(
+      ?iriKind = "date",
+      REPLACE(
+        ?iriText,
+        "^.*[^0-9]([0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))[^0-9].*$",
+        "$1"
+      ),
+      IF(
+        ?iriKind = "semver",
+        LCASE(
+          REPLACE(
+            ?iriText,
+            "^.*[^0-9A-Za-z]v?([0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?)([^0-9A-Za-z].*|$)",
+            "$1"
+          )
+        ),
+        ""
+      )
+    ) AS ?iriToken
+  )
+
+  BIND(
+    IF(
+      ?infoKind = "date",
+      REPLACE(
+        ?infoText,
+        "^.*[^0-9]([0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01]))[^0-9].*$",
+        "$1"
+      ),
+      IF(
+        ?infoKind = "semver",
+        LCASE(
+          REPLACE(
+            ?infoText,
+            "^.*[^0-9A-Za-z]v?([0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?)([^0-9A-Za-z].*|$)",
+            "$1"
+          )
+        ),
+        ""
+      )
+    ) AS ?infoToken
+  )
+
+  FILTER(
+    (?iriKind = "date" && ?infoKind = "date" && ?iriToken != ?infoToken)
+    ||
+    (?iriKind = "semver" && ?infoKind = "semver" && ?iriToken != ?infoToken)
+    ||
+    (?iriKind = "date" && ?infoKind = "semver")
+    ||
+    (?iriKind = "semver" && ?infoKind = "date")
+  )
+}
+ORDER BY ?ont ?versionIRI ?versionInfo
