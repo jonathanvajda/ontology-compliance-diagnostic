@@ -1,0 +1,43 @@
+graph BT;
+  %% Reference TBox %%
+  DirectiveInformationContentEntity(Directive Information Content Entity<br>https://www.commoncoreontologies.org/ont00000965):::owl:Class;
+  EligibilityCriterion(Eligibility Criterion<br>http://purl.obolibrary.org/obo/OBI_0500026):::owl:Class;
+  SPARQLQuery(SPARQL Query<br>https://github.com/jonathanvajda/okea/SPARQLQuery):::owl:Class;
+  SpecificationRequirement(Specification Requirement<br>https://github.com/jonathanvajda/okea/SpecificationRequirement):::owl:Class;
+  SpecificationRecommendation(Specification Recommendation<br>https://github.com/jonathanvajda/okea/SpecificationRecommendation):::owl:Class;
+
+  %% Abox %%
+  NationalSecurityOntologyFoundry(National Security Ontology Foundry<br>https://github.com/jonathanvajda/okea/NationalSecurityOntologyFoundry):::owl:NamedIndividual --type<br>http://www.w3.org/1999/02/22-rdf-syntax-ns#type--> DirectiveInformationContentEntity;
+
+  NSOFoundry_requirement_v10_req_0001(NSO Foundry v0.1.0 req0001<br>https://github.com/jonathanvajda/okea/NSOFoundry_requirement_v10_req_0001):::owl:NamedIndividual --type<br>http://www.w3.org/1999/02/22-rdf-syntax-ns#type--> SpecificationRequirement;
+  Criterion_ClassHasRdfsLabel(Criterion Class Has RDFS Label<br>https://github.com/jonathanvajda/okea/Criterion_ClassHasRdfsLabel):::owl:NamedIndividual --type<br>http://www.w3.org/1999/02/22-rdf-syntax-ns#type--> EligibilityCriterion;
+  SPARQLQuery_ClassMissingRdfsLabel(SPARQL Query Class Missing Rdfs Label<br>https://github.com/jonathanvajda/okea/SPARQLQuery_ClassMissingRdfsLabel):::owl:NamedIndividual --type<br>http://www.w3.org/1999/02/22-rdf-syntax-ns#type--> SPARQLQuery;
+
+  NSOFoundry_requirement_v10_rec_0001(NSO Foundry v0.1.0 rec0001<br>https://github.com/jonathanvajda/okea/NSOFoundry_requirement_v10_rec_0001):::owl:NamedIndividual --type<br>http://www.w3.org/1999/02/22-rdf-syntax-ns#type--> SpecificationRecommendation ;
+  Criterion_ClassHasSkosExample(Criterion Class Has SKOS Example<br>https://github.com/jonathanvajda/okea/Criterion_ClassHasSkosExample):::owl:NamedIndividual --type<br>http://www.w3.org/1999/02/22-rdf-syntax-ns#type--> EligibilityCriterion;
+  SPARQLQuery_ClassMissingSkosExample(SPARQL Query Class Missing SKOS Example<br>https://github.com/jonathanvajda/okea/SPARQLQuery_ClassMissingSkosExample):::owl:NamedIndividual --type<br>http://www.w3.org/1999/02/22-rdf-syntax-ns#type--> SPARQLQuery;
+
+
+  NSOFoundry_requirement_v10_req_0002(NSO Foundry v0.1.0 req0002<br>https://github.com/jonathanvajda/okea/NSOFoundry_requirement_v10_req_0002):::owl:NamedIndividual --type<br>http://www.w3.org/1999/02/22-rdf-syntax-ns#type--> SpecificationRequirement;
+  Criterion_ClassHasSkosDefinition(Criterion Class Has SKOS Definition<br>https://github.com/jonathanvajda/okea/Criterion_ClassHasSkosDefinition):::owl:NamedIndividual --type<br>http://www.w3.org/1999/02/22-rdf-syntax-ns#type--> EligibilityCriterion;
+  SPARQLQuery_ClassMissingSkosDefinition(SPARQL Query Class Missing SKOS Definition<br>https://github.com/jonathanvajda/okea/SPARQLQuery_ClassMissingSkosDefinition):::owl:NamedIndividual --type<br>http://www.w3.org/1999/02/22-rdf-syntax-ns#type--> SPARQLQuery;
+
+  %% Rbox %%
+  NationalSecurityOntologyFoundry --has continuant part<br>http://purl.obolibrary.org/obo/BFO_0000178-->NSOFoundry_requirement_v10_req_0001;
+  NSOFoundry_requirement_v10_req_0001--has specification criterion<br>https://github.com/jonathanvajda/okea/has_specification_criterion-->Criterion_ClassHasRdfsLabel;
+  Criterion_ClassHasRdfsLabel--has formalization<br>https://github.com/jonathanvajda/okea/has_formalization-->SPARQLQuery_ClassMissingRdfsLabel;
+
+  NationalSecurityOntologyFoundry --has continuant part<br>http://purl.obolibrary.org/obo/BFO_0000178-->NSOFoundry_requirement_v10_req_0002;
+NSOFoundry_requirement_v10_req_0002--has specification criterion<br>https://github.com/jonathanvajda/okea/has_specification_criterion-->Criterion_ClassHasSkosDefinition;
+  Criterion_ClassHasSkosDefinition--has formalization<br>https://github.com/jonathanvajda/okea/has_formalization-->SPARQLQuery_ClassMissingSkosDefinition;
+
+
+  NationalSecurityOntologyFoundry --has continuant part<br>http://purl.obolibrary.org/obo/BFO_0000178-->NSOFoundry_requirement_v10_rec_0001;
+  NSOFoundry_requirement_v10_rec_0001--has specification criterion<br>https://github.com/jonathanvajda/okea/has_specification_criterion-->Criterion_ClassHasSkosExample;
+  Criterion_ClassHasSkosExample--has formalization<br>https://github.com/jonathanvajda/okea/has_formalization-->SPARQLQuery_ClassMissingSkosExample;
+
+
+
+
+classDef owl:Class fill:#ffffad,stroke:#55553a
+classDef owl:NamedIndividual fill:#eec8ee,stroke:#553a55
