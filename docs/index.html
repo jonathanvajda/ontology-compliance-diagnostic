@@ -196,26 +196,33 @@
 
 
    <div class="ocq-toolbar-right">
-          <div class="ocq-export">
-            <button id="downloadResultsCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">
-              Download Results CSV
-            </button>
-            <button id="downloadOntologyYamlBtn" class="ocq-btn ocq-btn-tertiary" type="button">
-              Download Ontology Report YAML
-            </button>
-            <button id="downloadHtmlReportBtn" class="ocq-btn ocq-btn-tertiary" type="button">
-              Download HTML report
-            </button>
+          <div class="ocq-export" role="group" aria-label="Download exports">
+          <label for="downloadActionSelect" class="ocq-label">Download</label>
 
-            <button id="downloadFilteredResourcesCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">
-              Download Filtered Resources CSV
-            </button>
-            <button id="downloadRequirementDetailCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">
-              Download Requirement Detail CSV
-            </button>
-            <button id="downloadBatchSummaryCsvBtn" class="ocq-btn ocq-btn-tertiary" type="button">
-              Download Batch Summary CSV
-            </button>
+          <select id="downloadActionSelect" class="ocq-select">
+            <option value="">Choose export…</option>
+
+            <optgroup label="Current run">
+              <option value="resultsCsv">Results CSV</option>
+              <option value="ontologyYaml">Ontology Report YAML</option>
+              <option value="htmlReport">HTML Report</option>
+              <option value="filteredResourcesCsv">Filtered Resources CSV</option>
+              <option value="requirementDetailCsv">Requirement Detail CSV</option>
+            </optgroup>
+
+            <optgroup label="Batch run">
+              <option value="batchSummaryCsv">Batch Summary CSV</option>
+            </optgroup>
+          </select>
+
+          <button
+            id="downloadSelectedBtn"
+            class="ocq-btn ocq-btn-tertiary"
+            type="button"
+            disabled
+          >
+            Download
+          </button>
 
             <!-- Phase 6.2: Saved runs -->
             <select id="savedRunsSelect" class="ocq-input ocq-select" aria-label="Saved runs">

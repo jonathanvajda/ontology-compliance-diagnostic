@@ -13,11 +13,8 @@ import { saveRun, listRuns, getRun, deleteRun, getLastRunId } from './storage.js
 const filesInput = document.getElementById('ontologyFiles');
 const btnRun = document.getElementById('runChecksBtn');
 const runBatchBtn = document.getElementById('runBatchBtn');
-const btnCsv = document.getElementById('downloadResultsCsvBtn');
-const btnCsvFiltered = document.getElementById('downloadFilteredResourcesCsvBtn');
-const btnCsvReqDetail = document.getElementById('downloadRequirementDetailCsvBtn');
-const btnCsvBatchSummary = document.getElementById('downloadBatchSummaryCsvBtn');
-const btnYaml = document.getElementById('downloadOntologyYamlBtn');
+const downloadActionSelect = document.getElementById('downloadActionSelect');
+const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
 const statusEl = document.getElementById('status');
 const resourceSearchEl = document.getElementById('resourceSearch');
 const curationTableContainer = document.getElementById('curationTableContainer');
@@ -106,48 +103,66 @@ const clearFiltersBtn = document.getElementById('clearFiltersBtn');
 const curationFiltersSummaryEl = document.getElementById('curationFiltersSummary');
 
 function applyResourceFilters() {
-  if (!lastPerResourceFull) return;
+  if (!Array.isArray(lastPerResourceFull)) {
+    lastPerResource = [];
+    renderCurationTable([]);
+    if (curationFiltersSummaryEl) {
+      curationFiltersSummaryEl.textContent = 'Showing 0 of 0 resources.';
+    }
+    return;
+  }
 
-  const statusValue = statusFilterEl ? statusFilterEl.value : '';
-  const requirementValue = requirementFilterEl ? requirementFilterEl.value : '';
+  const statusValue = statusFilterEl ? String(statusFilterEl.value || '') : '';
+  const requirementValue = requirementFilterEl ? String(requirementFilterEl.value || '') : '';
+  const searchValue = (resourceSearchEl ? String(resourceSearchEl.value || '') : '')
+    .trim()
+    .toLowerCase();
 
-  let filtered = lastPerResourceFull;
+  let filtered = lastPerResourceFull.slice();
 
   if (statusValue) {
-    filtered = filtered.filter(r => r.statusLabel === statusValue);
+    filtered = filtered.filter(function (r) {
+      return String(r?.statusLabel || '') === statusValue;
+    });
   }
 
   if (requirementValue) {
-    filtered = filtered.filter(r => {
-      const fr = Array.isArray(r.failedRequirements) ? r.failedRequirements : [];
-      const frec = Array.isArray(r.failedRecommendations) ? r.failedRecommendations : [];
+    filtered = filtered.filter(function (r) {
+      const fr = Array.isArray(r?.failedRequirements) ? r.failedRequirements : [];
+      const frec = Array.isArray(r?.failedRecommendations) ? r.failedRecommendations : [];
       return fr.includes(requirementValue) || frec.includes(requirementValue);
     });
-
-  // 6.5.1 — Resource substring search
-  const q = (resourceSearchEl?.value || '').trim().toLowerCase();
-  if (q) {
-    filtered = filtered.filter(r =>
-      String(r?.resource || '').toLowerCase().includes(q)
-    );
   }
 
-
+  if (searchValue) {
+    filtered = filtered.filter(function (r) {
+      return String(r?.resource || '').toLowerCase().includes(searchValue);
+    });
   }
+
+  lastPerResource = filtered;
 
   if (curationFiltersSummaryEl) {
-    const total = lastPerResourceFull.length;
-    const shown = filtered.length;
     curationFiltersSummaryEl.textContent =
-      `Showing ${shown} of ${total} resources.`;
+      'Showing ' + filtered.length + ' of ' + lastPerResourceFull.length + ' resources.';
   }
 
   renderCurationTable(filtered);
+
+  if (typeof refreshDownloadOptions === 'function') {
+    refreshDownloadOptions();
+  }
 }
 
 function clearResourceFilters() {
   if (statusFilterEl) statusFilterEl.value = '';
   if (requirementFilterEl) requirementFilterEl.value = '';
+  if (resourceSearchEl) resourceSearchEl.value = '';
+
+  lastPerResource = Array.isArray(lastPerResourceFull)
+    ? lastPerResourceFull.slice()
+    : [];
+
   applyResourceFilters();
 }
 
@@ -220,6 +235,7 @@ async function ocqHydrateRun(run) {
     }
 
     if (statusEl) statusEl.textContent = `Loaded saved batch run (${run.createdAt}).`;
+    refreshDownloadOptions();
     return;
   }
 
@@ -252,6 +268,7 @@ async function ocqHydrateRun(run) {
   }
 
   if (statusEl) statusEl.textContent = `Loaded saved single run (${run.createdAt}).`;
+  refreshDownloadOptions();
 }
 
 function ocqFormatRunOption(run) {
@@ -349,6 +366,7 @@ function onBatchRowSelected(batchKey) {
   if (selectedBatchKey === batchKey) {
     selectedBatchKey = null;
     renderDashboard(lastBatchReports);
+    refreshDownloadOptions();
     return;
   }
 
@@ -363,6 +381,7 @@ function onBatchRowSelected(batchKey) {
   if (statusEl) {
     statusEl.textContent = `Selected: ${reportObj.fileName}`;
   }
+  refreshDownloadOptions();
 }
 
 function wireBatchDashboardSelection() {
@@ -433,6 +452,8 @@ function clearRequirementDetailPanel() {
   if (requirementDetailContainer) {
     requirementDetailContainer.innerHTML = '';
   }
+
+  refreshDownloadOptions();
 }
 
 /**
@@ -610,11 +631,11 @@ function onOntologyReportRowClick(event) {
 
   // Toggle behavior: same row clicked again
   if (lastSelectedRequirementId === requirementId) {
-    // Unselect
     row.classList.remove('ocq-row-selected');
     requirementDetailContainer.innerHTML = '';
     lastSelectedRequirementId = null;
     lastSelectedRequirementRow = null;
+    refreshDownloadOptions();
     return;
   }
 
@@ -629,6 +650,7 @@ function onOntologyReportRowClick(event) {
   lastSelectedRequirementId = requirementId;
 
   renderRequirementDetail(requirementId);
+  refreshDownloadOptions();
 }
 
 
@@ -793,18 +815,16 @@ function renderOntologyReport(report) {
 }
 
 // --- Download helpers ---
-function downloadTextFile(filename, text, mimeType) {
+function downloadTextFile(text, fileName, mimeType) {
   const blob = new Blob([text], { type: mimeType || 'text/plain' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filename;
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 0);
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function toCsv(results, ontologyIri) {
@@ -862,6 +882,186 @@ function csvEscape(value) {
 function rowsToCsv(rows) {
   return rows.map(r => r.map(csvEscape).join(',')).join('\n') + '\n';
 }
+
+
+function handleDownloadSelected() {
+  const actionKey = downloadActionSelect.value;
+  const action = downloadActions[actionKey];
+
+  if (!action) {
+    if (statusEl) statusEl.textContent = 'Choose a download type first.';
+    return;
+  }
+
+  if (!action.isAvailable()) {
+    if (statusEl) statusEl.textContent = `"${action.label}" is not available for the current state.`;
+    refreshDownloadOptions();
+    return;
+  }
+
+  try {
+    const content = action.build();
+    const fileName = action.getFileName();
+
+    downloadTextFile(content, fileName, action.mimeType);
+    if (statusEl) statusEl.textContent = `Downloaded ${action.label}.`;
+  } catch (err) {
+    console.error(err);
+    if (statusEl) statusEl.textContent = err && err.message ? err.message : 'Download failed.';
+  }
+}
+
+downloadActionSelect.addEventListener('change', function () {
+  downloadSelectedBtn.disabled = !downloadActionSelect.value;
+});
+
+downloadSelectedBtn.addEventListener('click', handleDownloadSelected);
+
+
+// -------------------------------
+// Export action registry
+// -------------------------------
+
+// Assumes these exist somewhere in your state:
+// lastResults
+// lastPerResource
+// lastOntologyReport
+// lastSelectedRequirementId
+// lastBatchReports
+
+function buildResultsCsv() {
+  const ontologyIri = lastOntologyReport?.ontologyIri || '';
+  return toCsv(lastResults || [], ontologyIri);
+}
+
+const downloadActions = {
+  resultsCsv: {
+    label: 'Results CSV',
+    isAvailable: function () {
+      return Array.isArray(lastResults) && lastResults.length > 0;
+    },
+    build: function () {
+      const ontologyIri = lastOntologyReport?.ontologyIri || '';
+      return toCsv(lastResults || [], ontologyIri);
+    },
+    getFileName: function () {
+      return `ocq-results_${getTimestampForFileName()}.csv`;
+    },
+    mimeType: 'text/csv;charset=utf-8'
+  },
+
+  ontologyYaml: {
+    label: 'Ontology Report YAML',
+    isAvailable: function () {
+      return !!lastOntologyReport;
+    },
+    build: function () {
+      return ontologyReportToYaml(lastOntologyReport);
+    },
+    getFileName: function () {
+      return `ocq-ontology-report_${getTimestampForFileName()}.yaml`;
+    },
+    mimeType: 'text/yaml;charset=utf-8'
+  },
+
+  htmlReport: {
+    label: 'HTML Report',
+    isAvailable: function () {
+      return !!lastOntologyReport || (Array.isArray(lastResults) && lastResults.length > 0);
+    },
+    build: function () {
+      return buildHtmlReport();
+    },
+    getFileName: function () {
+      return `ocq-report_${getTimestampForFileName()}.html`;
+    },
+    mimeType: 'text/html;charset=utf-8'
+  },
+
+  filteredResourcesCsv: {
+    label: 'Filtered Resources CSV',
+    isAvailable: function () {
+      return Array.isArray(lastPerResource) && lastPerResource.length > 0;
+    },
+    build: function () {
+      return buildFilteredResourcesCsv();
+    },
+    getFileName: function () {
+      return `ocq-filtered-resources_${getTimestampForFileName()}.csv`;
+    },
+    mimeType: 'text/csv;charset=utf-8'
+  },
+
+  requirementDetailCsv: {
+    label: 'Requirement Detail CSV',
+    isAvailable: function () {
+      return !!lastSelectedRequirementId &&
+        Array.isArray(lastResults) &&
+        lastResults.length > 0;
+    },
+    build: function () {
+      return buildRequirementDetailCsv(lastSelectedRequirementId);
+    },
+    getFileName: function () {
+      const req = safeFilePart(lastSelectedRequirementId || 'requirement');
+      return `ocq-requirement-detail_${req}_${getTimestampForFileName()}.csv`;
+    },
+    mimeType: 'text/csv;charset=utf-8'
+  },
+
+  batchSummaryCsv: {
+    label: 'Batch Summary CSV',
+    isAvailable: function () {
+      return Array.isArray(lastBatchReports) && lastBatchReports.length > 0;
+    },
+    build: function () {
+      return buildBatchSummaryCsv(lastBatchReports);
+    },
+    getFileName: function () {
+      return `ocq-batch-summary_${getTimestampForFileName()}.csv`;
+    },
+    mimeType: 'text/csv;charset=utf-8'
+  }
+};
+
+function refreshDownloadOptions() {
+  const currentValue = downloadActionSelect.value;
+
+  for (const option of downloadActionSelect.options) {
+    if (!option.value) continue;
+
+    const action = downloadActions[option.value];
+    option.disabled = !action || !action.isAvailable();
+  }
+
+  const selectedAction = downloadActions[currentValue];
+  const selectedIsValid = !!selectedAction && selectedAction.isAvailable();
+
+  if (!selectedIsValid) {
+    downloadActionSelect.value = '';
+  }
+
+  downloadSelectedBtn.disabled = !downloadActionSelect.value;
+}
+
+function safeFilePart(value) {
+  return String(value == null ? '' : value)
+    .trim()
+    .replace(/[^\w.-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function getTimestampForFileName() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}_${hh}-${mi}-${ss}`;
+}
+
 
 function buildFilteredResourcesCsv() {
   const data = Array.isArray(lastPerResource) ? lastPerResource : [];
@@ -969,44 +1169,6 @@ function buildBatchSummaryCsv(batchReports) {
 
 function isoFileStamp() {
   return new Date().toISOString().replace(/[:.]/g, '-');
-}
-
-if (btnCsvFiltered) {
-  btnCsvFiltered.addEventListener('click', () => {
-    try {
-      const csv = buildFilteredResourcesCsv();
-      downloadTextFile(csv, `ocq_filtered_resources_${isoFileStamp()}.csv`, 'text/csv');
-    } catch (e) {
-      console.error(e);
-      alert(e.message || String(e));
-    }
-  });
-}
-
-if (btnCsvReqDetail) {
-  btnCsvReqDetail.addEventListener('click', () => {
-    try {
-      const reqId = lastSelectedRequirementId || '';
-      const csv = buildRequirementDetailCsv(reqId);
-      const safeReq = (reqId || 'requirement').replace(/[^\w\-]+/g, '_').slice(0, 60);
-      downloadTextFile(csv, `ocq_requirement_detail_${safeReq}_${isoFileStamp()}.csv`, 'text/csv');
-    } catch (e) {
-      console.error(e);
-      alert(e.message || String(e));
-    }
-  });
-}
-
-if (btnCsvBatchSummary) {
-  btnCsvBatchSummary.addEventListener('click', () => {
-    try {
-      const csv = buildBatchSummaryCsv(lastBatchReports);
-      downloadTextFile(csv, `ocq_batch_summary_${isoFileStamp()}.csv`, 'text/csv');
-    } catch (e) {
-      console.error(e);
-      alert(e.message || String(e));
-    }
-  });
 }
 
 const downloadHtmlReportBtn = document.getElementById('downloadHtmlReportBtn');
@@ -1218,6 +1380,7 @@ btnRun.addEventListener('click', async () => {
 
     statusEl.textContent =
       `Checks completed. ${results.length} result rows across ${perResource.length} resources.`;
+    refreshDownloadOptions();
   } catch (err) {
     console.error('Error running checks:', err);
     statusEl.textContent = 'Error: ' + err.message;
@@ -1267,43 +1430,8 @@ runBatchBtn.addEventListener('click', async () => {
   await refreshSavedRunsUi();
 
   statusEl.textContent = `Completed ${batch.length} ontology checks. Click a row to drill down.`;
+  refreshDownloadOptions();
 });
-
-// --- Export buttons (use last single-run results) ---
-btnCsv.addEventListener('click', () => {
-  if (!lastResults) {
-    alert('No results to export yet. Run checks first.');
-    return;
-  }
-  const ontologyIri = lastOntologyReport ? lastOntologyReport.ontologyIri : '';
-  const csv = toCsv(lastResults, ontologyIri);
-  downloadTextFile('ontology-check-results.csv', csv, 'text/csv');
-});
-
-btnYaml.addEventListener('click', () => {
-  if (!lastOntologyReport) {
-    alert('No ontology report to export yet. Run checks first.');
-    return;
-  }
-  const yaml = ontologyReportToYaml(lastOntologyReport);
-  downloadTextFile('ontology-report.yaml', yaml, 'text/yaml');
-});
-
-if (btnCsvFiltered) {
-  btnCsvFiltered.addEventListener('click', () => {
-    try {
-      const csv = buildFilteredResourcesCsv();
-      downloadTextFile(
-        csv,
-        `ocq_filtered_resources_${new Date().toISOString().replace(/[:.]/g, '-')}.csv`,
-        'text/csv'
-      );
-    } catch (e) {
-      console.error(e);
-      alert(e.message || String(e));
-    }
-  });
-}
 
 
 async function ensureManifestLoaded() {
@@ -1381,7 +1509,5 @@ if (deleteSavedRunBtn) {
       await ocqHydrateRun(run);
     }
   }
+  refreshDownloadOptions();
 })();
-
-document.getElementById('statusFilter').addEventListener('change', applyResourceFilters);
-document.getElementById('requirementFilter').addEventListener('change', applyResourceFilters);
