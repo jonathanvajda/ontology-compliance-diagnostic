@@ -77,4 +77,73 @@
  * @property {string} runId
  */
 
+/**
+ * @typedef {'SELECT' | 'ASK'} OcqManifestQueryKind
+ */
+
+/**
+ * @typedef {'matchMeansFail' | 'matchMeansPass' | 'trueMeansPass' | 'trueMeansFail' | 'falseMeansPass' | 'falseMeansFail'} OcqManifestPolarity
+ */
+
+/**
+ * @typedef {'resource' | 'ontology' | 'TBox'} OcqQueryScope
+ */
+
+/**
+ * @typedef {'info' | 'warning' | 'error'} OcqSeverity
+ */
+
+/**
+ * @typedef {'pass' | 'fail'} OcqQueryResultStatus
+ */
+
+/**
+ * One query entry from manifest.json.
+ *
+ * @typedef {Object} OcqManifestQuery
+ * @property {string} id
+ * @property {string} file
+ * @property {string} title
+ * @property {OcqManifestQueryKind} kind
+ * @property {OcqManifestPolarity} polarity
+ * @property {string | null} checksCriterion
+ * @property {OcqQueryScope} scope
+ * @property {OcqSeverity} severity
+ * @property {string} resultShape
+ * @property {string} [resourceVar]
+ */
+
+/**
+ * One standard entry from manifest.json.
+ *
+ * @typedef {Object} OcqManifestStandard
+ * @property {string} id
+ * @property {'requirement' | 'recommendation'} [type]
+ * @property {number} [weight]
+ * @property {string} [label]
+ * @property {string} [statement]
+ */
+
+/**
+ * Manifest model used by the OCQ app.
+ *
+ * @typedef {Object} OcqManifest
+ * @property {number} [version]
+ * @property {OcqManifestQuery[]} queries
+ * @property {OcqManifestStandard[]} [standards]
+ */
+
+/**
+ * Normalized row produced by engine.js.
+ *
+ * @typedef {Object} OcqQueryResultRow
+ * @property {string | null} resource
+ * @property {string} queryId
+ * @property {string | null} criterionId
+ * @property {OcqQueryResultStatus} status
+ * @property {OcqSeverity} severity
+ * @property {OcqQueryScope} scope
+ * @property {Record<string, unknown>} details
+ */
+
 export {};

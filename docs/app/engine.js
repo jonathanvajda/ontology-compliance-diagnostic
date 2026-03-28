@@ -1,195 +1,543 @@
-// app/engine.js (ES module)
+// app/engine.js
+// @ts-check
 
-const N3 = window.N3 || {};
-const Comunica = window.Comunica || {};
+/**
+ * OCQ query evaluation engine.
+ *
+ * Responsibilities:
+ * - Parse ontology text into an RDF/JS store
+ * - Load the manifest and SPARQL query text files
+ * - Execute SELECT and ASK queries via Comunica
+ * - Normalize rows into a stable result shape
+ */
 
-const Parser = N3.Parser;
-const Store = N3.Store;
+/** @typedef {import('./types.js').OcqManifest} OcqManifest */
+/** @typedef {import('./types.js').OcqManifestQuery} OcqManifestQuery */
+/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
+/** @typedef {import('./types.js').OcqQueryResultStatus} OcqQueryResultStatus */
+/** @typedef {import('./types.js').OcqQueryScope} OcqQueryScope */
+/** @typedef {import('./types.js').OcqSeverity} OcqSeverity */
 
-if (!Parser || !Store) {
-  console.error('N3.Parser or N3.Store not found. Check n3.min.js loading.');
+/**
+ * @typedef {Object} EvaluateAllQueriesOptions
+ * @property {string} [manifestUrl]
+ * @property {string} [queryBasePath]
+ */
+
+/**
+ * @typedef {Object} EvaluateAllQueriesOutput
+ * @property {OcqQueryResultRow[]} results
+ * @property {string[]} resources
+ * @property {string} ontologyIri
+ */
+
+/** @type {Window & { N3?: any, Comunica?: any }} */
+const runtimeWindow = window;
+
+/** @type {{ Parser?: any, Store?: any }} */
+const N3_GLOBAL = runtimeWindow.N3 || {};
+
+/** @type {{ newEngine?: Function, QueryEngine?: any }} */
+const COMUNICA_GLOBAL = runtimeWindow.Comunica || {};
+
+/** @type {any | null} */
+let cachedComunicaEngine = null;
+
+export const DEFAULT_MANIFEST_URL = './queries/manifest.json';
+export const DEFAULT_QUERY_BASE_PATH = 'queries/';
+
+export const RDF_TYPE_IRI = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
+export const RDFS_LABEL_IRI = 'http://www.w3.org/2000/01/rdf-schema#label';
+export const OWL_ONTOLOGY_IRI = 'http://www.w3.org/2002/07/owl#Ontology';
+export const UNKNOWN_ONTOLOGY_IRI = 'urn:ontology:unknown';
+
+export const SUPPORTED_RDF_FORMATS = Object.freeze({
+  TURTLE: 'text/turtle',
+  N_TRIPLES: 'application/n-triples',
+  N_QUADS: 'application/n-quads',
+  TRIG: 'application/trig',
+  N3: 'text/n3'
+});
+
+export const SUPPORTED_RDF_EXTENSIONS = Object.freeze([
+  '.ttl',
+  '.turtle',
+  '.nt',
+  '.ntriples',
+  '.nq',
+  '.trig',
+  '.n3'
+]);
+
+/**
+ * Returns the N3 Parser constructor.
+ *
+ * @returns {any}
+ */
+function getParserConstructor() {
+  const Parser = N3_GLOBAL.Parser;
+  if (!Parser) {
+    throw new Error('N3.Parser not found on window.N3. Check that n3.min.js is loaded.');
+  }
+  return Parser;
 }
 
-function createComunicaEngine() {
-  if (typeof Comunica.newEngine === 'function') {
+/**
+ * Returns the N3 Store constructor.
+ *
+ * @returns {any}
+ */
+function getStoreConstructor() {
+  const Store = N3_GLOBAL.Store;
+  if (!Store) {
+    throw new Error('N3.Store not found on window.N3. Check that n3.min.js is loaded.');
+  }
+  return Store;
+}
+
+/**
+ * Creates a Comunica engine using the browser bundle shape available at runtime.
+ *
+ * @returns {any}
+ */
+export function createComunicaEngine() {
+  if (typeof COMUNICA_GLOBAL.newEngine === 'function') {
     console.info('[Comunica] Using Comunica.newEngine()');
-    return Comunica.newEngine();
+    return COMUNICA_GLOBAL.newEngine();
   }
-  if (typeof Comunica.QueryEngine === 'function') {
+
+  if (typeof COMUNICA_GLOBAL.QueryEngine === 'function') {
     console.info('[Comunica] Using new Comunica.QueryEngine()');
-    return new Comunica.QueryEngine();
+    return new COMUNICA_GLOBAL.QueryEngine();
   }
-  console.error('No suitable Comunica constructor found. Keys:', Object.keys(Comunica));
-  throw new Error('Unsupported Comunica browser bundle shape');
+
+  throw new Error(
+    'No supported Comunica constructor found on window.Comunica.'
+  );
 }
 
-const comunicaEngine = createComunicaEngine();
-
-// --- helper: guess RDF format from filename ---
-function guessFormatFromFilename(name) {
-  if (!name) return 'text/turtle';
-  const lower = name.toLowerCase();
-  if (lower.endsWith('.ttl') || lower.endsWith('.turtle')) return 'text/turtle';
-  if (lower.endsWith('.nt') || lower.endsWith('.ntriples')) return 'application/n-triples';
-  if (lower.endsWith('.nq')) return 'application/n-quads';
-  if (lower.endsWith('.trig')) return 'application/trig';
-  if (lower.endsWith('.rdf') || lower.endsWith('.owl') || lower.endsWith('.xml')) return 'application/rdf+xml';
-  if (lower.endsWith('.jsonld')) return 'application/ld+json';
-  return 'text/turtle';
+/**
+ * Returns a cached Comunica engine instance.
+ *
+ * @returns {any}
+ */
+export function getComunicaEngine() {
+  if (!cachedComunicaEngine) {
+    cachedComunicaEngine = createComunicaEngine();
+  }
+  return cachedComunicaEngine;
 }
 
-// --- helper: load ontology into N3.Store ---
-async function loadOntologyIntoStore(text, filename) {
-  if (!Parser || !Store) {
-    throw new Error('N3.Parser or N3.Store not available.');
+/**
+ * Guesses an RDF syntax from the file name.
+ *
+ * This function only returns formats that N3.Parser can actually parse.
+ * It intentionally does not claim RDF/XML or JSON-LD support.
+ *
+ * @param {string} [fileName]
+ * @returns {string}
+ */
+export function guessRdfFormatFromFilename(fileName) {
+  if (!fileName) {
+    return SUPPORTED_RDF_FORMATS.TURTLE;
   }
-  const format = guessFormatFromFilename(filename);
+
+  const lower = fileName.toLowerCase();
+
+  if (lower.endsWith('.ttl') || lower.endsWith('.turtle')) {
+    return SUPPORTED_RDF_FORMATS.TURTLE;
+  }
+  if (lower.endsWith('.nt') || lower.endsWith('.ntriples')) {
+    return SUPPORTED_RDF_FORMATS.N_TRIPLES;
+  }
+  if (lower.endsWith('.nq')) {
+    return SUPPORTED_RDF_FORMATS.N_QUADS;
+  }
+  if (lower.endsWith('.trig')) {
+    return SUPPORTED_RDF_FORMATS.TRIG;
+  }
+  if (lower.endsWith('.n3')) {
+    return SUPPORTED_RDF_FORMATS.N3;
+  }
+
+  return SUPPORTED_RDF_FORMATS.TURTLE;
+}
+
+/**
+ * Throws if the file extension suggests a syntax this module does not support.
+ *
+ * @param {string} [fileName]
+ * @returns {void}
+ */
+export function assertSupportedOntologyFile(fileName) {
+  if (!fileName) {
+    return;
+  }
+
+  const lower = fileName.toLowerCase();
+
+  if (
+    lower.endsWith('.rdf') ||
+    lower.endsWith('.owl') ||
+    lower.endsWith('.xml') ||
+    lower.endsWith('.jsonld') ||
+    lower.endsWith('.json-ld')
+  ) {
+    throw new Error(
+      'This engine currently supports only N3.js-compatible syntaxes: Turtle, N-Triples, N-Quads, TriG, and N3.'
+    );
+  }
+}
+
+/**
+ * Loads ontology text into an N3 store.
+ *
+ * @param {string} ontologyText
+ * @param {string} [fileName='ontology.ttl']
+ * @returns {Promise<any>}
+ */
+export async function loadOntologyIntoStore(ontologyText, fileName = 'ontology.ttl') {
+  if (typeof ontologyText !== 'string') {
+    throw new TypeError('loadOntologyIntoStore() requires ontologyText to be a string.');
+  }
+
+  assertSupportedOntologyFile(fileName);
+
+  const Parser = getParserConstructor();
+  const Store = getStoreConstructor();
+  const format = guessRdfFormatFromFilename(fileName);
+
   const parser = new Parser({ format });
   const store = new Store();
-  const quads = parser.parse(text);
+  const quads = parser.parse(ontologyText);
+
   store.addQuads(quads);
   return store;
 }
 
-// --- consume Comunica bindings (async iterator or EventEmitter) ---
-async function collectBindingsStream(stream) {
+/**
+ * Collects all rows from a Comunica bindings stream.
+ *
+ * Supports either an async iterator or an EventEmitter-like stream.
+ *
+ * @param {any} stream
+ * @returns {Promise<any[]>}
+ */
+export async function collectBindingsStream(stream) {
   if (stream && typeof stream[Symbol.asyncIterator] === 'function') {
     const rows = [];
-    for await (const b of stream) rows.push(b);
+    for await (const row of stream) {
+      rows.push(row);
+    }
     return rows;
   }
+
   if (stream && typeof stream.on === 'function') {
-    return await new Promise((resolve, reject) => {
-      const rows = [];
-      stream.on('data', b => rows.push(b));
-      stream.on('end', () => resolve(rows));
-      stream.on('error', err => reject(err));
-    });
+    return new Promise(
+      /**
+       * @param {(value: any[]) => void} resolve
+       * @param {(reason?: unknown) => void} reject
+       */
+      (resolve, reject) => {
+        /** @type {any[]} */
+        const rows = [];
+        stream.on('data', /** @param {any} row */ (row) => rows.push(row));
+        stream.on('end', () => resolve(rows));
+        stream.on('error', /** @param {unknown} error */ (error) => reject(error));
+      }
+    );
   }
-  console.error('Unknown bindings stream shape', stream);
-  throw new Error('Unsupported bindings stream');
+
+  throw new Error('Unsupported bindings stream shape returned by Comunica.');
 }
 
-async function runSelect(store, sparql) {
-  if (!comunicaEngine) throw new Error('Comunica engine not initialized.');
+/**
+ * Executes a SELECT query against an RDF/JS store and normalizes the bindings.
+ *
+ * @param {any} store
+ * @param {string} sparql
+ * @param {any} [engine]
+ * @returns {Promise<Array<Record<string, string>>>}
+ */
+export async function runSelect(store, sparql, engine = getComunicaEngine()) {
+  if (!store) {
+    throw new TypeError('runSelect() requires a store.');
+  }
+  if (!sparql) {
+    throw new TypeError('runSelect() requires SPARQL text.');
+  }
 
   let bindingsStream;
-  if (typeof comunicaEngine.queryBindings === 'function') {
-    bindingsStream = await comunicaEngine.queryBindings(sparql, {
+
+  if (typeof engine.queryBindings === 'function') {
+    bindingsStream = await engine.queryBindings(sparql, {
       sources: [{ type: 'rdfjsSource', value: store }]
     });
-  } else if (typeof comunicaEngine.query === 'function') {
-    const result = await comunicaEngine.query(sparql, {
+  } else if (typeof engine.query === 'function') {
+    const result = await engine.query(sparql, {
       sources: [{ type: 'rdfjsSource', value: store }]
     });
-    if (typeof result.bindings !== 'function') {
-      throw new Error('Comunica query() result has no .bindings() method');
+
+    if (!result || typeof result.bindings !== 'function') {
+      throw new Error('Comunica query() result does not expose a bindings() method.');
     }
+
     bindingsStream = await result.bindings();
   } else {
-    throw new Error('Comunica engine has neither queryBindings() nor query()');
+    throw new Error('Comunica engine supports neither queryBindings() nor query().');
   }
 
   const bindings = await collectBindingsStream(bindingsStream);
+  /** @type {Array<Record<string, string>>} */
   const rows = [];
 
   for (const binding of bindings) {
-    const obj = {};
+    /** @type {Record<string, string>} */
+    const row = {};
+
     if (typeof binding.entries === 'function') {
-      for (const [varName, term] of binding.entries()) {
-        obj[varName] = term.value;
+      for (const [variable, term] of binding.entries()) {
+        row[String(variable)] = term?.value ?? '';
       }
     } else if (typeof binding.forEach === 'function') {
-      binding.forEach((term, varName) => {
-        obj[varName] = term.value;
-      });
+        binding.forEach(
+          /** @type {(term: { value?: string } | null | undefined, variable: string) => void} */
+          ((term, variable) => {
+            row[String(variable)] = term?.value ?? '';
+          })
+        );
     }
-    rows.push(obj);
+
+    rows.push(row);
   }
 
   return rows;
 }
 
-async function runAsk(store, sparql) {
-  if (!comunicaEngine) throw new Error('Comunica engine not initialized.');
+/**
+ * Executes an ASK query against an RDF/JS store.
+ *
+ * @param {any} store
+ * @param {string} sparql
+ * @param {any} [engine]
+ * @returns {Promise<boolean>}
+ */
+export async function runAsk(store, sparql, engine = getComunicaEngine()) {
+  if (!store) {
+    throw new TypeError('runAsk() requires a store.');
+  }
+  if (!sparql) {
+    throw new TypeError('runAsk() requires SPARQL text.');
+  }
 
-  if (typeof comunicaEngine.queryBoolean === 'function') {
-    return await comunicaEngine.queryBoolean(sparql, {
+  if (typeof engine.queryBoolean === 'function') {
+    return engine.queryBoolean(sparql, {
       sources: [{ type: 'rdfjsSource', value: store }]
     });
   }
 
-  if (typeof comunicaEngine.query === 'function') {
-    const result = await comunicaEngine.query(sparql, {
+  if (typeof engine.query === 'function') {
+    const result = await engine.query(sparql, {
       sources: [{ type: 'rdfjsSource', value: store }]
     });
-    if (!result || !result.booleanResult) {
-      throw new Error('Comunica query() result has no booleanResult for ASK');
+
+    if (!result || !('booleanResult' in result)) {
+      throw new Error('Comunica query() result does not expose booleanResult for ASK.');
     }
-    return await result.booleanResult;
+
+    return Boolean(await result.booleanResult);
   }
 
-  throw new Error('Comunica engine has neither queryBoolean() nor query()');
+  throw new Error('Comunica engine supports neither queryBoolean() nor query().');
 }
 
-async function loadManifest(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch manifest: ${res.status} ${res.statusText}`);
-  return res.json();
+/**
+ * Loads and validates the manifest JSON.
+ *
+ * @param {string} [manifestUrl=DEFAULT_MANIFEST_URL]
+ * @returns {Promise<OcqManifest>}
+ */
+export async function loadManifest(manifestUrl = DEFAULT_MANIFEST_URL) {
+  const response = await fetch(manifestUrl);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch manifest: ${response.status} ${response.statusText}`);
+  }
+
+  /** @type {unknown} */
+  const rawManifest = await response.json();
+
+  /** @type {{ queries?: unknown }} */
+  const manifestLike =
+    rawManifest && typeof rawManifest === 'object'
+      ? /** @type {{ queries?: unknown }} */ (rawManifest)
+      : {};
+
+  if (!Array.isArray(manifestLike.queries)) {
+    throw new Error('Manifest JSON is invalid: expected an object with a queries array.');
+  }
+
+  return /** @type {OcqManifest} */ (rawManifest);
 }
 
-async function loadQueryText(qMeta, basePath) {
-  const url = basePath + qMeta.file;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch query ${qMeta.id} from ${url}`);
-  return res.text();
+/**
+ * Loads SPARQL query text for one manifest query definition.
+ *
+ * @param {OcqManifestQuery} queryDefinition
+ * @param {string} [queryBasePath=DEFAULT_QUERY_BASE_PATH]
+ * @returns {Promise<string>}
+ */
+export async function loadQueryText(
+  queryDefinition,
+  queryBasePath = DEFAULT_QUERY_BASE_PATH
+) {
+  if (!queryDefinition || !queryDefinition.file || !queryDefinition.id) {
+    throw new Error('Invalid query definition: missing id or file.');
+  }
+
+  const url = `${queryBasePath}${queryDefinition.file}`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch query ${queryDefinition.id} from ${url}: ${response.status} ${response.statusText}`
+    );
+  }
+
+  return response.text();
 }
 
-function guessOntologyIri(store) {
-  const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
-  const OWL_ONTOLOGY = 'http://www.w3.org/2002/07/owl#Ontology';
-
+/**
+ * Guesses the ontology IRI by locating a subject typed owl:Ontology.
+ *
+ * @param {any} store
+ * @returns {string}
+ */
+export function guessOntologyIri(store) {
   const quads = store.getQuads(null, null, null, null);
+
   for (const quad of quads) {
-    if (quad.predicate.value === RDF_TYPE && quad.object.value === OWL_ONTOLOGY) {
+    if (
+      quad?.predicate?.value === RDF_TYPE_IRI &&
+      quad?.object?.value === OWL_ONTOLOGY_IRI
+    ) {
       return quad.subject.value;
     }
   }
-  return 'urn:ontology:unknown';
+
+  return UNKNOWN_ONTOLOGY_IRI;
 }
 
-async function evaluateSingleQuery(store, qMeta, queryText) {
-  const criterionId = qMeta.checksCriterion || null;
-  const severity = qMeta.severity || 'info';
-  const scope = qMeta.scope || 'resource';
+/**
+ * Returns the set of labeled resources based on rdfs:label.
+ *
+ * @param {any} store
+ * @returns {string[]}
+ */
+export function collectLabeledResources(store) {
+  const labeled = new Set();
+  const quads = store.getQuads(null, RDFS_LABEL_IRI, null, null);
 
-  if (qMeta.kind === 'SELECT') {
-    const rows = await runSelect(store, queryText);
-    const resourceVar = qMeta.resourceVar || 'resource';
-
-    let status;
-    switch (qMeta.polarity) {
-      case 'matchMeansFail':
-        status = 'fail';
-        break;
-      case 'matchMeansPass':
-        status = 'pass';
-        break;
-      default:
-        status = 'fail';
-        console.warn(`Unknown SELECT polarity for ${qMeta.id}: ${qMeta.polarity}`);
-        break;
+  for (const quad of quads) {
+    if (quad?.subject?.value) {
+      labeled.add(quad.subject.value);
     }
+  }
+
+  return Array.from(labeled);
+}
+
+/**
+ * Maps SELECT polarity to result status.
+ *
+ * @param {OcqManifestQuery['polarity']} polarity
+ * @param {string} queryId
+ * @returns {OcqQueryResultStatus}
+ */
+export function getSelectStatusFromPolarity(polarity, queryId) {
+  switch (polarity) {
+    case 'matchMeansFail':
+      return 'fail';
+    case 'matchMeansPass':
+      return 'pass';
+    default:
+      throw new Error(`Unsupported SELECT polarity for ${queryId}: ${String(polarity)}`);
+  }
+}
+
+/**
+ * Maps ASK polarity and boolean result to result status.
+ *
+ * @param {OcqManifestQuery['polarity']} polarity
+ * @param {boolean} askResult
+ * @param {string} queryId
+ * @returns {OcqQueryResultStatus}
+ */
+export function getAskStatusFromPolarity(polarity, askResult, queryId) {
+  switch (polarity) {
+    case 'trueMeansPass':
+      return askResult ? 'pass' : 'fail';
+    case 'trueMeansFail':
+      return askResult ? 'fail' : 'pass';
+    case 'falseMeansPass':
+      return askResult ? 'fail' : 'pass';
+    case 'falseMeansFail':
+      return askResult ? 'pass' : 'fail';
+    default:
+      throw new Error(`Unsupported ASK polarity for ${queryId}: ${String(polarity)}`);
+  }
+}
+
+/**
+ * Picks the resource IRI for a SELECT result row.
+ *
+ * @param {Record<string, string>} row
+ * @param {string} resourceVar
+ * @returns {string | null}
+ */
+export function getResourceFromSelectRow(row, resourceVar) {
+  if (!row || typeof row !== 'object') {
+    return null;
+  }
+
+  if (row[resourceVar]) {
+    return row[resourceVar];
+  }
+
+  if (row.resource) {
+    return row.resource;
+  }
+
+  const firstValue = Object.values(row)[0];
+  return typeof firstValue === 'string' ? firstValue : null;
+}
+
+/**
+ * Evaluates a single manifest query definition against the store.
+ *
+ * @param {any} store
+ * @param {OcqManifestQuery} queryDefinition
+ * @param {string} queryText
+ * @returns {Promise<OcqQueryResultRow[]>}
+ */
+export async function evaluateSingleQuery(store, queryDefinition, queryText) {
+  const criterionId = queryDefinition.checksCriterion || null;
+  /** @type {OcqSeverity} */
+  const severity = queryDefinition.severity || 'info';
+  /** @type {OcqQueryScope} */
+  const scope = queryDefinition.scope || 'resource';
+
+  if (queryDefinition.kind === 'SELECT') {
+    const rows = await runSelect(store, queryText);
+    const resourceVar = queryDefinition.resourceVar || 'resource';
+    const status = getSelectStatusFromPolarity(queryDefinition.polarity, queryDefinition.id);
 
     return rows.map((row) => {
-      const resource =
-        row[resourceVar] ??
-        row.resource ??
-        (Object.values(row).length ? Object.values(row)[0] : null);
+      const resource = getResourceFromSelectRow(row, resourceVar);
 
       return {
         resource,
-        queryId: qMeta.id,
+        queryId: queryDefinition.id,
         criterionId,
         status,
         severity,
@@ -199,78 +547,68 @@ async function evaluateSingleQuery(store, qMeta, queryText) {
     });
   }
 
-  if (qMeta.kind === 'ASK') {
-    const ok = await runAsk(store, queryText);
-    let status;
-
-    switch (qMeta.polarity) {
-      case 'trueMeansPass':
-        status = ok ? 'pass' : 'fail';
-        break;
-
-      case 'trueMeansFail':
-      case 'falseMeansPass':
-        status = ok ? 'fail' : 'pass';
-        break;
-
-      case 'falseMeansFail':
-        status = ok ? 'pass' : 'fail';
-        break;
-
-      default:
-        status = 'fail';
-        console.warn(`Unknown ASK polarity for ${qMeta.id}: ${qMeta.polarity}`);
-        break;
-    }
-
+  if (queryDefinition.kind === 'ASK') {
+    const askResult = await runAsk(store, queryText);
+    const status = getAskStatusFromPolarity(
+      queryDefinition.polarity,
+      askResult,
+      queryDefinition.id
+    );
     const ontologyIri = guessOntologyIri(store);
 
     return [
       {
         resource: ontologyIri,
-        queryId: qMeta.id,
+        queryId: queryDefinition.id,
         criterionId,
         status,
         severity,
         scope,
-        details: { askResult: ok }
+        details: { askResult }
       }
     ];
   }
 
-  console.warn(`Unknown query kind for ${qMeta.id}:`, qMeta.kind);
-  return [];
+  throw new Error(
+    `Unsupported query kind for ${queryDefinition.id}: ${String(queryDefinition.kind)}`
+  );
 }
 
-// 🔹 This is the main function your UI uses
-export async function evaluateAllQueries(ontologyText, fileName) {
-  const store = await loadOntologyIntoStore(ontologyText, fileName || 'ontology.ttl');
-  const manifest = await loadManifest('./queries/manifest.json');
+/**
+ * Evaluates all manifest queries against an ontology text input.
+ *
+ * @param {string} ontologyText
+ * @param {string} [fileName='ontology.ttl']
+ * @param {EvaluateAllQueriesOptions} [options]
+ * @returns {Promise<EvaluateAllQueriesOutput>}
+ */
+export async function evaluateAllQueries(
+  ontologyText,
+  fileName = 'ontology.ttl',
+  options = {}
+) {
+  const manifestUrl = options.manifestUrl || DEFAULT_MANIFEST_URL;
+  const queryBasePath = options.queryBasePath || DEFAULT_QUERY_BASE_PATH;
 
+  const store = await loadOntologyIntoStore(ontologyText, fileName);
+  const manifest = await loadManifest(manifestUrl);
+
+  /** @type {OcqQueryResultRow[]} */
   const allResults = [];
 
-  for (const qMeta of manifest.queries) {
+  for (const queryDefinition of manifest.queries) {
     try {
-      const queryText = await loadQueryText(qMeta, 'queries/');
-      const rows = await evaluateSingleQuery(store, qMeta, queryText);
+      const queryText = await loadQueryText(queryDefinition, queryBasePath);
+      const rows = await evaluateSingleQuery(store, queryDefinition, queryText);
       allResults.push(...rows);
-    } catch (err) {
-      console.error(`Error evaluating query ${qMeta.id}:`, err);
+    } catch (error) {
+      console.error(`Error evaluating query ${queryDefinition.id}:`, error);
     }
   }
 
-  const RDFS_LABEL = 'http://www.w3.org/2000/01/rdf-schema#label';
-  const labeled = new Set();
-  const quads = store.getQuads(null, RDFS_LABEL, null, null);
-  for (const q of quads) {
-    labeled.add(q.subject.value);
-  }
-
-  const ontologyIri = guessOntologyIri(store);
-
   return {
     results: allResults,
-    resources: Array.from(labeled),
-    ontologyIri
+    resources: collectLabeledResources(store),
+    ontologyIri: guessOntologyIri(store)
   };
 }
