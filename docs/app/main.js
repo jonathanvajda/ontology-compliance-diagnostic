@@ -1,6 +1,12 @@
-// app/main.js (ES module)
+// app/main.js
+// @ts-check
 
-import { evaluateAllQueries } from './engine.js';
+import {
+  evaluateAllQueries,
+  loadManifest,
+  DEFAULT_MANIFEST_URL
+} from './engine.js';
+
 import {
   computePerResourceCuration,
   computeOntologyReport,
@@ -8,137 +14,604 @@ import {
   getResultCriterionId
 } from './grader.js';
 
-import { saveRun, listRuns, getRun, deleteRun, getLastRunId } from './storage.js';
+import {
+  saveRun,
+  listRuns,
+  getRun,
+  deleteRun,
+  getLastRunId
+} from './storage.js';
 
-// --- DOM elements ---
-// Reuse the same input (#ontologyFiles) for both single and batch runs
-const filesInput = document.getElementById('ontologyFiles');
-const btnRun = document.getElementById('runChecksBtn');
-const runBatchBtn = document.getElementById('runBatchBtn');
-const downloadActionSelect = document.getElementById('downloadActionSelect');
-const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
-const statusEl = document.getElementById('status');
-const resourceSearchEl = document.getElementById('resourceSearch');
+/** @typedef {import('./types.js').OcqManifest} OcqManifest */
+/** @typedef {import('./types.js').OcqSavedRun} OcqSavedRun */
+/** @typedef {import('./types.js').OcqUiStateSnapshot} OcqUiStateSnapshot */
+/** @typedef {import('./types.js').OcqEvaluatedReport} OcqEvaluatedReport */
+/** @typedef {import('./types.js').OcqSingleRunPayload} OcqSingleRunPayload */
+/** @typedef {import('./types.js').OcqBatchRunPayload} OcqBatchRunPayload */
+/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
+/** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
+/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
+/** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
+/** @typedef {import('./types.js').OcqFailureIndex} OcqFailureIndex */
+
+/**
+ * @typedef {Object} OcqDownloadAction
+ * @property {string} label
+ * @property {() => boolean} isAvailable
+ * @property {() => string} build
+ * @property {() => string} getFileName
+ * @property {string} mimeType
+ */
+
+/**
+ * @typedef {Object} StandardDetailEntry
+ * @property {string} resource
+ * @property {string[]} queryIds
+ */
+
+/** @type {HTMLInputElement | null} */
+const filesInput = /** @type {HTMLInputElement | null} */ (
+  document.getElementById('ontologyFiles')
+);
+
+/** @type {HTMLButtonElement | null} */
+const runChecksButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('runChecksBtn')
+);
+
+/** @type {HTMLButtonElement | null} */
+const runBatchChecksButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('runBatchBtn')
+);
+
+/** @type {HTMLSelectElement | null} */
+const downloadActionSelect = /** @type {HTMLSelectElement | null} */ (
+  document.getElementById('downloadActionSelect')
+);
+
+/** @type {HTMLButtonElement | null} */
+const downloadSelectedButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('downloadSelectedBtn')
+);
+
+/** @type {HTMLElement | null} */
+const statusElement = document.getElementById('status');
+
+/** @type {HTMLInputElement | null} */
+const resourceSearchInput = /** @type {HTMLInputElement | null} */ (
+  document.getElementById('resourceSearch')
+);
+
+/** @type {HTMLElement | null} */
 const curationTableContainer = document.getElementById('curationTableContainer');
+
+/** @type {HTMLElement | null} */
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
+
+/** @type {HTMLElement | null} */
 const standardDetailContainer = document.getElementById('standardDetailContainer');
+
+/** @type {HTMLElement | null} */
 const dashboardContainer = document.getElementById('dashboardContainer');
-const savedRunsSelect = document.getElementById('savedRunsSelect');
-const loadSavedRunBtn = document.getElementById('loadSavedRunBtn');
-const deleteSavedRunBtn = document.getElementById('deleteSavedRunBtn');
-const printReportBtn = document.getElementById('printReportBtn');
 
+/** @type {HTMLSelectElement | null} */
+const savedRunsSelect = /** @type {HTMLSelectElement | null} */ (
+  document.getElementById('savedRunsSelect')
+);
 
-if (curationTableContainer) {
-  curationTableContainer.addEventListener('click', function (event) {
-    const btn = event.target.closest('button[data-toggle-resource-detail]');
-    if (!btn) return;
+/** @type {HTMLButtonElement | null} */
+const loadSavedRunButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('loadSavedRunBtn')
+);
 
-    const resourceIri = btn.getAttribute('data-toggle-resource-detail');
-    if (!resourceIri) return;
+/** @type {HTMLButtonElement | null} */
+const deleteSavedRunButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('deleteSavedRunBtn')
+);
 
-    toggleResourceDetail(resourceIri);
-  });
-}
+/** @type {HTMLButtonElement | null} */
+const printReportButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('printReportBtn')
+);
 
+/** @type {HTMLElement | null} */
+const appRoot = document.getElementById('appRoot');
 
+/** @type {HTMLButtonElement | null} */
+const themeToggleButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('ocqThemeToggleBtn')
+);
+
+/** @type {HTMLSelectElement | null} */
+const statusFilterSelect = /** @type {HTMLSelectElement | null} */ (
+  document.getElementById('statusFilter')
+);
+
+/** @type {HTMLSelectElement | null} */
+const standardFilterSelect = /** @type {HTMLSelectElement | null} */ (
+  document.getElementById('standardFilter')
+);
+
+/** @type {HTMLButtonElement | null} */
+const clearFiltersButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('clearFiltersBtn')
+);
+
+/** @type {HTMLElement | null} */
+const curationFiltersSummaryElement = document.getElementById('curationFiltersSummary');
+
+/** @type {OcqManifest | null} */
 let lastManifest = null;
+
+/** @type {OcqQueryResultRow[] | null} */
 let lastResults = null;
+
+/** @type {OcqPerResourceCurationRow[] | null} */
 let lastPerResource = null;
-let lastFailuresIndex = null; 
+
+/** @type {OcqPerResourceCurationRow[] | null} */
+let lastPerResourceFull = null;
+
+/** @type {OcqFailureIndex | null} */
+let lastFailuresIndex = null;
+
+/** @type {OcqOntologyReport | null} */
 let lastOntologyReport = null;
-let standardFilterPopulated = false;  // prevents duplicate option inserts
-let ontologyReportEventsWired = false;
-let lastBatchReports = null;     // Array of { fileName, ontologyIri, ontologyReport, perResource, results }
-let selectedBatchKey = null;     // stable selection key for dashboard rows
+
+/** @type {OcqEvaluatedReport[] | null} */
+let lastBatchReports = null;
+
+/** @type {string | null} */
+let selectedBatchKey = null;
+
+/** @type {number | null} */
 let resourceSearchTimer = null;
 
-// Phase 6.2 — saved runs UI
+/** @type {string | null} */
 let lastSelectedCriterionId = null;
+
+/** @type {HTMLTableRowElement | null} */
 let lastSelectedStandardRow = null;
 
-function safeIdFromIri(iri) {
-  return String(iri || '')
-    .replace(/[^a-zA-Z0-9_-]/g, '_')
-    .slice(0, 80);
+let ontologyReportEventsWired = false;
+let batchDashboardEventsWired = false;
+let standardDetailEventsWired = false;
+
+/**
+ * Sets the status text.
+ *
+ * @param {string} message
+ * @returns {void}
+ */
+export function setStatus(message) {
+  if (statusElement) {
+    statusElement.textContent = message;
+  }
 }
 
-if (resourceSearchEl) {
-  resourceSearchEl.addEventListener('input', () => {
-    if (resourceSearchTimer) clearTimeout(resourceSearchTimer);
-    resourceSearchTimer = setTimeout(() => {
-      applyResourceFilters();
-    }, 150);
-  });
+/**
+ * Escapes text for safe HTML insertion.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function escapeHtml(value) {
+  if (value == null) {
+    return '';
+  }
+
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
-function cssEscapeAttr(value) {
-  return String(value).replace(/"/g, '\\"');
+/**
+ * Escapes a value for use in a CSS attribute selector.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function cssEscapeAttr(value) {
+  return String(value == null ? '' : value).replace(/"/g, '\\"');
 }
 
-let lastPerResourceFull = null; // unfiltered source of truth
+/**
+ * Returns a safe file-name fragment.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function safeFilePart(value) {
+  return String(value == null ? '' : value)
+    .trim()
+    .replace(/[^\w.-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
 
-const statusFilterEl = document.getElementById('statusFilter');
-const standardFilterEl = document.getElementById('requirementFilter');
-const clearFiltersBtn = document.getElementById('clearFiltersBtn');
-const curationFiltersSummaryEl = document.getElementById('curationFiltersSummary');
+/**
+ * Returns a timestamp suitable for file names.
+ *
+ * @returns {string}
+ */
+export function getTimestampForFileName() {
+  const date = new Date();
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mi = String(date.getMinutes()).padStart(2, '0');
+  const ss = String(date.getSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}_${hh}-${mi}-${ss}`;
+}
 
-function applyResourceFilters() {
-  if (!Array.isArray(lastPerResourceFull)) {
-    lastPerResource = [];
-    renderCurationTable([]);
-    if (curationFiltersSummaryEl) {
-      curationFiltersSummaryEl.textContent = 'Showing 0 of 0 resources.';
-    }
+/**
+ * Returns an ISO-derived file stamp.
+ *
+ * @returns {string}
+ */
+export function isoFileStamp() {
+  return new Date().toISOString().replace(/[:.]/g, '-');
+}
+
+/**
+ * Escapes one CSV field.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function csvEscape(value) {
+  const text = value == null ? '' : String(value);
+  const needsWrap = /[",\n\r]/.test(text);
+  const escaped = text.replace(/"/g, '""');
+  return needsWrap ? `"${escaped}"` : escaped;
+}
+
+/**
+ * Converts rows to CSV text.
+ *
+ * @param {Array<Array<unknown>>} rows
+ * @returns {string}
+ */
+export function rowsToCsv(rows) {
+  return rows.map((row) => row.map(csvEscape).join(',')).join('\n') + '\n';
+}
+
+/**
+ * Downloads a text file.
+ *
+ * @param {string} text
+ * @param {string} fileName
+ * @param {string} mimeType
+ * @returns {void}
+ */
+export function downloadTextFile(text, fileName, mimeType) {
+  const blob = new Blob([text], { type: mimeType || 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Serializes result rows as CSV.
+ *
+ * @param {OcqQueryResultRow[]} results
+ * @param {string} ontologyIri
+ * @returns {string}
+ */
+export function toCsv(results, ontologyIri) {
+  /** @type {Array<Array<unknown>>} */
+  const rows = [[
+    'ontologyIri',
+    'resource',
+    'queryId',
+    'criterionId',
+    'status',
+    'severity',
+    'scope'
+  ]];
+
+  if (!Array.isArray(results) || results.length === 0) {
+    return rowsToCsv(rows);
+  }
+
+  for (const row of results) {
+    rows.push([
+      ontologyIri || '',
+      row.resource || '',
+      row.queryId || '',
+      row.criterionId || '',
+      row.status || '',
+      row.severity || '',
+      row.scope || ''
+    ]);
+  }
+
+  return rowsToCsv(rows);
+}
+
+/**
+ * Serializes an ontology report as YAML-like text.
+ *
+ * @param {OcqOntologyReport | null} report
+ * @returns {string}
+ */
+export function ontologyReportToYaml(report) {
+  if (!report) {
+    return '# No ontology report\n';
+  }
+
+  const lines = [];
+  lines.push(`ontologyIri: "${String(report.ontologyIri).replace(/"/g, '\\"')}"`);
+  lines.push(`status: "${String(report.statusLabel).replace(/"/g, '\\"')}"`);
+  lines.push('standards:');
+
+  for (const standard of report.standards || []) {
+    lines.push(`  - id: "${String(standard.id).replace(/"/g, '\\"')}"`);
+    lines.push(`    type: "${String(standard.type).replace(/"/g, '\\"')}"`);
+    lines.push(`    status: "${String(standard.status).replace(/"/g, '\\"')}"`);
+    lines.push(`    failedResourcesCount: ${standard.failedResourcesCount || 0}`);
+  }
+
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * Returns the standards array from an ontology report.
+ *
+ * @param {OcqOntologyReport | null | undefined} report
+ * @returns {OcqOntologyReportStandardRow[]}
+ */
+export function getReportStandards(report) {
+  return Array.isArray(report?.standards) ? report.standards : [];
+}
+
+/**
+ * Returns the stable key for a batch row.
+ *
+ * @param {OcqEvaluatedReport} item
+ * @returns {string}
+ */
+export function getBatchKey(item) {
+  const fileName = item?.fileName ?? '';
+  const ontologyIri = item?.ontologyIri ?? item?.ontologyReport?.ontologyIri ?? '';
+  return `${fileName}::${ontologyIri}`;
+}
+
+/**
+ * Returns the current UI state snapshot for persistence.
+ *
+ * @returns {OcqUiStateSnapshot}
+ */
+export function getUiStateSnapshot() {
+  return {
+    statusFilter: statusFilterSelect ? statusFilterSelect.value : '',
+    standardFilter: standardFilterSelect ? standardFilterSelect.value : '',
+    selectedBatchKey: selectedBatchKey || null,
+    selectedCriterionId: lastSelectedCriterionId || null
+  };
+}
+
+/**
+ * Applies a stored UI state snapshot.
+ *
+ * @param {OcqUiStateSnapshot | null | undefined} state
+ * @returns {void}
+ */
+export function applyUiStateSnapshot(state) {
+  if (!state) {
     return;
   }
 
-  const statusValue = statusFilterEl ? String(statusFilterEl.value || '') : '';
-  const requirementValue = standardFilterEl ? String(standardFilterEl.value || '') : '';
-  const searchValue = (resourceSearchEl ? String(resourceSearchEl.value || '') : '')
-    .trim()
-    .toLowerCase();
+  if (statusFilterSelect) {
+    statusFilterSelect.value = state.statusFilter || '';
+  }
+
+  if (standardFilterSelect) {
+    standardFilterSelect.value = state.standardFilter || '';
+  }
+}
+
+/**
+ * Formats a saved run as an option label.
+ *
+ * @param {OcqSavedRun} run
+ * @returns {string}
+ */
+export function formatRunOption(run) {
+  const kind = run.kind === 'batch' ? 'Batch' : 'Single';
+  const labelSuffix = run.label ? ` — ${run.label}` : '';
+  return `${kind} — ${run.createdAt}${labelSuffix}`;
+}
+
+/**
+ * Refreshes the saved-runs dropdown.
+ *
+ * @returns {Promise<void>}
+ */
+export async function refreshSavedRunsUi() {
+  if (!savedRunsSelect) {
+    return;
+  }
+
+  const runs = await listRuns(50);
+  savedRunsSelect.innerHTML = '<option value="">Saved runs…</option>';
+
+  for (const run of runs) {
+    const option = document.createElement('option');
+    option.value = run.id;
+    option.textContent = formatRunOption(run);
+    savedRunsSelect.appendChild(option);
+  }
+}
+
+/**
+ * Sets the app theme.
+ *
+ * @param {'ocq-theme-light' | 'ocq-theme-dark'} themeClass
+ * @returns {void}
+ */
+export function setTheme(themeClass) {
+  if (!appRoot) {
+    return;
+  }
+
+  appRoot.classList.remove('ocq-theme-light', 'ocq-theme-dark');
+  appRoot.classList.add(themeClass);
+  localStorage.setItem('ocq-theme', themeClass);
+}
+
+/**
+ * Toggles the current app theme.
+ *
+ * @returns {void}
+ */
+export function toggleTheme() {
+  if (!appRoot) {
+    return;
+  }
+
+  const isDark = appRoot.classList.contains('ocq-theme-dark');
+  setTheme(isDark ? 'ocq-theme-light' : 'ocq-theme-dark');
+}
+
+/**
+ * Initializes theme from localStorage.
+ *
+ * @returns {void}
+ */
+export function initTheme() {
+  const savedTheme = localStorage.getItem('ocq-theme');
+  if (savedTheme === 'ocq-theme-dark' || savedTheme === 'ocq-theme-light') {
+    setTheme(savedTheme);
+  }
+}
+
+/**
+ * Clears main rendered panels.
+ *
+ * @returns {void}
+ */
+export function clearRenderedViews() {
+  if (dashboardContainer) {
+    dashboardContainer.innerHTML = '';
+  }
+  if (ontologyReportContainer) {
+    ontologyReportContainer.innerHTML = '';
+  }
+  if (curationTableContainer) {
+    curationTableContainer.innerHTML = '';
+  }
+  if (standardDetailContainer) {
+    standardDetailContainer.innerHTML = '';
+  }
+}
+
+/**
+ * Clears transient selection state.
+ *
+ * @returns {void}
+ */
+export function clearRunSelectionState() {
+  selectedBatchKey = null;
+  lastBatchReports = null;
+  lastSelectedCriterionId = null;
+
+  if (lastSelectedStandardRow) {
+    lastSelectedStandardRow.classList.remove('ocq-row-selected');
+  }
+  lastSelectedStandardRow = null;
+}
+
+/**
+ * Applies current resource filters and rerenders the curation table.
+ *
+ * @returns {void}
+ */
+export function applyResourceFilters() {
+  if (!Array.isArray(lastPerResourceFull)) {
+    lastPerResource = [];
+    renderCurationTable([]);
+
+    if (curationFiltersSummaryElement) {
+      curationFiltersSummaryElement.textContent = 'Showing 0 of 0 resources.';
+    }
+
+    refreshDownloadOptions();
+    return;
+  }
+
+  const statusValue = statusFilterSelect ? String(statusFilterSelect.value || '') : '';
+  const standardValue = standardFilterSelect ? String(standardFilterSelect.value || '') : '';
+  const searchValue = resourceSearchInput
+    ? String(resourceSearchInput.value || '').trim().toLowerCase()
+    : '';
 
   let filtered = lastPerResourceFull.slice();
 
   if (statusValue) {
-    filtered = filtered.filter(function (r) {
-      return String(r?.statusLabel || '') === statusValue;
-    });
+    filtered = filtered.filter((row) => String(row?.statusLabel || '') === statusValue);
   }
 
-  if (requirementValue) {
-    filtered = filtered.filter(function (r) {
-      const fr = Array.isArray(r?.failedRequirements) ? r.failedRequirements : [];
-      const frec = Array.isArray(r?.failedRecommendations) ? r.failedRecommendations : [];
-      return fr.includes(requirementValue) || frec.includes(requirementValue);
+  if (standardValue) {
+    filtered = filtered.filter((row) => {
+      const failedRequirements = Array.isArray(row?.failedRequirements)
+        ? row.failedRequirements
+        : [];
+      const failedRecommendations = Array.isArray(row?.failedRecommendations)
+        ? row.failedRecommendations
+        : [];
+
+      return (
+        failedRequirements.includes(standardValue) ||
+        failedRecommendations.includes(standardValue)
+      );
     });
   }
 
   if (searchValue) {
-    filtered = filtered.filter(function (r) {
-      return String(r?.resource || '').toLowerCase().includes(searchValue);
-    });
+    filtered = filtered.filter((row) =>
+      String(row?.resource || '').toLowerCase().includes(searchValue)
+    );
   }
 
   lastPerResource = filtered;
 
-  if (curationFiltersSummaryEl) {
-    curationFiltersSummaryEl.textContent =
-      'Showing ' + filtered.length + ' of ' + lastPerResourceFull.length + ' resources.';
+  if (curationFiltersSummaryElement) {
+    curationFiltersSummaryElement.textContent =
+      `Showing ${filtered.length} of ${lastPerResourceFull.length} resources.`;
   }
 
   renderCurationTable(filtered);
-
-  if (typeof refreshDownloadOptions === 'function') {
-    refreshDownloadOptions();
-  }
+  refreshDownloadOptions();
 }
 
-function clearResourceFilters() {
-  if (statusFilterEl) statusFilterEl.value = '';
-  if (standardFilterEl) standardFilterEl.value = '';
-  if (resourceSearchEl) resourceSearchEl.value = '';
+/**
+ * Clears resource filters and reapplies them.
+ *
+ * @returns {void}
+ */
+export function clearResourceFilters() {
+  if (statusFilterSelect) {
+    statusFilterSelect.value = '';
+  }
+
+  if (standardFilterSelect) {
+    standardFilterSelect.value = '';
+  }
+
+  if (resourceSearchInput) {
+    resourceSearchInput.value = '';
+  }
 
   lastPerResource = Array.isArray(lastPerResourceFull)
     ? lastPerResourceFull.slice()
@@ -147,286 +620,62 @@ function clearResourceFilters() {
   applyResourceFilters();
 }
 
-if (statusFilterEl) statusFilterEl.addEventListener('change', applyResourceFilters);
-if (standardFilterEl) standardFilterEl.addEventListener('change', applyResourceFilters);
-if (clearFiltersBtn) clearFiltersBtn.addEventListener('click', clearResourceFilters);
+/**
+ * Returns standard-detail rows for a selected criterion id.
+ *
+ * @param {string | null | undefined} criterionId
+ * @returns {StandardDetailEntry[]}
+ */
+export function getStandardDetailEntries(criterionId) {
+  const selectedCriterionId = criterionId || lastSelectedCriterionId || '';
 
-function ocqGetUiStateSnapshot() {
-  return {
-    statusFilter: statusFilterEl ? statusFilterEl.value : '',
-    requirementFilter: standardFilterEl ? standardFilterEl.value : '',
-    selectedBatchKey: selectedBatchKey || null,
-    selectedcriterionId: lastSelectedCriterionId || null
-  };
-}
-
-function ocqApplyUiStateSnapshot(state) {
-  if (!state) return;
-
-  if (statusFilterEl) statusFilterEl.value = state.statusFilter || '';
-  if (standardFilterEl) standardFilterEl.value = state.requirementFilter || '';
-}
-
-async function ocqHydrateRun(run) {
-  if (!run) return;
-
-  await ensureManifestLoaded();
-
-  // Apply stored UI filters first
-  ocqApplyUiStateSnapshot(run.uiState);
-
-  // Reset view containers (optional; keeps things tidy)
-  // dashboardContainer.innerHTML = '';
-  // ontologyReportContainer.innerHTML = '';
-  // curationTableContainer.innerHTML = '';
-  clearRequirementDetailPanel();
-
-  if (run.kind === 'batch') {
-    // payload is batchReports[]
-    lastBatchReports = Array.isArray(run.payload) ? run.payload : [];
-    selectedBatchKey = run.uiState?.selectedBatchKey || null;
-
-    renderDashboard(lastBatchReports);
-
-    // if we had a selected batch row, load it into panes
-    if (selectedBatchKey) {
-      const match = lastBatchReports.find(r => getBatchKey(r) === selectedBatchKey);
-      if (match) {
-        loadBatchSelection(match);
-        renderDashboard(lastBatchReports);
-      }
-    }
-
-    // Now apply filters to whatever is loaded in panes
-    applyResourceFilters();
-
-    // restore requirement selection if possible
-    const reqId = run.uiState?.selectedcriterionId || null;
-    if (reqId && lastOntologyReport?.standards?.some(r => r.id === reqId)) {
-      lastSelectedCriterionId = reqId;
-      renderStandardDetail(reqId);
-
-      const row = ontologyReportContainer?.querySelector(
-        'tr[data-requirement-id="' + cssEscapeAttr(reqId) + '"]'
-      );
-      if (row) {
-        row.classList.add('ocq-row-selected');
-        lastSelectedStandardRow = row;
-      }
-    }
-
-    if (statusEl) statusEl.textContent = `Loaded saved batch run (${run.createdAt}).`;
-    refreshDownloadOptions();
-    return;
+  if (!selectedCriterionId || !Array.isArray(lastResults)) {
+    return [];
   }
 
-  // single
-  const reportObj = run.payload;
+  const failingRows = lastResults.filter(
+    (row) => row.criterionId === selectedCriterionId && row.status === 'fail'
+  );
 
-  lastResults = reportObj?.results || [];
-  lastFailuresIndex = buildFailuresIndex(lastResults);
-  lastOntologyReport = reportObj?.ontologyReport || null;
-  lastPerResourceFull = reportObj?.perResource || [];
-  lastPerResource = reportObj?.perResource || [];
-  selectedBatchKey = null;
-  lastBatchReports = null;
+  /** @type {Map<string, Set<string>>} */
+  const failuresByResource = new Map();
 
-  renderOntologyReport(lastOntologyReport);
-  applyResourceFilters();
+  for (const row of failingRows) {
+    const resource = row.resource || '';
+    const queryId = row.queryId || '';
 
-  const reqId = run.uiState?.selectedcriterionId || null;
-  if (reqId && lastOntologyReport?.standards?.some(r => r.id === reqId)) {
-    lastSelectedCriterionId = reqId;
-    renderStandardDetail(reqId);
+    if (!resource) {
+      continue;
+    }
 
-    const row = ontologyReportContainer?.querySelector(
-      'tr[data-requirement-id="' + cssEscapeAttr(reqId) + '"]'
-    );
-    if (row) {
-      row.classList.add('ocq-row-selected');
-      lastSelectedStandardRow = row;
+    if (!failuresByResource.has(resource)) {
+      failuresByResource.set(resource, new Set());
+    }
+
+    const queryIds = failuresByResource.get(resource);
+    if (queryIds && queryId) {
+      queryIds.add(queryId);
     }
   }
 
-  if (statusEl) statusEl.textContent = `Loaded saved single run (${run.createdAt}).`;
-  refreshDownloadOptions();
+  return Array.from(failuresByResource.entries())
+    .map(([resource, queryIdSet]) => ({
+      resource,
+      queryIds: Array.from(queryIdSet).sort()
+    }))
+    .sort((a, b) => String(a.resource).localeCompare(String(b.resource)));
 }
-
-function ocqFormatRunOption(run) {
-  const kind = run.kind === 'batch' ? 'Batch' : 'Single';
-  const label = run.label ? ` — ${run.label}` : '';
-  return `${kind} — ${run.createdAt}${label}`;
-}
-
-async function refreshSavedRunsUi() {
-  if (!savedRunsSelect) return;
-
-  const runs = await listRuns(50);
-
-  savedRunsSelect.innerHTML = '<option value="">Saved runs…</option>';
-  for (const run of runs) {
-    const opt = document.createElement('option');
-    opt.value = run.id;
-    opt.textContent = ocqFormatRunOption(run);
-    savedRunsSelect.appendChild(opt);
-  }
-}
-
-
-const appRoot = document.getElementById('appRoot');
-const themeToggleBtn = document.getElementById('ocqThemeToggleBtn');
-
-function setTheme(themeClass) {
-  if (!appRoot) return;
-
-  appRoot.classList.remove('ocq-theme-light', 'ocq-theme-dark');
-  appRoot.classList.add(themeClass);
-
-  localStorage.setItem('ocq-theme', themeClass);
-}
-
-function toggleTheme() {
-  if (!appRoot) return;
-
-  const isDark = appRoot.classList.contains('ocq-theme-dark');
-  setTheme(isDark ? 'ocq-theme-light' : 'ocq-theme-dark');
-}
-
-// Init on load
-(function initTheme() {
-  const saved = localStorage.getItem('ocq-theme');
-  if (saved === 'ocq-theme-dark' || saved === 'ocq-theme-light') {
-    setTheme(saved);
-  }
-})();
-
-if (themeToggleBtn) {
-  themeToggleBtn.addEventListener('click', toggleTheme);
-}
-
-
-function escapeHtml(str) {
-  if (str == null) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-// Phase 6.1 — stable key for batch row selection
-function getBatchKey(item) {
-  const fn = item?.fileName ?? '';
-  const oi = item?.ontologyIri ?? (item?.ontologyReport?.ontologyIri ?? '');
-  return `${fn}::${oi}`;
-}
-
-function loadBatchSelection(reportObj) {
-  // Assign to existing single-run globals so existing UI works unchanged
-  lastResults = reportObj.results || [];
-  lastFailuresIndex = buildFailuresIndex(lastResults);
-
-  lastPerResourceFull = reportObj.perResource || [];
-  lastPerResource = reportObj.perResource || [];
-
-  lastOntologyReport = reportObj.ontologyReport || null;
-
-  // Ensure the filters are wired to the current manifest (shared)
-  if (lastManifest) populateStandardFilter(lastManifest);
-
-  // Render single-run view panes using existing codepaths
-  renderOntologyReport(lastOntologyReport);
-  applyResourceFilters(); // will call renderCurationTable(filtered)
-}
-
-function onBatchRowSelected(batchKey) {
-  if (!Array.isArray(lastBatchReports) || !lastBatchReports.length) return;
-
-  // Toggle-close behavior (click same row again)
-  if (selectedBatchKey === batchKey) {
-    selectedBatchKey = null;
-    renderDashboard(lastBatchReports);
-    refreshDownloadOptions();
-    return;
-  }
-
-  selectedBatchKey = batchKey;
-
-  const reportObj = lastBatchReports.find(r => getBatchKey(r) === batchKey);
-  if (!reportObj) return;
-
-  loadBatchSelection(reportObj);
-  renderDashboard(lastBatchReports); // keep dashboard visible + highlight selected row
-
-  if (statusEl) {
-    statusEl.textContent = `Selected: ${reportObj.fileName}`;
-  }
-  refreshDownloadOptions();
-}
-
-function wireBatchDashboardSelection() {
-  if (!dashboardContainer) return;
-
-  // Click selection (event delegation)
-  dashboardContainer.addEventListener('click', (event) => {
-    const row = event.target.closest('tr[data-batch-key]');
-    if (!row) return;
-    const key = row.getAttribute('data-batch-key');
-    if (!key) return;
-    onBatchRowSelected(key);
-  });
-
-  // Keyboard selection (Enter / Space)
-  dashboardContainer.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    const row = event.target.closest('tr[data-batch-key]');
-    if (!row) return;
-    event.preventDefault();
-    const key = row.getAttribute('data-batch-key');
-    if (!key) return;
-    onBatchRowSelected(key);
-  });
-}
-
-// Run all queries + grading for a single File object
-async function evaluateFile(file) {
-  const text = await file.text();
-  const { results, resources, ontologyIri } = await evaluateAllQueries(text, file.name);
-  const manifest = await ensureManifestLoaded();
-
-  const perResource = computePerResourceCuration(results, manifest, resources);
-  const ontologyReport = computeOntologyReport(results, manifest, ontologyIri);
-
-  return {
-    fileName: file.name,
-    ontologyIri,
-    ontologyReport,
-    perResource,
-    results
-  };
-}
-
-// ==============================
-// Requirement detail: FIXED
-// - No inline onclick
-// - Delegated close handler wired once (no multiplying listeners)
-// - Uses a single clearRequirementDetailPanel() in global scope
-// - Close button uses data-requirement-close
-// - Escapes rendered values
-// - Keeps all content inside .ocq-detail
-// ==============================
-
-// Wire-once flag
-let requirementDetailEventsWired = false;
 
 /**
- * Clears requirement detail panel + clears any selected requirement row highlight.
+ * Clears the standard-detail panel and selected row highlight.
+ *
+ * @returns {void}
  */
-function clearRequirementDetailPanel() {
+export function clearStandardDetailPanel() {
   if (lastSelectedStandardRow) {
     lastSelectedStandardRow.classList.remove('ocq-row-selected');
   }
+
   lastSelectedStandardRow = null;
   lastSelectedCriterionId = null;
 
@@ -438,79 +687,101 @@ function clearRequirementDetailPanel() {
 }
 
 /**
- * Wires the close button handler once using event delegation.
- * Call this once during init (top-level), or before first renderStandardDetail().
+ * Wires the standard-detail close handler once.
+ *
+ * @returns {void}
  */
-function wireRequirementDetailCloseOnce() {
-  if (!standardDetailContainer || requirementDetailEventsWired) return;
+export function wireStandardDetailCloseOnce() {
+  if (!standardDetailContainer || standardDetailEventsWired) {
+    return;
+  }
 
-  standardDetailContainer.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-requirement-close]');
-    if (!btn) return;
-    clearRequirementDetailPanel();
+  standardDetailContainer.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    const closeButton = event.target.closest('button[data-standard-close]');
+    if (!closeButton) {
+      return;
+    }
+
+    clearStandardDetailPanel();
   });
 
-  requirementDetailEventsWired = true;
+  standardDetailEventsWired = true;
 }
 
-// Call once during startup (safe to call multiple times)
-wireRequirementDetailCloseOnce();
-
 /**
- * Renders the requirement detail panel for a selected criterionId.
+ * Renders the standard-detail panel.
+ *
+ * @param {string} criterionId
+ * @returns {void}
  */
-function renderStandardDetail(criterionId) {
-  if (!standardDetailContainer) return;
+export function renderStandardDetail(criterionId) {
+  if (!standardDetailContainer) {
+    return;
+  }
 
   if (!lastOntologyReport || !lastResults) {
-    standardDetailContainer.innerHTML = '<p>No data available for requirement details.</p>';
+    standardDetailContainer.innerHTML = '<p>No data available for standard details.</p>';
     return;
   }
 
   const standards = getReportStandards(lastOntologyReport);
-  const req = standards.find(r => r.id === criterionId);
+  const selectedStandard = standards.find((standard) => standard.id === criterionId);
 
-  if (!req) {
+  if (!selectedStandard) {
     standardDetailContainer.innerHTML = `<p>No details found for ${escapeHtml(criterionId)}.</p>`;
     return;
   }
 
   const failingRows = lastResults.filter(
-    r => getResultCriterionId(r) === criterionId && r.status === 'fail'
+    (row) => getResultCriterionId(row) === criterionId && row.status === 'fail'
   );
 
-  const queryIds = Array.from(new Set(failingRows.map(r => r.queryId))).sort();
-  const resources = Array.from(new Set(failingRows.map(r => r.resource))).sort();
+  const queryIds = Array.from(
+    new Set(
+      failingRows
+        .map((row) => row.queryId || '')
+        .filter((queryId) => queryId !== '')
+    )
+  ).sort();
 
-  // Optional: group by resource → [queryIds]
-  const failuresByResource = new Map();
-  for (const row of failingRows) {
-    if (!failuresByResource.has(row.resource)) {
-      failuresByResource.set(row.resource, new Set());
-    }
-    failuresByResource.get(row.resource).add(row.queryId);
-  }
+  const resources = Array.from(
+    new Set(
+      failingRows
+        .map((row) => row.resource || '')
+        .filter((resource) => resource !== '')
+    )
+  ).sort();
 
-  const entries = Array.from(failuresByResource.entries())
-    .map(([resource, qSet]) => ({
-      resource,
-      queryIds: Array.from(qSet).sort()
-    }))
-    .sort((a, b) => String(a.resource).localeCompare(String(b.resource)));
+  const entries = getStandardDetailEntries(criterionId);
 
-  // 3) Render into the detail container (everything inside .ocq-detail)
   let html = '';
   html += '<div class="ocq-detail">';
   html += '  <div class="ocq-detail-header">';
-  html += '    <h3 class="ocq-detail-title">Requirement: ' + escapeHtml(req.id) + '</h3>';
-  html += '    <button class="ocq-btn" type="button" data-requirement-close>Close</button>';
+  html += `    <h3 class="ocq-detail-title">Standard: ${escapeHtml(selectedStandard.id)}</h3>`;
+  html += '    <button class="ocq-btn" type="button" data-standard-close>Close</button>';
   html += '  </div>';
 
-  html += '  <div class="ocq-detail-meta">Status: <strong>' + escapeHtml(req.status) + '</strong> (' + escapeHtml(req.type) + ')</div>';
-  html += '  <div class="ocq-detail-meta">Failing resources: <strong>' + escapeHtml(resources.length) + '</strong></div>';
+  html +=
+    '  <div class="ocq-detail-meta">Status: <strong>' +
+    escapeHtml(selectedStandard.status) +
+    '</strong> (' +
+    escapeHtml(selectedStandard.type) +
+    ')</div>';
+
+  html +=
+    '  <div class="ocq-detail-meta">Failing resources: <strong>' +
+    escapeHtml(resources.length) +
+    '</strong></div>';
 
   if (queryIds.length) {
-    html += '  <div class="ocq-detail-meta">Queries involved: <span class="ocq-mono">' + escapeHtml(queryIds.join(', ')) + '</span></div>';
+    html +=
+      '  <div class="ocq-detail-meta">Queries involved: <span class="ocq-mono">' +
+      escapeHtml(queryIds.join(', ')) +
+      '</span></div>';
   }
 
   if (!entries.length) {
@@ -525,10 +796,10 @@ function renderStandardDetail(criterionId) {
     html += '    </thead>';
     html += '    <tbody>';
 
-    for (const item of entries) {
+    for (const entry of entries) {
       html += '      <tr>';
-      html += '        <td class="ocq-table-td ocq-mono">' + escapeHtml(item.resource) + '</td>';
-      html += '        <td class="ocq-table-td ocq-mono">' + escapeHtml(item.queryIds.join(', ')) + '</td>';
+      html += '        <td class="ocq-table-td ocq-mono">' + escapeHtml(entry.resource) + '</td>';
+      html += '        <td class="ocq-table-td ocq-mono">' + escapeHtml(entry.queryIds.join(', ')) + '</td>';
       html += '      </tr>';
     }
 
@@ -541,17 +812,26 @@ function renderStandardDetail(criterionId) {
   standardDetailContainer.innerHTML = html;
 }
 
-
-function toggleResourceDetail(resourceIri) {
-  if (!curationTableContainer) return;
+/**
+ * Toggles the detail row for one resource.
+ *
+ * @param {string} resourceIri
+ * @returns {void}
+ */
+export function toggleResourceDetail(resourceIri) {
+  if (!curationTableContainer) {
+    return;
+  }
 
   const detailRow = curationTableContainer.querySelector(
-    'tr[data-resource-detail-row="' + cssEscapeAttr(resourceIri) + '"]'
+    `tr[data-resource-detail-row="${cssEscapeAttr(resourceIri)}"]`
   );
-  if (!detailRow) return;
+
+  if (!(detailRow instanceof HTMLTableRowElement)) {
+    return;
+  }
 
   const isOpen = detailRow.style.display !== 'none';
-
   if (isOpen) {
     detailRow.style.display = 'none';
     return;
@@ -560,65 +840,77 @@ function toggleResourceDetail(resourceIri) {
   detailRow.style.display = '';
 
   const panel = detailRow.querySelector('.ocq-resource-detail');
-  if (!panel) return;
+  if (!(panel instanceof HTMLElement)) {
+    return;
+  }
 
   panel.innerHTML = renderResourceFailureDetailHtml(resourceIri);
 }
 
-function renderResourceFailureDetailHtml(resourceIri) {
+/**
+ * Builds HTML for the resource-failure detail panel.
+ *
+ * @param {string} resourceIri
+ * @returns {string}
+ */
+export function renderResourceFailureDetailHtml(resourceIri) {
   if (!lastFailuresIndex) {
     return '<div class="ocq-muted">No failure index available.</div>';
   }
 
-  const byReq = lastFailuresIndex.get(resourceIri);
-  if (!byReq || byReq.size === 0) {
+  const byCriterion = lastFailuresIndex.get(resourceIri);
+  if (!byCriterion || byCriterion.size === 0) {
     return '<div class="ocq-muted">No failing queries for this resource.</div>';
   }
 
   let html = '';
   html += '<table class="ocq-table" style="margin-top:10px;">';
-  html += '<thead class="ocq-table-head"><tr>' +
-          '<th class="ocq-table-th">Standardization Code</th>' +
-          '<th class="ocq-table-th">Failing query IDs</th>' +
-          '</tr></thead><tbody>';
+  html += '<thead class="ocq-table-head"><tr>';
+  html += '<th class="ocq-table-th">Standardization Code</th>';
+  html += '<th class="ocq-table-th">Failing query IDs</th>';
+  html += '</tr></thead><tbody>';
 
-  for (const [reqId, qSet] of byReq.entries()) {
-    html +=
-      '<tr class="ocq-table-tr">' +
-        '<td class="ocq-table-td ocq-mono">' + escapeHtml(reqId) + '</td>' +
-        '<td class="ocq-table-td ocq-mono">' +
-          escapeHtml(Array.from(qSet).join(', ')) +
-        '</td>' +
-      '</tr>';
+  for (const [criterionId, queryIdSet] of byCriterion.entries()) {
+    html += '<tr class="ocq-table-tr">';
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(criterionId) + '</td>';
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(Array.from(queryIdSet).join(', ')) + '</td>';
+    html += '</tr>';
   }
 
   html += '</tbody></table>';
   return html;
 }
 
-function onOntologyReportRowClick(event) {
-  const row = event.target.closest('tr[data-requirement-id]');
-  if (!row) return;
-
-  const criterionId = row.getAttribute('data-requirement-id');
-  if (!criterionId) return;
-
-  // Toggle behavior: same row clicked again
-  if (lastSelectedCriterionId === criterionId) {
-    row.classList.remove('ocq-row-selected');
-    standardDetailContainer.innerHTML = '';
-    lastSelectedCriterionId = null;
-    lastSelectedStandardRow = null;
-    refreshDownloadOptions();
+/**
+ * Handles clicks on ontology-report rows.
+ *
+ * @param {MouseEvent} event
+ * @returns {void}
+ */
+export function onOntologyReportRowClick(event) {
+  if (!(event.target instanceof Element)) {
     return;
   }
 
-  // Clear previous selection
+  const row = event.target.closest('tr[data-standard-id]');
+  if (!(row instanceof HTMLTableRowElement)) {
+    return;
+  }
+
+  const criterionId = row.getAttribute('data-standard-id');
+  if (!criterionId) {
+    return;
+  }
+
+  if (lastSelectedCriterionId === criterionId) {
+    clearStandardDetailPanel();
+    return;
+  }
+
   if (lastSelectedStandardRow) {
     lastSelectedStandardRow.classList.remove('ocq-row-selected');
   }
 
-  // Select new row
   row.classList.add('ocq-row-selected');
   lastSelectedStandardRow = row;
   lastSelectedCriterionId = criterionId;
@@ -627,110 +919,17 @@ function onOntologyReportRowClick(event) {
   refreshDownloadOptions();
 }
 
-
-// --- Dashboard for batch mode ---
-function renderDashboard(batchReports) {
-  if (!dashboardContainer) return;
-
-  if (!batchReports || !batchReports.length) {
-    dashboardContainer.innerHTML = '<p>No ontologies evaluated.</p>';
+/**
+ * Renders the ontology report card.
+ *
+ * @param {OcqOntologyReport | null | undefined} report
+ * @returns {void}
+ */
+export function renderOntologyReport(report) {
+  if (!ontologyReportContainer) {
     return;
   }
 
-  let html = '<h2 class="ocq-title">Ontology dashboard</h2>';
-  html += '<table class="ocq-table">';
-  html += '<thead class="ocq-table-head"><tr>' +
-          '<th class="ocq-table-th">File</th>' +
-          '<th class="ocq-table-th">Ontology IRI</th>' +
-          '<th class="ocq-table-th">Status</th>' +
-          '<th class="ocq-table-th"># Failed Requirements</th>' +
-          '<th class="ocq-table-th"># Failed Recommendations</th>' +
-          '</tr></thead><tbody>';
-
-  for (const item of batchReports) {
-    const report = item.ontologyReport;
-    const failedReqs = report.standards
-      .filter(r => r.type === 'requirement' && r.status === 'fail').length;
-    const failedRecs = report.standards
-      .filter(r => r.type === 'recommendation' && r.status === 'fail').length;
-
-    const key = getBatchKey(item);
-    const isSelected = (selectedBatchKey === key);
-
-    html +=
-      '<tr class="ocq-table-tr ocq-row-clickable ocq-batch-row' + (isSelected ? ' ocq-batch-row--selected' : '') + '"' +
-          ' tabindex="0"' +
-          ' role="button"' +
-          ' data-batch-key="' + escapeHtml(key) + '">' +
-        `<td class="ocq-table-td ocq-mono">${escapeHtml(item.fileName)}</td>` +
-        `<td class="ocq-table-td ocq-mono">${escapeHtml(report.ontologyIri)}</td>` +
-        `<td class="ocq-table-td ocq-mono">${escapeHtml(report.statusLabel)}</td>` +
-        `<td class="ocq-table-td ocq-mono">${failedReqs}</td>` +
-        `<td class="ocq-table-td ocq-mono">${failedRecs}</td>` +
-      '</tr>';
-  }
-
-  html += '</tbody></table>';
-  dashboardContainer.innerHTML = html;
-}
-
-// --- Per-resource table ---
-function renderCurationTable(perResource) {
-  if (!perResource || perResource.length === 0) {
-    curationTableContainer.innerHTML = '<p>No curation results to display.</p>';
-    return;
-  }
-
-  let html = '<h2 class="ocq-title">Per-resource curation</h2>';
-  html += '<table class="ocq-table">';
-  html += '<thead class="ocq-table-head"><tr>' +
-          '<th class="ocq-table-th">Resource</th>' +
-          '<th class="ocq-table-th">Suggested Curation Status</th>' +
-          '<th class="ocq-table-th">Failed Requirements</th>' +
-          '<th class="ocq-table-th">Failed Recommendations</th>' +
-          '<th class="ocq-table-th">Details</th>' +
-          '</tr></thead><tbody>';
-
-  for (const row of perResource) {
-    const reqs = row.failedRequirements.join(', ') || '—';
-    const recs = row.failedRecommendations.join(', ') || '—';
-
-    const statusBadgeClass = {
-      'uncurated': 'ocq-badge ocq-badge-danger',
-      'metadata incomplete': 'ocq-badge ocq-badge-warn',
-      'metadata complete': 'ocq-badge ocq-badge-success',
-      'pending final vetting': 'ocq-badge ocq-badge-info'
-    }[row.statusLabel] || 'ocq-badge';
-
-    html += '<tr>' +
-            '<td class="ocq-table-td ocq-mono">' + escapeHtml(row.resource) + '</td>' +
-            '<td class="ocq-table-td ocq-mono"><span class="' + statusBadgeClass + '">' + escapeHtml(row.statusLabel) + '</span></td>' +
-            '<td class="ocq-table-td ocq-mono">' + escapeHtml(reqs) + '</td>' +
-            '<td class="ocq-table-td ocq-mono">' + escapeHtml(recs) + '</td>' +
-            '<td class="ocq-table-td ocq-mono">' +
-              '<button class="ocq-btn ocq-btn-tertiary ocq-btn-small" ' +
-                      'type="button" ' +
-                      'data-toggle-resource-detail="' + escapeHtml(row.resource) + '">' +
-                'View' +
-              '</button>' +
-            '</td>' +
-          '</tr>';
-    html +=
-          '<tr class="ocq-table-tr ocq-resource-detail-row" ' +
-              'data-resource-detail-row="' + escapeHtml(row.resource) + '" ' +
-              'style="display:none;">' +
-            '<td class="ocq-table-td" colspan="999">' +
-              '<div class="ocq-resource-detail"></div>' +
-            '</td>' +
-          '</tr>';
-  }
-
-  html += '</tbody></table>';
-  curationTableContainer.innerHTML = html;
-}
-
-// --- Ontology report card ---
-function renderOntologyReport(report) {
   if (!report) {
     ontologyReportContainer.innerHTML = '';
     return;
@@ -743,33 +942,36 @@ function renderOntologyReport(report) {
   html += '<p><strong>Ontology curation status:</strong> ' + escapeHtml(report.statusLabel) + '</p>';
 
   if (!standards.length) {
-    html += '<p>No requirement entries.</p>';
+    html += '<p>No standards found.</p>';
     ontologyReportContainer.innerHTML = html;
     return;
   }
 
   html += '<table class="ocq-table">';
-  html += '<thead class="ocq-table-head"><tr>' +
-          '<th class="ocq-table-th">Standardization Code</th>' +
-          '<th class="ocq-table-th">Type</th>' +
-          '<th class="ocq-table-th">Status</th>' +
-          '<th class="ocq-table-th">Failed Resources</th>' +
-          '</tr></thead><tbody>';
+  html += '<thead class="ocq-table-head"><tr>';
+  html += '<th class="ocq-table-th">Standardization Code</th>';
+  html += '<th class="ocq-table-th">Type</th>';
+  html += '<th class="ocq-table-th">Status</th>';
+  html += '<th class="ocq-table-th">Failed Resources</th>';
+  html += '</tr></thead><tbody>';
 
-  for (const r of standards) {
-    const typeLabel = r.type === 'recommendation' ? 'recommendation' : 'requirement';
-    const failedCount = r.failedResourcesCount || 0;
+  for (const standard of standards) {
+    const typeLabel = standard.type === 'recommendation' ? 'recommendation' : 'requirement';
+    const failedCount = standard.failedResourcesCount || 0;
     const statusBadgeClass =
-      r.status === 'pass'
+      standard.status === 'pass'
         ? 'ocq-badge ocq-badge-success'
         : 'ocq-badge ocq-badge-danger';
 
-    html += '<tr class="ocq-table-tr ocq-row-clickable" tabindex="0" data-requirement-id="' + escapeHtml(r.id) + '">' +
-      '<td class="ocq-table-td">' + escapeHtml(r.id) + '</td>' +
-      '<td class="ocq-table-td">' + escapeHtml(typeLabel) + '</td>' +
-      '<td class="ocq-table-td"><span class="' + statusBadgeClass + '">' + escapeHtml(r.status) + '</span></td>' +
-      '<td class="ocq-table-td">' + escapeHtml(String(failedCount)) + '</td>' +
-      '</tr>';
+    html += '<tr class="ocq-table-tr ocq-row-clickable" tabindex="0" data-standard-id="' +
+      escapeHtml(standard.id) +
+      '">';
+
+    html += '<td class="ocq-table-td">' + escapeHtml(standard.id) + '</td>';
+    html += '<td class="ocq-table-td">' + escapeHtml(typeLabel) + '</td>';
+    html += '<td class="ocq-table-td"><span class="' + statusBadgeClass + '">' + escapeHtml(standard.status) + '</span></td>';
+    html += '<td class="ocq-table-td">' + escapeHtml(String(failedCount)) + '</td>';
+    html += '</tr>';
   }
 
   html += '</tbody></table>';
@@ -777,271 +979,278 @@ function renderOntologyReport(report) {
 
   if (!ontologyReportEventsWired) {
     ontologyReportContainer.addEventListener('click', onOntologyReportRowClick);
-    ontologyReportContainer.addEventListener('keydown', function (event) {
-      if (event.key !== 'Enter' && event.key !== ' ') return;
 
-      const row = event.target.closest('tr[data-requirement-id]');
-      if (!row) return;
+    ontologyReportContainer.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      const row = event.target.closest('tr[data-standard-id]');
+      if (!(row instanceof HTMLTableRowElement)) {
+        return;
+      }
 
       event.preventDefault();
       row.click();
     });
+
     ontologyReportEventsWired = true;
   }
 }
 
-// --- Download helpers ---
-function downloadTextFile(text, fileName, mimeType) {
-  const blob = new Blob([text], { type: mimeType || 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function toCsv(results, ontologyIri) {
-  if (!Array.isArray(results) || results.length === 0) {
-    return 'ontologyIri,resource,queryId,criterionId,status,severity,scope\n';
-  }
-  const header = ['ontologyIri', 'resource', 'queryId', 'criterionId', 'status', 'severity', 'scope'];
-  const rows = [header.join(',')];
-
-  for (const row of results) {
-    const cols = [
-      ontologyIri || '',
-      row.resource || '',
-      row.queryId || '',
-      row.criterionId || '',
-      row.status || '',
-      row.severity || '',
-      row.scope || ''
-    ].map(v => {
-      const s = String(v).replace(/"/g, '""');
-      return `"${s}"`;
-    });
-    rows.push(cols.join(','));
-  }
-  return rows.join('\n');
-}
-
-function ontologyReportToYaml(report) {
-  if (!report) return '# No ontology report\n';
-
-  const lines = [];
-  lines.push('ontologyIri: "' + String(report.ontologyIri).replace(/"/g, '\\"') + '"');
-  lines.push('status: "' + String(report.statusLabel).replace(/"/g, '\\"') + '"');
-  lines.push('standards:');
-  for (const r of report.standards || []) {
-    lines.push('  - id: "' + String(r.id).replace(/"/g, '\\"') + '"');
-    lines.push('    type: "' + String(r.type).replace(/"/g, '\\"') + '"');
-    lines.push('    status: "' + String(r.status).replace(/"/g, '\\"') + '"');
-    lines.push('    failedResourcesCount: ' + (r.failedResourcesCount || 0));
-  }
-  return lines.join('\n') + '\n';
-}
-
-// -------------------------------
-// Phase 6.3 CSV helpers (no clash)
-// -------------------------------
-
-function csvEscape(value) {
-  const s = value == null ? '' : String(value);
-  const needsWrap = /[",\n\r]/.test(s);
-  const escaped = s.replace(/"/g, '""');
-  return needsWrap ? `"${escaped}"` : escaped;
-}
-
-function rowsToCsv(rows) {
-  return rows.map(r => r.map(csvEscape).join(',')).join('\n') + '\n';
-}
-
-
-function handleDownloadSelected() {
-  const actionKey = downloadActionSelect.value;
-  const action = downloadActions[actionKey];
-
-  if (!action) {
-    if (statusEl) statusEl.textContent = 'Choose a download type first.';
+/**
+ * Renders the batch dashboard.
+ *
+ * @param {OcqEvaluatedReport[] | null | undefined} batchReports
+ * @returns {void}
+ */
+export function renderDashboard(batchReports) {
+  if (!dashboardContainer) {
     return;
   }
 
-  if (!action.isAvailable()) {
-    if (statusEl) statusEl.textContent = `"${action.label}" is not available for the current state.`;
+  if (!Array.isArray(batchReports) || batchReports.length === 0) {
+    dashboardContainer.innerHTML = '<p>No ontologies evaluated.</p>';
+    return;
+  }
+
+  let html = '<h2 class="ocq-title">Ontology dashboard</h2>';
+  html += '<table class="ocq-table">';
+  html += '<thead class="ocq-table-head"><tr>';
+  html += '<th class="ocq-table-th">File</th>';
+  html += '<th class="ocq-table-th">Ontology IRI</th>';
+  html += '<th class="ocq-table-th">Status</th>';
+  html += '<th class="ocq-table-th"># Failed Requirements</th>';
+  html += '<th class="ocq-table-th"># Failed Recommendations</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const item of batchReports) {
+    const report = item.ontologyReport;
+    const standards = getReportStandards(report);
+
+    const failedRequirements = standards.filter(
+      (standard) => standard.type === 'requirement' && standard.status === 'fail'
+    ).length;
+
+    const failedRecommendations = standards.filter(
+      (standard) => standard.type === 'recommendation' && standard.status === 'fail'
+    ).length;
+
+    const batchKey = getBatchKey(item);
+    const isSelected = selectedBatchKey === batchKey;
+
+    html += '<tr class="ocq-table-tr ocq-row-clickable ocq-batch-row' +
+      (isSelected ? ' ocq-batch-row--selected' : '') +
+      '" tabindex="0" role="button" data-batch-key="' +
+      escapeHtml(batchKey) +
+      '">';
+
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(item.fileName) + '</td>';
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(report?.ontologyIri || '') + '</td>';
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(report?.statusLabel || '') + '</td>';
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(String(failedRequirements)) + '</td>';
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(String(failedRecommendations)) + '</td>';
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  dashboardContainer.innerHTML = html;
+}
+
+/**
+ * Renders the per-resource curation table.
+ *
+ * @param {OcqPerResourceCurationRow[] | null | undefined} perResourceRows
+ * @returns {void}
+ */
+export function renderCurationTable(perResourceRows) {
+  if (!curationTableContainer) {
+    return;
+  }
+
+  if (!Array.isArray(perResourceRows) || perResourceRows.length === 0) {
+    curationTableContainer.innerHTML = '<p>No curation results to display.</p>';
+    return;
+  }
+
+  /** @type {Record<string, string>} */
+  const statusBadgeClasses = {
+    'uncurated': 'ocq-badge ocq-badge-danger',
+    'metadata incomplete': 'ocq-badge ocq-badge-warn',
+    'metadata complete': 'ocq-badge ocq-badge-success',
+    'pending final vetting': 'ocq-badge ocq-badge-info'
+  };
+
+  let html = '<h2 class="ocq-title">Per-resource curation</h2>';
+  html += '<table class="ocq-table">';
+  html += '<thead class="ocq-table-head"><tr>';
+  html += '<th class="ocq-table-th">Resource</th>';
+  html += '<th class="ocq-table-th">Suggested Curation Status</th>';
+  html += '<th class="ocq-table-th">Failed Requirements</th>';
+  html += '<th class="ocq-table-th">Failed Recommendations</th>';
+  html += '<th class="ocq-table-th">Details</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const row of perResourceRows) {
+    const failedRequirements = Array.isArray(row.failedRequirements)
+      ? row.failedRequirements.join(', ')
+      : '—';
+
+    const failedRecommendations = Array.isArray(row.failedRecommendations)
+      ? row.failedRecommendations.join(', ')
+      : '—';
+
+    const statusBadgeClass = statusBadgeClasses[row.statusLabel] || 'ocq-badge';
+
+    html += '<tr>';
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(row.resource) + '</td>';
+    html += '<td class="ocq-table-td ocq-mono"><span class="' + statusBadgeClass + '">' + escapeHtml(row.statusLabel) + '</span></td>';
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(failedRequirements || '—') + '</td>';
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(failedRecommendations || '—') + '</td>';
+    html += '<td class="ocq-table-td ocq-mono">';
+    html += '<button class="ocq-btn ocq-btn-tertiary ocq-btn-small" type="button" data-toggle-resource-detail="' +
+      escapeHtml(row.resource) +
+      '">View</button>';
+    html += '</td>';
+    html += '</tr>';
+
+    html += '<tr class="ocq-table-tr ocq-resource-detail-row" data-resource-detail-row="' +
+      escapeHtml(row.resource) +
+      '" style="display:none;">';
+    html += '<td class="ocq-table-td" colspan="999">';
+    html += '<div class="ocq-resource-detail"></div>';
+    html += '</td>';
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  curationTableContainer.innerHTML = html;
+}
+
+/**
+ * Loads a selected batch item into the single-run panels.
+ *
+ * @param {OcqEvaluatedReport} reportObject
+ * @returns {void}
+ */
+export function loadBatchSelection(reportObject) {
+  lastResults = reportObject.results || [];
+  lastFailuresIndex = buildFailuresIndex(lastResults);
+  lastPerResourceFull = reportObject.perResource || [];
+  lastPerResource = reportObject.perResource || [];
+  lastOntologyReport = reportObject.ontologyReport || null;
+
+  if (lastManifest) {
+    populateStandardFilter(lastManifest);
+  }
+
+  renderOntologyReport(lastOntologyReport);
+  applyResourceFilters();
+}
+
+/**
+ * Handles selection of one batch row.
+ *
+ * @param {string} batchKey
+ * @returns {void}
+ */
+export function onBatchRowSelected(batchKey) {
+  if (!Array.isArray(lastBatchReports) || !lastBatchReports.length) {
+    return;
+  }
+
+  if (selectedBatchKey === batchKey) {
+    selectedBatchKey = null;
+    renderDashboard(lastBatchReports);
     refreshDownloadOptions();
     return;
   }
 
-  try {
-    const content = action.build();
-    const fileName = action.getFileName();
+  selectedBatchKey = batchKey;
 
-    downloadTextFile(content, fileName, action.mimeType);
-    if (statusEl) statusEl.textContent = `Downloaded ${action.label}.`;
-  } catch (err) {
-    console.error(err);
-    if (statusEl) statusEl.textContent = err && err.message ? err.message : 'Download failed.';
-  }
-}
+  const selectedReport = lastBatchReports.find(
+    (report) => getBatchKey(report) === batchKey
+  );
 
-downloadActionSelect.addEventListener('change', function () {
-  downloadSelectedBtn.disabled = !downloadActionSelect.value;
-});
-
-downloadSelectedBtn.addEventListener('click', handleDownloadSelected);
-
-
-// -------------------------------
-// Export action registry
-// -------------------------------
-
-// Assumes these exist somewhere in your state:
-// lastResults
-// lastPerResource
-// lastOntologyReport
-// lastSelectedCriterionId
-// lastBatchReports
-
-function buildResultsCsv() {
-  const ontologyIri = lastOntologyReport?.ontologyIri || '';
-  return toCsv(lastResults || [], ontologyIri);
-}
-
-const downloadActions = {
-  resultsCsv: {
-    label: 'Results CSV',
-    isAvailable: function () {
-      return Array.isArray(lastResults) && lastResults.length > 0;
-    },
-    build: function () {
-      const ontologyIri = lastOntologyReport?.ontologyIri || '';
-      return toCsv(lastResults || [], ontologyIri);
-    },
-    getFileName: function () {
-      return `ocq-results_${getTimestampForFileName()}.csv`;
-    },
-    mimeType: 'text/csv;charset=utf-8'
-  },
-
-  ontologyYaml: {
-    label: 'Ontology Report YAML',
-    isAvailable: function () {
-      return !!lastOntologyReport;
-    },
-    build: function () {
-      return ontologyReportToYaml(lastOntologyReport);
-    },
-    getFileName: function () {
-      return `ocq-ontology-report_${getTimestampForFileName()}.yaml`;
-    },
-    mimeType: 'text/yaml;charset=utf-8'
-  },
-
-  htmlReport: {
-    label: 'HTML Report',
-    isAvailable: function () {
-      return !!lastOntologyReport || (Array.isArray(lastResults) && lastResults.length > 0);
-    },
-    build: function () {
-      return buildHtmlReport();
-    },
-    getFileName: function () {
-      return `ocq-report_${getTimestampForFileName()}.html`;
-    },
-    mimeType: 'text/html;charset=utf-8'
-  },
-
-  filteredResourcesCsv: {
-    label: 'Filtered Resources CSV',
-    isAvailable: function () {
-      return Array.isArray(lastPerResource) && lastPerResource.length > 0;
-    },
-    build: function () {
-      return buildFilteredResourcesCsv();
-    },
-    getFileName: function () {
-      return `ocq-filtered-resources_${getTimestampForFileName()}.csv`;
-    },
-    mimeType: 'text/csv;charset=utf-8'
-  },
-
-  requirementDetailCsv: {
-    label: 'Requirement Detail CSV',
-    isAvailable: function () {
-      return !!lastSelectedCriterionId &&
-        Array.isArray(lastResults) &&
-        lastResults.length > 0;
-    },
-    build: function () {
-      return buildCriterionDetailCsv(lastSelectedCriterionId);
-    },
-    getFileName: function () {
-      const req = safeFilePart(lastSelectedCriterionId || 'requirement');
-      return `ocq-requirement-detail_${req}_${getTimestampForFileName()}.csv`;
-    },
-    mimeType: 'text/csv;charset=utf-8'
-  },
-
-  batchSummaryCsv: {
-    label: 'Batch Summary CSV',
-    isAvailable: function () {
-      return Array.isArray(lastBatchReports) && lastBatchReports.length > 0;
-    },
-    build: function () {
-      return buildBatchSummaryCsv(lastBatchReports);
-    },
-    getFileName: function () {
-      return `ocq-batch-summary_${getTimestampForFileName()}.csv`;
-    },
-    mimeType: 'text/csv;charset=utf-8'
-  }
-};
-
-function refreshDownloadOptions() {
-  const currentValue = downloadActionSelect.value;
-
-  for (const option of downloadActionSelect.options) {
-    if (!option.value) continue;
-
-    const action = downloadActions[option.value];
-    option.disabled = !action || !action.isAvailable();
+  if (!selectedReport) {
+    return;
   }
 
-  const selectedAction = downloadActions[currentValue];
-  const selectedIsValid = !!selectedAction && selectedAction.isAvailable();
+  loadBatchSelection(selectedReport);
+  renderDashboard(lastBatchReports);
 
-  if (!selectedIsValid) {
-    downloadActionSelect.value = '';
+  setStatus(`Selected: ${selectedReport.fileName}`);
+  refreshDownloadOptions();
+}
+
+/**
+ * Wires batch dashboard selection once.
+ *
+ * @returns {void}
+ */
+export function wireBatchDashboardSelectionOnce() {
+  if (!dashboardContainer || batchDashboardEventsWired) {
+    return;
   }
 
-  downloadSelectedBtn.disabled = !downloadActionSelect.value;
+  dashboardContainer.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    const row = event.target.closest('tr[data-batch-key]');
+    if (!(row instanceof HTMLTableRowElement)) {
+      return;
+    }
+
+    const batchKey = row.getAttribute('data-batch-key');
+    if (!batchKey) {
+      return;
+    }
+
+    onBatchRowSelected(batchKey);
+  });
+
+  dashboardContainer.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+
+    const row = event.target.closest('tr[data-batch-key]');
+    if (!(row instanceof HTMLTableRowElement)) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const batchKey = row.getAttribute('data-batch-key');
+    if (!batchKey) {
+      return;
+    }
+
+    onBatchRowSelected(batchKey);
+  });
+
+  batchDashboardEventsWired = true;
 }
 
-function safeFilePart(value) {
-  return String(value == null ? '' : value)
-    .trim()
-    .replace(/[^\w.-]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-}
-
-function getTimestampForFileName() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}_${hh}-${mi}-${ss}`;
-}
-
-
-function buildFilteredResourcesCsv() {
+/**
+ * Builds CSV for the filtered per-resource rows.
+ *
+ * @returns {string}
+ */
+export function buildFilteredResourcesCsv() {
   const data = Array.isArray(lastPerResource) ? lastPerResource : [];
 
+  /** @type {Array<Array<unknown>>} */
   const rows = [[
     'resource',
     'statusIri',
@@ -1052,61 +1261,73 @@ function buildFilteredResourcesCsv() {
     'failedRecommendations'
   ]];
 
-  for (const r of data) {
-    const failedReqs = Array.isArray(r.failedRequirements) ? r.failedRequirements : [];
-    const failedRecs = Array.isArray(r.failedRecommendations) ? r.failedRecommendations : [];
+  for (const row of data) {
+    const failedRequirements = Array.isArray(row.failedRequirements) ? row.failedRequirements : [];
+    const failedRecommendations = Array.isArray(row.failedRecommendations)
+      ? row.failedRecommendations
+      : [];
 
     rows.push([
-      r.resource || '',
-      r.statusIri || '',
-      r.statusLabel || '',
-      String(failedReqs.length),
-      String(failedRecs.length),
-      failedReqs.join(' | '),
-      failedRecs.join(' | ')
+      row.resource || '',
+      row.statusIri || '',
+      row.statusLabel || '',
+      String(failedRequirements.length),
+      String(failedRecommendations.length),
+      failedRequirements.join(' | '),
+      failedRecommendations.join(' | ')
     ]);
   }
 
   return rowsToCsv(rows);
 }
 
-function buildCriterionDetailCsv(criterionId) {
-  const reqId = criterionId || lastSelectedCriterionId || '';
-  if (!reqId) throw new Error('No requirement selected.');
-  if (!Array.isArray(lastResults)) throw new Error('No results loaded.');
+/**
+ * Builds CSV for the selected standard detail.
+ *
+ * @param {string | null | undefined} criterionId
+ * @returns {string}
+ */
+export function buildStandardDetailCsv(criterionId) {
+  const selectedCriterionId = criterionId || lastSelectedCriterionId || '';
 
-  const failingRows = lastResults.filter(r => r.criterionId === reqId && r.status === 'fail');
-
-  const failuresByResource = new Map();
-  for (const row of failingRows) {
-    const res = row.resource || '';
-    const qid = row.queryId || '';
-    if (!res) continue;
-
-    if (!failuresByResource.has(res)) failuresByResource.set(res, new Set());
-    if (qid) failuresByResource.get(res).add(qid);
+  if (!selectedCriterionId) {
+    throw new Error('No standard selected.');
   }
 
-  const entries = Array.from(failuresByResource.entries())
-    .map(([resource, qSet]) => ({ resource, queryIds: Array.from(qSet).sort() }))
-    .sort((a, b) => String(a.resource).localeCompare(String(b.resource)));
+  const entries = getStandardDetailEntries(selectedCriterionId);
 
+  /** @type {Array<Array<unknown>>} */
   const rows = [['criterionId', 'resource', 'queryIds']];
 
-  for (const e of entries) {
-    rows.push([reqId, e.resource, e.queryIds.join(' | ')]);
+  for (const entry of entries) {
+    rows.push([
+      selectedCriterionId,
+      entry.resource,
+      entry.queryIds.join(' | ')
+    ]);
   }
 
   return rowsToCsv(rows);
 }
 
-function buildBatchSummaryCsv(batchReports) {
+/**
+ * Builds CSV summary for batch results.
+ *
+ * @param {OcqEvaluatedReport[] | null | undefined} batchReports
+ * @returns {string}
+ */
+export function buildBatchSummaryCsv(batchReports) {
   const batch = Array.isArray(batchReports)
     ? batchReports
-    : (Array.isArray(lastBatchReports) ? lastBatchReports : []);
+    : Array.isArray(lastBatchReports)
+      ? lastBatchReports
+      : [];
 
-  if (!batch.length) throw new Error('No batch results available.');
+  if (!batch.length) {
+    throw new Error('No batch results available.');
+  }
 
+  /** @type {Array<Array<unknown>>} */
   const rows = [[
     'fileName',
     'ontologyIri',
@@ -1120,71 +1341,55 @@ function buildBatchSummaryCsv(batchReports) {
 
   for (const item of batch) {
     const report = item.ontologyReport;
-    const reqs = Array.isArray(report?.standards) ? report.standards : [];
+    const standards = getReportStandards(report);
 
-    const failedReqs = reqs.filter(r => r.type === 'requirement' && r.status === 'fail').length;
-    const failedRecs = reqs.filter(r => r.type === 'recommendation' && r.status === 'fail').length;
+    const failedRequirements = standards.filter(
+      (standard) => standard.type === 'requirement' && standard.status === 'fail'
+    ).length;
 
-    const totalReqs = reqs.filter(r => r.type === 'requirement').length;
-    const totalRecs = reqs.filter(r => r.type === 'recommendation').length;
+    const failedRecommendations = standards.filter(
+      (standard) => standard.type === 'recommendation' && standard.status === 'fail'
+    ).length;
+
+    const totalRequirements = standards.filter(
+      (standard) => standard.type === 'requirement'
+    ).length;
+
+    const totalRecommendations = standards.filter(
+      (standard) => standard.type === 'recommendation'
+    ).length;
 
     rows.push([
       item.fileName || '',
       report?.ontologyIri || '',
       report?.statusIri || '',
       report?.statusLabel || '',
-      String(failedReqs),
-      String(failedRecs),
-      String(totalReqs),
-      String(totalRecs)
+      String(failedRequirements),
+      String(failedRecommendations),
+      String(totalRequirements),
+      String(totalRecommendations)
     ]);
   }
 
   return rowsToCsv(rows);
 }
 
-function isoFileStamp() {
-  return new Date().toISOString().replace(/[:.]/g, '-');
-}
-
-function getReportStandards(report) {
-  if (Array.isArray(report?.standards)) return report.standards;
-  return [];
-}
-
-const downloadHtmlReportBtn = document.getElementById('downloadHtmlReportBtn');
-
-function safeText(v) { return escapeHtml(v == null ? '' : String(v)); }
-
-function buildHtmlReport() {
-  const now = new Date();
-  const createdAt = now.toISOString();
-  const statusFilter = statusFilterEl ? statusFilterEl.value : '';
-  const requirementFilter = standardFilterEl ? standardFilterEl.value : '';
-  const selectedReq = lastSelectedCriterionId || '';
+/**
+ * Builds an HTML report for the current view.
+ *
+ * @returns {string}
+ */
+export function buildHtmlReport() {
+  const createdAt = new Date().toISOString();
+  const currentStatusFilter = statusFilterSelect ? statusFilterSelect.value : '';
+  const currentStandardFilter = standardFilterSelect ? standardFilterSelect.value : '';
+  const selectedCriterionId = lastSelectedCriterionId || '';
 
   const report = lastOntologyReport || null;
-  const perRes = Array.isArray(lastPerResource) ? lastPerResource : [];
+  const perResourceRows = Array.isArray(lastPerResource) ? lastPerResource : [];
   const resultsCount = Array.isArray(lastResults) ? lastResults.length : 0;
+  const standardDetailEntries = getStandardDetailEntries(selectedCriterionId);
 
-  // If a requirement is selected, reuse the same grouping logic as CSV export
-  let reqDetailRows = [];
-  if (selectedReq && Array.isArray(lastResults)) {
-    const failing = lastResults.filter(r => r.criterionId === selectedReq && r.status === 'fail');
-    const map = new Map();
-    for (const row of failing) {
-      const res = row.resource || '';
-      const qid = row.queryId || '';
-      if (!res) continue;
-      if (!map.has(res)) map.set(res, new Set());
-      if (qid) map.get(res).add(qid);
-    }
-    reqDetailRows = Array.from(map.entries())
-      .map(([resource, qSet]) => ({ resource, queryIds: Array.from(qSet).sort() }))
-      .sort((a, b) => String(a.resource).localeCompare(String(b.resource)));
-  }
-
-  // Minimal inline CSS; does not rely on your app CSS
   const css = `
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; }
     h1,h2,h3 { margin: 0.2rem 0 0.6rem; }
@@ -1205,126 +1410,445 @@ function buildHtmlReport() {
   html += `<style>${css}</style>`;
   html += '</head><body>';
 
-  html += `<h1>Ontology Checks Report</h1>`;
-  html += `<div class="meta">Created: <span class="mono">${safeText(createdAt)}</span></div>`;
-  html += `<div class="meta">Results rows: <span class="mono">${safeText(resultsCount)}</span></div>`;
+  html += '<h1>Ontology Checks Report</h1>';
+  html += `<div class="meta">Created: <span class="mono">${escapeHtml(createdAt)}</span></div>`;
+  html += `<div class="meta">Results rows: <span class="mono">${escapeHtml(resultsCount)}</span></div>`;
 
-  html += `<div class="card">`;
-  html += `<h2>View state</h2>`;
-  html += `<div class="meta">Curation status filter: <span class="mono">${safeText(statusFilter || 'All')}</span></div>`;
-  html += `<div class="meta">Fails requirement/recommendation filter: <span class="mono">${safeText(requirementFilter || 'Any')}</span></div>`;
-  html += `<div class="meta">Selected requirement: <span class="mono">${safeText(selectedReq || '(none)')}</span></div>`;
-  html += `</div>`;
+  html += '<div class="card">';
+  html += '<h2>View state</h2>';
+  html += `<div class="meta">Curation status filter: <span class="mono">${escapeHtml(currentStatusFilter || 'All')}</span></div>`;
+  html += `<div class="meta">Fails standard filter: <span class="mono">${escapeHtml(currentStandardFilter || 'Any')}</span></div>`;
+  html += `<div class="meta">Selected standard: <span class="mono">${escapeHtml(selectedCriterionId || '(none)')}</span></div>`;
+  html += '</div>';
 
-  // Ontology report card
-  html += `<div class="card"><h2>Ontology report</h2>`;
+  html += '<div class="card"><h2>Ontology report</h2>';
   if (!report) {
-    html += `<p>No ontology report loaded.</p>`;
+    html += '<p>No ontology report loaded.</p>';
   } else {
-    html += `<div class="meta">Ontology IRI: <span class="mono">${safeText(report.ontologyIri || '')}</span></div>`;
-    html += `<div class="meta">Overall status: <span class="pill">${safeText(report.statusLabel || '')}</span></div>`;
+    html += `<div class="meta">Ontology IRI: <span class="mono">${escapeHtml(report.ontologyIri || '')}</span></div>`;
+    html += `<div class="meta">Overall status: <span class="pill">${escapeHtml(report.statusLabel || '')}</span></div>`;
 
-    const reqs = Array.isArray(report.standards) ? report.standards : [];
-    html += `<table><thead><tr>
-      <th>id</th><th>type</th><th>status</th><th>failedResourcesCount</th>
-    </tr></thead><tbody>`;
-    for (const r of reqs) {
-      html += `<tr>
-        <td class="mono">${safeText(r.id)}</td>
-        <td>${safeText(r.type)}</td>
-        <td>${safeText(r.status)}</td>
-        <td class="mono">${safeText(r.failedResourcesCount ?? '')}</td>
-      </tr>`;
+    const standards = getReportStandards(report);
+    html += '<table><thead><tr><th>id</th><th>type</th><th>status</th><th>failedResourcesCount</th></tr></thead><tbody>';
+
+    for (const standard of standards) {
+      html += '<tr>';
+      html += `<td class="mono">${escapeHtml(standard.id)}</td>`;
+      html += `<td>${escapeHtml(standard.type)}</td>`;
+      html += `<td>${escapeHtml(standard.status)}</td>`;
+      html += `<td class="mono">${escapeHtml(standard.failedResourcesCount ?? '')}</td>`;
+      html += '</tr>';
     }
-    html += `</tbody></table>`;
-  }
-  html += `</div>`;
 
-  // Requirement detail (if selected)
-  if (selectedReq) {
-    html += `<div class="card"><h2>Requirement detail</h2>`;
-    if (!reqDetailRows.length) {
-      html += `<p>No failing resources found for selected requirement.</p>`;
+    html += '</tbody></table>';
+  }
+  html += '</div>';
+
+  if (selectedCriterionId) {
+    html += '<div class="card"><h2>Standard detail</h2>';
+
+    if (!standardDetailEntries.length) {
+      html += '<p>No failing resources found for selected standard.</p>';
     } else {
-      html += `<table><thead><tr><th>Resource IRI</th><th>Failing query IDs</th></tr></thead><tbody>`;
-      for (const row of reqDetailRows) {
-        html += `<tr>
-          <td class="mono">${safeText(row.resource)}</td>
-          <td class="mono">${safeText(row.queryIds.join(', '))}</td>
-        </tr>`;
+      html += '<table><thead><tr><th>Resource IRI</th><th>Failing query IDs</th></tr></thead><tbody>';
+
+      for (const entry of standardDetailEntries) {
+        html += '<tr>';
+        html += `<td class="mono">${escapeHtml(entry.resource)}</td>`;
+        html += `<td class="mono">${escapeHtml(entry.queryIds.join(', '))}</td>`;
+        html += '</tr>';
       }
-      html += `</tbody></table>`;
+
+      html += '</tbody></table>';
     }
-    html += `</div>`;
+
+    html += '</div>';
   }
 
-  // Per-resource curation (filtered)
-  html += `<div class="card"><h2>Per-resource curation (filtered)</h2>`;
-  html += `<div class="meta">Rows: <span class="mono">${safeText(perRes.length)}</span></div>`;
-  if (!perRes.length) {
-    html += `<p>No resources in current view.</p>`;
+  html += '<div class="card"><h2>Per-resource curation (filtered)</h2>';
+  html += `<div class="meta">Rows: <span class="mono">${escapeHtml(perResourceRows.length)}</span></div>`;
+
+  if (!perResourceRows.length) {
+    html += '<p>No resources in current view.</p>';
   } else {
-    html += `<table><thead><tr>
-      <th>resource</th><th>statusLabel</th><th>failedRequirements</th><th>failedRecommendations</th>
-    </tr></thead><tbody>`;
-    for (const r of perRes) {
-      const fr = Array.isArray(r.failedRequirements) ? r.failedRequirements : [];
-      const frec = Array.isArray(r.failedRecommendations) ? r.failedRecommendations : [];
-      html += `<tr>
-        <td class="mono">${safeText(r.resource || '')}</td>
-        <td>${safeText(r.statusLabel || '')}</td>
-        <td class="mono">${safeText(fr.join(', '))}</td>
-        <td class="mono">${safeText(frec.join(', '))}</td>
-      </tr>`;
-    }
-    html += `</tbody></table>`;
-  }
-  html += `</div>`;
+    html += '<table><thead><tr><th>resource</th><th>statusLabel</th><th>failedRequirements</th><th>failedRecommendations</th></tr></thead><tbody>';
 
+    for (const row of perResourceRows) {
+      const failedRequirements = Array.isArray(row.failedRequirements) ? row.failedRequirements : [];
+      const failedRecommendations = Array.isArray(row.failedRecommendations)
+        ? row.failedRecommendations
+        : [];
+
+      html += '<tr>';
+      html += `<td class="mono">${escapeHtml(row.resource || '')}</td>`;
+      html += `<td>${escapeHtml(row.statusLabel || '')}</td>`;
+      html += `<td class="mono">${escapeHtml(failedRequirements.join(', '))}</td>`;
+      html += `<td class="mono">${escapeHtml(failedRecommendations.join(', '))}</td>`;
+      html += '</tr>';
+    }
+
+    html += '</tbody></table>';
+  }
+
+  html += '</div>';
   html += '</body></html>';
+
   return html;
 }
 
-if (downloadHtmlReportBtn) {
-  downloadHtmlReportBtn.addEventListener('click', () => {
-    try {
-      const html = buildHtmlReport();
-      downloadTextFile(html, `ocq_report_${isoFileStamp()}.html`, 'text/html');
-    } catch (e) {
-      console.error(e);
-      alert(e.message || String(e));
+/** @type {Record<string, OcqDownloadAction>} */
+const downloadActions = {
+  resultsCsv: {
+    label: 'Results CSV',
+    isAvailable: () => Array.isArray(lastResults) && lastResults.length > 0,
+    build: () => toCsv(lastResults || [], lastOntologyReport?.ontologyIri || ''),
+    getFileName: () => `ocq-results_${getTimestampForFileName()}.csv`,
+    mimeType: 'text/csv;charset=utf-8'
+  },
+
+  ontologyYaml: {
+    label: 'Ontology Report YAML',
+    isAvailable: () => !!lastOntologyReport,
+    build: () => ontologyReportToYaml(lastOntologyReport),
+    getFileName: () => `ocq-ontology-report_${getTimestampForFileName()}.yaml`,
+    mimeType: 'text/yaml;charset=utf-8'
+  },
+
+  htmlReport: {
+    label: 'HTML Report',
+    isAvailable: () =>
+      !!lastOntologyReport || (Array.isArray(lastResults) && lastResults.length > 0),
+    build: () => buildHtmlReport(),
+    getFileName: () => `ocq-report_${getTimestampForFileName()}.html`,
+    mimeType: 'text/html;charset=utf-8'
+  },
+
+  filteredResourcesCsv: {
+    label: 'Filtered Resources CSV',
+    isAvailable: () => Array.isArray(lastPerResource) && lastPerResource.length > 0,
+    build: () => buildFilteredResourcesCsv(),
+    getFileName: () => `ocq-filtered-resources_${getTimestampForFileName()}.csv`,
+    mimeType: 'text/csv;charset=utf-8'
+  },
+
+  standardDetailCsv: {
+    label: 'Standard Detail CSV',
+    isAvailable: () =>
+      !!lastSelectedCriterionId &&
+      Array.isArray(lastResults) &&
+      lastResults.length > 0,
+    build: () => buildStandardDetailCsv(lastSelectedCriterionId),
+    getFileName: () =>
+      `ocq-standard-detail_${safeFilePart(lastSelectedCriterionId || 'standard')}_${getTimestampForFileName()}.csv`,
+    mimeType: 'text/csv;charset=utf-8'
+  },
+
+  batchSummaryCsv: {
+    label: 'Batch Summary CSV',
+    isAvailable: () => Array.isArray(lastBatchReports) && lastBatchReports.length > 0,
+    build: () => buildBatchSummaryCsv(lastBatchReports),
+    getFileName: () => `ocq-batch-summary_${getTimestampForFileName()}.csv`,
+    mimeType: 'text/csv;charset=utf-8'
+  }
+};
+
+/**
+ * Refreshes download-option availability.
+ *
+ * @returns {void}
+ */
+export function refreshDownloadOptions() {
+  if (!downloadActionSelect || !downloadSelectedButton) {
+    return;
+  }
+
+  const currentValue = downloadActionSelect.value;
+
+  for (const option of Array.from(downloadActionSelect.options)) {
+    if (!option.value) {
+      continue;
     }
-  });
+
+    const action = downloadActions[option.value];
+    option.disabled = !action || !action.isAvailable();
+  }
+
+  const selectedAction = downloadActions[currentValue];
+  const selectedIsValid = !!selectedAction && selectedAction.isAvailable();
+
+  if (!selectedIsValid) {
+    downloadActionSelect.value = '';
+  }
+
+  downloadSelectedButton.disabled = !downloadActionSelect.value;
 }
 
+/**
+ * Handles the currently selected download action.
+ *
+ * @returns {void}
+ */
+export function handleDownloadSelected() {
+  if (!downloadActionSelect) {
+    return;
+  }
 
-// --- Single-file run ("Run checks") ---
-btnRun.addEventListener('click', async () => {
+  const actionKey = downloadActionSelect.value;
+  const action = downloadActions[actionKey];
+
+  if (!action) {
+    setStatus('Choose a download type first.');
+    return;
+  }
+
+  if (!action.isAvailable()) {
+    setStatus(`"${action.label}" is not available for the current state.`);
+    refreshDownloadOptions();
+    return;
+  }
+
+  try {
+    const content = action.build();
+    const fileName = action.getFileName();
+
+    downloadTextFile(content, fileName, action.mimeType);
+    setStatus(`Downloaded ${action.label}.`);
+  } catch (error) {
+    console.error(error);
+    setStatus(error instanceof Error ? error.message : 'Download failed.');
+  }
+}
+
+/**
+ * Loads the manifest and populates the standard filter.
+ *
+ * @returns {Promise<OcqManifest>}
+ */
+export async function ensureManifestLoaded() {
+  if (lastManifest) {
+    return lastManifest;
+  }
+
+  lastManifest = await loadManifest(DEFAULT_MANIFEST_URL);
+  populateStandardFilter(lastManifest);
+  return lastManifest;
+}
+
+/**
+ * Populates the standard filter select.
+ *
+ * @param {OcqManifest | null | undefined} manifest
+ * @returns {void}
+ */
+export function populateStandardFilter(manifest) {
+  if (!standardFilterSelect) {
+    return;
+  }
+
+  const currentValue = standardFilterSelect.value;
+  standardFilterSelect.innerHTML = '<option value="">Any</option>';
+
+  const standards = Array.isArray(manifest?.standards) ? manifest.standards : [];
+
+  for (const standard of standards) {
+    if (!standard?.id) {
+      continue;
+    }
+
+    const option = document.createElement('option');
+    option.value = standard.id;
+    option.textContent = standard.id + (standard.type ? ` (${standard.type})` : '');
+    standardFilterSelect.appendChild(option);
+  }
+
+  if (
+    currentValue &&
+    Array.from(standardFilterSelect.options).some((option) => option.value === currentValue)
+  ) {
+    standardFilterSelect.value = currentValue;
+  }
+}
+
+/**
+ * Evaluates one file and returns its full report bundle.
+ *
+ * @param {File} file
+ * @returns {Promise<OcqEvaluatedReport>}
+ */
+export async function evaluateFile(file) {
+  const text = await file.text();
+  const { results, resources, ontologyIri } = await evaluateAllQueries(text, file.name);
+  const manifest = await ensureManifestLoaded();
+
+  const perResource = computePerResourceCuration(results, manifest, resources);
+  const ontologyReport = computeOntologyReport(results, manifest, ontologyIri);
+
+  return {
+    fileName: file.name,
+    ontologyIri,
+    ontologyReport,
+    perResource,
+    results
+  };
+}
+
+/**
+ * Hydrates the UI from a saved run.
+ *
+ * @param {OcqSavedRun | null} run
+ * @returns {Promise<void>}
+ */
+export async function hydrateRun(run) {
+  if (!run) {
+    return;
+  }
+
+  await ensureManifestLoaded();
+  applyUiStateSnapshot(run.uiState);
+  clearStandardDetailPanel();
+
+  /** @type {unknown} */
+  const payload = run.payload;
+
+  if (run.kind === 'batch') {
+    /** @type {OcqBatchRunPayload} */
+    const batchPayload = Array.isArray(payload)
+      ? /** @type {OcqBatchRunPayload} */ (payload)
+      : [];
+
+    lastBatchReports = batchPayload;
+    selectedBatchKey = run.uiState?.selectedBatchKey || null;
+
+    lastResults = null;
+    lastFailuresIndex = null;
+    lastOntologyReport = null;
+    lastPerResourceFull = null;
+    lastPerResource = null;
+
+    renderDashboard(lastBatchReports);
+
+    if (selectedBatchKey) {
+      const selectedReport = lastBatchReports.find(
+        (report) => getBatchKey(report) === selectedBatchKey
+      );
+
+      if (selectedReport) {
+        loadBatchSelection(selectedReport);
+        renderDashboard(lastBatchReports);
+      }
+    }
+
+    applyResourceFilters();
+
+    const selectedCriterionId = run.uiState?.selectedCriterionId || null;
+    /** @type {OcqOntologyReport | null} */
+    const activeOntologyReport = selectedBatchKey
+      ? (lastBatchReports.find((report) => getBatchKey(report) === selectedBatchKey)?.ontologyReport || null)
+      : null;
+
+    if (
+      selectedCriterionId &&
+      activeOntologyReport &&
+      activeOntologyReport.standards.some(
+        /** @param {OcqOntologyReportStandardRow} standard */
+        (standard) => standard.id === selectedCriterionId
+      )
+    ) {
+      lastSelectedCriterionId = selectedCriterionId;
+      renderStandardDetail(selectedCriterionId);
+
+      const row = ontologyReportContainer?.querySelector(
+        `tr[data-standard-id="${cssEscapeAttr(selectedCriterionId)}"]`
+      );
+
+      if (row instanceof HTMLTableRowElement) {
+        row.classList.add('ocq-row-selected');
+        lastSelectedStandardRow = row;
+      }
+    }
+
+    setStatus(`Loaded saved batch run (${run.createdAt}).`);
+    refreshDownloadOptions();
+    return;
+  }
+
+  /** @type {OcqSingleRunPayload | null} */
+  const reportObject = !Array.isArray(payload) && payload
+    ? /** @type {OcqSingleRunPayload} */ (payload)
+    : null;
+
+  if (!reportObject) {
+    setStatus('Saved run payload is invalid for a single run.');
+    refreshDownloadOptions();
+    return;
+  }
+
+  lastResults = reportObject.results || [];
+  lastFailuresIndex = buildFailuresIndex(lastResults);
+  lastOntologyReport = reportObject.ontologyReport || null;
+  lastPerResourceFull = reportObject.perResource || [];
+  lastPerResource = reportObject.perResource || [];
+  lastBatchReports = null;
+  selectedBatchKey = null;
+
+  renderOntologyReport(lastOntologyReport);
+  applyResourceFilters();
+
+  const selectedCriterionId = run.uiState?.selectedCriterionId || null;
+  if (
+    selectedCriterionId &&
+    lastOntologyReport?.standards?.some((standard) => standard.id === selectedCriterionId)
+  ) {
+    lastSelectedCriterionId = selectedCriterionId;
+    renderStandardDetail(selectedCriterionId);
+
+    const row = ontologyReportContainer?.querySelector(
+      `tr[data-standard-id="${cssEscapeAttr(selectedCriterionId)}"]`
+    );
+
+    if (row instanceof HTMLTableRowElement) {
+      row.classList.add('ocq-row-selected');
+      lastSelectedStandardRow = row;
+    }
+  }
+
+  setStatus(`Loaded saved single run (${run.createdAt}).`);
+  refreshDownloadOptions();
+}
+
+/**
+ * Runs checks for the first selected file.
+ *
+ * @returns {Promise<void>}
+ */
+export async function runSingleChecks() {
   if (!filesInput) {
-    alert('File input #ontologyFiles not found.');
+    window.alert('File input #ontologyFiles not found.');
     return;
   }
 
   const files = Array.from(filesInput.files || []);
   const file = files[0];
+
   if (!file) {
-    alert('Please select an ontology file first.');
+    window.alert('Please select an ontology file first.');
     return;
   }
 
-  statusEl.textContent = 'Reading file…';
-  curationTableContainer.innerHTML = '';
-  ontologyReportContainer.innerHTML = '';
-  dashboardContainer.innerHTML = '';
+  setStatus('Reading file…');
+  clearRenderedViews();
+  clearRunSelectionState();
 
   lastResults = null;
   lastPerResource = null;
+  lastPerResourceFull = null;
+  lastFailuresIndex = null;
   lastOntologyReport = null;
 
-  const text = await file.text();
-  statusEl.textContent = 'Running checks…';
-
   try {
+    const text = await file.text();
+    setStatus('Running checks…');
+
     const { results, resources, ontologyIri } = await evaluateAllQueries(text, file.name);
     const manifest = await ensureManifestLoaded();
 
@@ -1333,12 +1857,13 @@ btnRun.addEventListener('click', async () => {
 
     lastResults = results;
     lastFailuresIndex = buildFailuresIndex(lastResults);
-    lastPerResourceFull = perResource; // source of truth for filtering
-    lastPerResource = perResource;      // keep if you use it elsewhere
+    lastPerResourceFull = perResource;
+    lastPerResource = perResource;
     lastOntologyReport = ontologyReport;
     lastManifest = manifest;
+    lastBatchReports = null;
+    selectedBatchKey = null;
 
-    // Phase 6.2 — persist snapshot to IndexedDB (via storage.js)
     await saveRun({
       kind: 'single',
       label: file.name,
@@ -1349,145 +1874,214 @@ btnRun.addEventListener('click', async () => {
         perResource,
         results
       },
-      uiState: ocqGetUiStateSnapshot()
+      uiState: getUiStateSnapshot()
     });
+
     await refreshSavedRunsUi();
-
     populateStandardFilter(manifest);
-    applyResourceFilters(); // renders filtered (initially “all”)
-
     renderOntologyReport(ontologyReport);
-    renderCurationTable(perResource);
+    applyResourceFilters();
 
-    statusEl.textContent =
-      `Checks completed. ${results.length} result rows across ${perResource.length} resources.`;
+    setStatus(
+      `Checks completed. ${results.length} result rows across ${perResource.length} resources.`
+    );
     refreshDownloadOptions();
-  } catch (err) {
-    console.error('Error running checks:', err);
-    statusEl.textContent = 'Error: ' + err.message;
+  } catch (error) {
+    console.error('Error running checks:', error);
+    setStatus(error instanceof Error ? `Error: ${error.message}` : 'Error running checks.');
   }
-});
+}
 
-// --- Batch run ("Run batch checks") ---
-runBatchBtn.addEventListener('click', async () => {
+/**
+ * Runs checks for all selected files.
+ *
+ * @returns {Promise<void>}
+ */
+export async function runBatchChecks() {
   if (!filesInput) {
-    alert('Batch input #ontologyFiles not found in the DOM.');
+    window.alert('Batch input #ontologyFiles not found in the DOM.');
     return;
   }
 
   const files = Array.from(filesInput.files || []);
   if (!files.length) {
-    alert('Please select one or more ontology files.');
+    window.alert('Please select one or more ontology files.');
     return;
   }
 
-  statusEl.textContent = 'Running batch checks…';
-  curationTableContainer.innerHTML = '';
-  ontologyReportContainer.innerHTML = '';
-  standardDetailContainer.innerHTML = '';
+  setStatus('Running batch checks…');
 
-  // Ensure manifest exists for filters/drill-down
-  await ensureManifestLoaded(); // loads + populateStandardFilter(lastManifest)
-
-  const batch = [];
-  for (const file of files) {
-    const report = await evaluateFile(file);
-    batch.push(report);
+  if (curationTableContainer) {
+    curationTableContainer.innerHTML = '';
+  }
+  if (ontologyReportContainer) {
+    ontologyReportContainer.innerHTML = '';
+  }
+  if (standardDetailContainer) {
+    standardDetailContainer.innerHTML = '';
   }
 
-  // Phase 6.1 — store batch results so dashboard can drill-down without re-running
-  lastBatchReports = batch;
+  clearRunSelectionState();
+
+  lastResults = null;
+  lastFailuresIndex = null;
+  lastPerResourceFull = null;
+  lastPerResource = null;
+  lastOntologyReport = null;
+
+  await ensureManifestLoaded();
+
+  /** @type {OcqEvaluatedReport[]} */
+  const batchReports = [];
+
+  for (const file of files) {
+    const report = await evaluateFile(file);
+    batchReports.push(report);
+  }
+
+  lastBatchReports = batchReports;
   selectedBatchKey = null;
 
   renderDashboard(lastBatchReports);
 
-  // Phase 6.2 — persist batch snapshot to IndexedDB (via storage.js)
   await saveRun({
     kind: 'batch',
-    label: `${batch.length} file(s)`,
+    label: `${batchReports.length} file(s)`,
     payload: lastBatchReports,
-    uiState: ocqGetUiStateSnapshot()
+    uiState: getUiStateSnapshot()
   });
-  await refreshSavedRunsUi();
 
-  statusEl.textContent = `Completed ${batch.length} ontology checks. Click a row to drill down.`;
+  await refreshSavedRunsUi();
+  setStatus(`Completed ${batchReports.length} ontology checks. Click a row to drill down.`);
   refreshDownloadOptions();
-});
+}
 
+/**
+ * Initializes all event handlers and restores saved state.
+ *
+ * @returns {Promise<void>}
+ */
+export async function initializeApp() {
+  initTheme();
+  wireStandardDetailCloseOnce();
+  wireBatchDashboardSelectionOnce();
 
-async function ensureManifestLoaded() {
-  if (lastManifest) return lastManifest;
-  const res = await fetch('./queries/manifest.json');
-  lastManifest = await res.json();
-  if (!standardFilterPopulated) {
-    populateStandardFilter(lastManifest);
-    standardFilterPopulated = true;
+  if (curationTableContainer) {
+    curationTableContainer.addEventListener('click', (event) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      const button = event.target.closest('button[data-toggle-resource-detail]');
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+
+      const resourceIri = button.getAttribute('data-toggle-resource-detail');
+      if (!resourceIri) {
+        return;
+      }
+
+      toggleResourceDetail(resourceIri);
+    });
   }
-  return lastManifest;
-}
 
-function populateStandardFilter(manifest) {
-  if (!standardFilterEl) return;
+  if (resourceSearchInput) {
+    resourceSearchInput.addEventListener('input', () => {
+      if (resourceSearchTimer != null) {
+        window.clearTimeout(resourceSearchTimer);
+      }
 
-  standardFilterEl.innerHTML = '<option value="">Any</option>';
-
-  const standards = Array.isArray(manifest?.standards)
-    ? manifest.standards
-    : (Array.isArray(manifest?.standards) ? manifest.standards : []);
-
-  for (const std of standards) {
-    if (!std?.id) continue;
-
-    const opt = document.createElement('option');
-    opt.value = std.id;
-    opt.textContent = std.id + (std.type ? ` (${std.type})` : '');
-    standardFilterEl.appendChild(opt);
+      resourceSearchTimer = window.setTimeout(() => {
+        applyResourceFilters();
+      }, 150);
+    });
   }
-}
 
-// Phase 6.1 — enable batch drill-down selection
-wireBatchDashboardSelection();
+  if (statusFilterSelect) {
+    statusFilterSelect.addEventListener('change', applyResourceFilters);
+  }
 
-if (printReportBtn) {
-  printReportBtn.addEventListener('click', () => window.print());
-}
+  if (standardFilterSelect) {
+    standardFilterSelect.addEventListener('change', applyResourceFilters);
+  }
 
-if (loadSavedRunBtn) {
-  loadSavedRunBtn.addEventListener('click', async () => {
-    const id = savedRunsSelect ? savedRunsSelect.value : '';
-    if (!id) {
-      alert('Choose a saved run first.');
-      return;
-    }
-    const run = await getRun(id);
-    await ocqHydrateRun(run);
-  });
-}
+  if (clearFiltersButton) {
+    clearFiltersButton.addEventListener('click', clearResourceFilters);
+  }
 
-if (deleteSavedRunBtn) {
-  deleteSavedRunBtn.addEventListener('click', async () => {
-    const id = savedRunsSelect ? savedRunsSelect.value : '';
-    if (!id) {
-      alert('Choose a saved run first.');
-      return;
-    }
-    await deleteRun(id);
-    await refreshSavedRunsUi();
-    if (statusEl) statusEl.textContent = 'Deleted saved run.';
-  });
-}
+  if (themeToggleButton) {
+    themeToggleButton.addEventListener('click', toggleTheme);
+  }
 
+  if (downloadActionSelect && downloadSelectedButton) {
+    downloadActionSelect.addEventListener('change', () => {
+      downloadSelectedButton.disabled = !downloadActionSelect.value;
+    });
 
-// Phase 6.2 — initial load: populate dropdown + restore last run if present
-(async function initSavedRuns() {
+    downloadSelectedButton.addEventListener('click', handleDownloadSelected);
+  }
+
+  if (runChecksButton) {
+    runChecksButton.addEventListener('click', () => {
+      void runSingleChecks();
+    });
+  }
+
+  if (runBatchChecksButton) {
+    runBatchChecksButton.addEventListener('click', () => {
+      void runBatchChecks();
+    });
+  }
+
+  if (printReportButton) {
+    printReportButton.addEventListener('click', () => {
+      window.print();
+    });
+  }
+
+  if (loadSavedRunButton) {
+    loadSavedRunButton.addEventListener('click', () => {
+      void (async () => {
+        const runId = savedRunsSelect ? savedRunsSelect.value : '';
+        if (!runId) {
+          window.alert('Choose a saved run first.');
+          return;
+        }
+
+        const run = await getRun(runId);
+        await hydrateRun(run);
+      })();
+    });
+  }
+
+  if (deleteSavedRunButton) {
+    deleteSavedRunButton.addEventListener('click', () => {
+      void (async () => {
+        const runId = savedRunsSelect ? savedRunsSelect.value : '';
+        if (!runId) {
+          window.alert('Choose a saved run first.');
+          return;
+        }
+
+        await deleteRun(runId);
+        await refreshSavedRunsUi();
+        setStatus('Deleted saved run.');
+      })();
+    });
+  }
+
   await refreshSavedRunsUi();
 
-  const lastId = await getLastRunId();
-  if (lastId) {
-    const run = await getRun(lastId);
+  const lastRunId = await getLastRunId();
+  if (lastRunId) {
+    const run = await getRun(lastRunId);
     if (run) {
-      await ocqHydrateRun(run);
+      await hydrateRun(run);
     }
   }
+
   refreshDownloadOptions();
-})();
+}
+
+void initializeApp();

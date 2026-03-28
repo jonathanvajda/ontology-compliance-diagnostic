@@ -30,9 +30,9 @@
  * @typedef {Object} OcqEvaluatedReport
  * @property {string} fileName
  * @property {string} ontologyIri
- * @property {Object | null} ontologyReport
- * @property {Array<Object>} perResource
- * @property {Array<Object>} results
+ * @property {OcqOntologyReport | null} ontologyReport
+ * @property {OcqPerResourceCurationRow[]} perResource
+ * @property {OcqQueryResultRow[]} results
  */
 
 /**

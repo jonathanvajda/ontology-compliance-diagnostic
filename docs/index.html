@@ -124,58 +124,110 @@
       <div class="ocq-toolbar">
         <div class="ocq-toolbar-left">
           <label class="ocq-label" for="ontologyFiles">Ontology files</label>
-          <div class="ocq-file-row"></div>
-            <input class="ocq-input ocq-input-file" type="file" id="ontologyFiles" accept=".ttl,.rdf,.owl,.nt,.nq,.trig,.jsonld" multiple />
-            <p>Select an ontology file (e.g., TTL) and click "Run checks".<br /> Results will be logged to the browser console, and a per-resource curation table will appear below.</p>
+
+          <input
+            class="ocq-input ocq-input-file"
+            type="file"
+            id="ontologyFiles"
+            accept=".ttl,.rdf,.owl,.nt,.nq,.trig,.jsonld"
+            multiple
+          />
+
+          <p>
+            Select an ontology file (e.g., TTL) and click "Run checks".<br />
+            Results will be logged to the browser console, and a per-resource curation table will appear below.
+          </p>
+
           <div class="ocq-actions">
             <button id="runChecksBtn" class="ocq-btn ocq-btn-primary" type="button">Run checks</button>
             <button id="runBatchBtn" class="ocq-btn ocq-btn-secondary" type="button">Run batch checks</button>
           </div>
-        </div>
 
           <p class="ocq-help">
-            Tip: For keyboard users, requirement rows are focusable — press Enter/Space to open details.
+            Tip: For keyboard users, standard rows are focusable — press Enter/Space to open details.
           </p>
         </div>
-  <div id="dashboardContainer" class="ocq-section ocq-card"></div>
-  
-  <!-- Container for the ontology-level report -->
-  <div id="ontologyReportContainer" class="ocq-section ocq-card"></div>
 
+        <div class="ocq-toolbar-right">
+          <div class="ocq-export" role="group" aria-label="Download exports">
+            <label for="downloadActionSelect" class="ocq-label">Download</label>
 
-  <div id="requirementDetailContainer"></div>
-    <div id="status" class="ocq-status" aria-live="polite"></div>
+            <select id="downloadActionSelect" class="ocq-select">
+              <option value="">Choose export…</option>
+
+              <optgroup label="Current run">
+                <option value="resultsCsv">Results CSV</option>
+                <option value="ontologyYaml">Ontology Report YAML</option>
+                <option value="htmlReport">HTML Report</option>
+                <option value="filteredResourcesCsv">Filtered Resources CSV</option>
+                <option value="standardDetailCsv">Standard Detail CSV</option>
+              </optgroup>
+
+              <optgroup label="Batch run">
+                <option value="batchSummaryCsv">Batch Summary CSV</option>
+              </optgroup>
+            </select>
+
+            <button
+              id="downloadSelectedBtn"
+              class="ocq-btn ocq-btn-tertiary"
+              type="button"
+              disabled
+            >
+              Download
+            </button>
+
+            <select id="savedRunsSelect" class="ocq-input ocq-select" aria-label="Saved runs">
+              <option value="">Saved runs…</option>
+            </select>
+            <button id="loadSavedRunBtn" class="ocq-btn ocq-btn-tertiary" type="button">Load</button>
+            <button id="deleteSavedRunBtn" class="ocq-btn ocq-btn-tertiary" type="button">Delete</button>
+            <button id="printReportBtn" class="ocq-btn ocq-btn-tertiary" type="button">Print</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="status" class="ocq-status" aria-live="polite"></div>
+    </div>
+
+    <div id="dashboardContainer" class="ocq-section ocq-card"></div>
+
+    <div id="ontologyReportContainer" class="ocq-section ocq-card"></div>
+
+    <div id="standardDetailContainer" class="ocq-section ocq-card"></div>
+
     <div id="curationFiltersContainer" class="ocq-section ocq-card">
       <h2 class="ocq-title">Resource filters</h2>
 
-  <div id="curationFilters" class="ocq-filters">
-    
-      <div class="ocq-filter">
-        <label class="ocq-label" for="statusFilter">Curation status</label>
-        <select id="statusFilter" class="ocq-input ocq-select">
-          <option value="">All</option>
-          <option value="uncurated">uncurated</option>
-          <option value="metadata incomplete">metadata incomplete</option>
-          <option value="metadata complete">metadata complete</option>
-          <option value="pending final vetting">pending final vetting</option>
-        </select>
-      </div>
-        
-      <div class="ocq-filter">
-        <label class="ocq-label" for="requirementFilter">Fails requirement / recommendation</label>
-        <select id="requirementFilter" class="ocq-input ocq-select">
-          <option value="">Any</option>
-        </select>
-      </div>
+      <div id="curationFilters" class="ocq-filters">
+        <div class="ocq-filter">
+          <label class="ocq-label" for="statusFilter">Curation status</label>
+          <select id="statusFilter" class="ocq-input ocq-select">
+            <option value="">All</option>
+            <option value="uncurated">uncurated</option>
+            <option value="metadata incomplete">metadata incomplete</option>
+            <option value="metadata complete">metadata complete</option>
+            <option value="pending final vetting">pending final vetting</option>
+          </select>
+        </div>
 
-      <div class="ocq-filter">
-        <label>
-          Resource IRI contains:
-          <input id="resourceSearch" class="ocq-input" type="text" placeholder="e.g., obo:IAO_" autocomplete="off" />
-        </label>
-      </div>
-    </div>
-    
+        <div class="ocq-filter">
+          <label class="ocq-label" for="standardFilter">Fails requirement / recommendation</label>
+          <select id="standardFilter" class="ocq-input ocq-select">
+            <option value="">Any</option>
+          </select>
+        </div>
+
+        <div class="ocq-filter">
+          <label class="ocq-label" for="resourceSearch">Resource IRI contains:</label>
+          <input
+            id="resourceSearch"
+            class="ocq-input"
+            type="text"
+            placeholder="e.g., obo:IAO_"
+            autocomplete="off"
+          />
+        </div>
 
         <div class="ocq-filter ocq-filter-actions">
           <button id="clearFiltersBtn" class="ocq-btn ocq-btn-secondary" type="button">
@@ -185,63 +237,14 @@
       </div>
 
       <div id="curationFiltersSummary" class="ocq-status" aria-live="polite"></div>
-
-
-  <!-- Container for the per-resource curation table -->
-  <div id="curationTableContainer"></div>
-
-  <div id="requirementDetailContainer"></div>
-
     </div>
 
-
-   <div class="ocq-toolbar-right">
-          <div class="ocq-export" role="group" aria-label="Download exports">
-          <label for="downloadActionSelect" class="ocq-label">Download</label>
-
-          <select id="downloadActionSelect" class="ocq-select">
-            <option value="">Choose export…</option>
-
-            <optgroup label="Current run">
-              <option value="resultsCsv">Results CSV</option>
-              <option value="ontologyYaml">Ontology Report YAML</option>
-              <option value="htmlReport">HTML Report</option>
-              <option value="filteredResourcesCsv">Filtered Resources CSV</option>
-              <option value="requirementDetailCsv">Requirement Detail CSV</option>
-            </optgroup>
-
-            <optgroup label="Batch run">
-              <option value="batchSummaryCsv">Batch Summary CSV</option>
-            </optgroup>
-          </select>
-
-          <button
-            id="downloadSelectedBtn"
-            class="ocq-btn ocq-btn-tertiary"
-            type="button"
-            disabled
-          >
-            Download
-          </button>
-
-            <!-- Phase 6.2: Saved runs -->
-            <select id="savedRunsSelect" class="ocq-input ocq-select" aria-label="Saved runs">
-              <option value="">Saved runs…</option>
-            </select>
-            <button id="loadSavedRunBtn" class="ocq-btn ocq-btn-tertiary" type="button">Load</button>
-            <button id="deleteSavedRunBtn" class="ocq-btn ocq-btn-tertiary" type="button">Delete</button>
-            <button id="printReportBtn" class="ocq-btn ocq-btn-tertiary" type="button">Print</button>            
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Container for the per-resource curation table -->
     <div id="curationTableContainer" class="ocq-section ocq-card"></div>
-
-    <div id="requirementDetailContainer" class="ocq-section ocq-card"></div>
- 
   </div>
+  <footer style="margin: 1em;">
+		<details open=""><summary><b>Important User Data Notice</b></summary>By design, any data that a user inputs stays <i>local</i> to the user's device. Ontology settings and data can be saved in the browser ('Save Session' button), but users are encouraged to export their work ('Download RDF' button), since it <i>cannot</i> be otherwise recovered. This is on purpose: I do not harvest your data or process your data. This site does not receive data from a user, and therefore no user data is stored anywhere except locally. If you are interested in storing data on the cloud (on a server), please contact me (jonathan.vajda [at] gmail.com) so I know about your interest and so I can notify you if/when I add that feature.</details><br>
+		<span style="text-align:right"><small>Copyright 2026, Jonathan Vajda</small></span>
+  </footer>
 
   <!-- Vendor JS -->
   <script src="./app/n3.min.js"></script>
