@@ -146,4 +146,57 @@
  * @property {Record<string, unknown>} details
  */
 
+/**
+ * @typedef {'requirement' | 'recommendation'} OcqStandardType
+ */
+
+/**
+ * Flags used when deriving curation status.
+ *
+ * @typedef {Object} OcqCurationFlags
+ * @property {boolean} uncurated
+ * @property {boolean} requiresDiscussion
+ * @property {boolean} readyForRelease
+ */
+
+/**
+ * One row in the per-resource curation table.
+ *
+ * @typedef {Object} OcqPerResourceCurationRow
+ * @property {string} resource
+ * @property {string} statusIri
+ * @property {string} statusLabel
+ * @property {string[]} failedRequirements
+ * @property {string[]} failedRecommendations
+ */
+
+/**
+ * One row in the ontology-level standards report.
+ *
+ * @typedef {Object} OcqOntologyReportStandardRow
+ * @property {string} id
+ * @property {OcqStandardType} type
+ * @property {number} weight
+ * @property {'pass' | 'fail'} status
+ * @property {number} failedResourcesCount
+ * @property {string[]} failingResources
+ */
+
+/**
+ * Ontology-level report returned by grader.js.
+ *
+ * @typedef {Object} OcqOntologyReport
+ * @property {string} ontologyIri
+ * @property {string} statusIri
+ * @property {string} statusLabel
+ * @property {OcqOntologyReportStandardRow[]} standards
+ */
+
+/**
+ * Failure index:
+ * Map<resourceIri, Map<criterionId, Set<queryId>>>
+ *
+ * @typedef {Map<string, Map<string, Set<string>>>} OcqFailureIndex
+ */
+
 export {};

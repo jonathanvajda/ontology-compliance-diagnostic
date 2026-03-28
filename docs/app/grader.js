@@ -1,106 +1,289 @@
-// app/grader.js (ES module)
+// app/grader.js
+// @ts-check
 
-const IAO = {
+/** @typedef {import('./types.js').OcqManifest} OcqManifest */
+/** @typedef {import('./types.js').OcqManifestStandard} OcqManifestStandard */
+/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
+/** @typedef {import('./types.js').OcqStandardType} OcqStandardType */
+/** @typedef {import('./types.js').OcqCurationFlags} OcqCurationFlags */
+/** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
+/** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
+/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
+/** @typedef {import('./types.js').OcqFailureIndex} OcqFailureIndex */
+
+/**
+ * Internal accumulator shape for per-resource curation.
+ *
+ * @typedef {Object} PerResourceAccumulator
+ * @property {string} resource
+ * @property {Set<string>} failedRequirements
+ * @property {Set<string>} failedRecommendations
+ * @property {OcqCurationFlags} flags
+ */
+
+/**
+ * Internal accumulator shape for ontology report rows.
+ *
+ * @typedef {Object} OntologyStandardAccumulator
+ * @property {string} id
+ * @property {OcqStandardType} type
+ * @property {number} weight
+ * @property {boolean} hasFail
+ * @property {Set<string>} failingResources
+ */
+
+export const CURATION_STATUS_IRIS = Object.freeze({
   UNCURATED: 'http://purl.obolibrary.org/obo/IAO_0000124',
   METADATA_INCOMPLETE: 'http://purl.obolibrary.org/obo/IAO_0000123',
   METADATA_COMPLETE: 'http://purl.obolibrary.org/obo/IAO_0000120',
   PENDING_FINAL_VETTING: 'http://purl.obolibrary.org/obo/IAO_0000125',
   REQUIRES_DISCUSSION: 'http://example.org/curation-status/requires-discussion',
   READY_FOR_RELEASE: 'http://example.org/curation-status/ready-for-release'
-};
+});
 
-const IAO_LABELS = {
-  [IAO.UNCURATED]: 'uncurated',
-  [IAO.METADATA_INCOMPLETE]: 'metadata incomplete',
-  [IAO.METADATA_COMPLETE]: 'metadata complete',
-  [IAO.PENDING_FINAL_VETTING]: 'pending final vetting',
-  [IAO.REQUIRES_DISCUSSION]: 'requires discussion',
-  [IAO.READY_FOR_RELEASE]: 'ready for release'
-};
+/** @type {Readonly<Record<string, string>>} */
+export const CURATION_STATUS_LABELS = Object.freeze({
+  [CURATION_STATUS_IRIS.UNCURATED]: 'uncurated',
+  [CURATION_STATUS_IRIS.METADATA_INCOMPLETE]: 'metadata incomplete',
+  [CURATION_STATUS_IRIS.METADATA_COMPLETE]: 'metadata complete',
+  [CURATION_STATUS_IRIS.PENDING_FINAL_VETTING]: 'pending final vetting',
+  [CURATION_STATUS_IRIS.REQUIRES_DISCUSSION]: 'requires discussion',
+  [CURATION_STATUS_IRIS.READY_FOR_RELEASE]: 'ready for release'
+});
 
-function statusPolicy(hasReqFail, hasRecFail, flags = {}) {
-  if (flags.uncurated) return IAO.UNCURATED;
-  if (hasReqFail) return IAO.METADATA_INCOMPLETE;
-  if (!hasReqFail && hasRecFail) return IAO.METADATA_COMPLETE;
-  return IAO.PENDING_FINAL_VETTING;
+export const UNKNOWN_ONTOLOGY_IRI = 'urn:ontology:unknown';
+export const UNKNOWN_RESOURCE_IRI = 'urn:resource:unknown';
+
+/**
+ * Returns a normalized criterion id from a result row.
+ *
+ * @param {Partial<OcqQueryResultRow> | null | undefined} row
+ * @returns {string | null}
+ */
+export function getResultCriterionId(row) {
+  return row?.criterionId || null;
 }
 
+/**
+ * Returns a fresh curation flags object.
+ *
+ * @returns {OcqCurationFlags}
+ */
+export function makeEmptyCurationFlags() {
+  return {
+    uncurated: false,
+    requiresDiscussion: false,
+    readyForRelease: false
+  };
+}
+
+/**
+ * Resolves the standard type for a manifest standard entry.
+ *
+ * @param {Partial<OcqManifestStandard> | null | undefined} standard
+ * @returns {OcqStandardType}
+ */
+export function getStandardType(standard) {
+  return standard?.type === 'recommendation' ? 'recommendation' : 'requirement';
+}
+
+/**
+ * Returns the curation status IRI for the supplied failure state and flags.
+ *
+ * Current policy:
+ * - uncurated overrides all
+ * - any failed requirement -> metadata incomplete
+ * - recommendation failures only -> metadata complete
+ * - no failures -> pending final vetting
+ *
+ * @param {boolean} hasRequirementFailure
+ * @param {boolean} hasRecommendationFailure
+ * @param {Partial<OcqCurationFlags>} [flags={}]
+ * @returns {string}
+ */
+export function getCurationStatusIri(
+  hasRequirementFailure,
+  hasRecommendationFailure,
+  flags = {}
+) {
+  if (flags.uncurated) {
+    return CURATION_STATUS_IRIS.UNCURATED;
+  }
+  if (hasRequirementFailure) {
+    return CURATION_STATUS_IRIS.METADATA_INCOMPLETE;
+  }
+  if (!hasRequirementFailure && hasRecommendationFailure) {
+    return CURATION_STATUS_IRIS.METADATA_COMPLETE;
+  }
+  return CURATION_STATUS_IRIS.PENDING_FINAL_VETTING;
+}
+
+/**
+ * Returns the human-readable label for a curation status IRI.
+ *
+ * @param {string} statusIri
+ * @returns {string}
+ */
+export function getCurationStatusLabel(statusIri) {
+  return CURATION_STATUS_LABELS[statusIri] || 'unknown';
+}
+
+/**
+ * Builds a map from criterion id to standard type.
+ *
+ * @param {OcqManifest | null | undefined} manifest
+ * @returns {Map<string, OcqStandardType>}
+ */
+export function buildStandardTypeMap(manifest) {
+  /** @type {Map<string, OcqStandardType>} */
+  const standardTypeMap = new Map();
+
+  if (!manifest || !Array.isArray(manifest.standards)) {
+    return standardTypeMap;
+  }
+
+  for (const standard of manifest.standards) {
+    if (!standard || !standard.id) {
+      continue;
+    }
+    standardTypeMap.set(standard.id, getStandardType(standard));
+  }
+
+  return standardTypeMap;
+}
+
+/**
+ * Returns true if a result row should count as a resource-scoped failure.
+ *
+ * Ontology-scoped failures are intentionally excluded from per-resource views.
+ *
+ * @param {Partial<OcqQueryResultRow> | null | undefined} row
+ * @returns {boolean}
+ */
+export function isResourceScopedRow(row) {
+  const scope = row?.scope || 'resource';
+  return scope === 'resource' || scope === 'TBox';
+}
+
+/**
+ * Creates a new per-resource accumulator entry.
+ *
+ * @param {string} resource
+ * @returns {PerResourceAccumulator}
+ */
+export function createPerResourceAccumulator(resource) {
+  return {
+    resource,
+    failedRequirements: new Set(),
+    failedRecommendations: new Set(),
+    flags: makeEmptyCurationFlags()
+  };
+}
+
+/**
+ * Builds an index of failing query ids by resource and criterion id.
+ *
+ * Shape:
+ * Map<resourceIri, Map<criterionId, Set<queryId>>>
+ *
+ * Only resource-scoped failures are indexed.
+ *
+ * @param {OcqQueryResultRow[] | null | undefined} results
+ * @returns {OcqFailureIndex}
+ */
 export function buildFailuresIndex(results) {
+  /** @type {OcqFailureIndex} */
   const byResource = new Map();
 
-  if (!Array.isArray(results)) return byResource;
+  if (!Array.isArray(results)) {
+    return byResource;
+  }
 
   for (const row of results) {
-    if (!row || row.status !== 'fail') continue;
+    if (!row || row.status !== 'fail') {
+      continue;
+    }
+    if (!isResourceScopedRow(row)) {
+      continue;
+    }
 
     const resource = row.resource;
     const criterionId = getResultCriterionId(row);
     const queryId = row.queryId;
 
-    if (!resource || !criterionId || !queryId) continue;
+    if (!resource || !criterionId || !queryId) {
+      continue;
+    }
 
-    if (!byResource.has(resource)) byResource.set(resource, new Map());
-    const byReq = byResource.get(resource);
+    if (!byResource.has(resource)) {
+      byResource.set(resource, new Map());
+    }
 
-    if (!byReq.has(criterionId)) byReq.set(criterionId, new Set());
-    byReq.get(criterionId).add(queryId);
+    const byCriterion = byResource.get(resource);
+    if (!byCriterion) {
+      continue;
+    }
+
+    if (!byCriterion.has(criterionId)) {
+      byCriterion.set(criterionId, new Set());
+    }
+
+    const queryIds = byCriterion.get(criterionId);
+    if (queryIds) {
+      queryIds.add(queryId);
+    }
   }
 
   return byResource;
 }
 
-export function getResultCriterionId(row) {
-  return row?.criterionId || row?.criterionId || null;
-}
-
-function buildStandardTypeMap(manifest) {
-  const map = new Map();
-  if (manifest && Array.isArray(manifest.standards)) {
-    for (const r of manifest.standards) {
-      if (!r || !r.id) continue;
-      const type = r.type === 'recommendation' ? 'recommendation' : 'requirement';
-      map.set(r.id, type);
-    }
-  }
-  return map;
-}
-
+/**
+ * Computes per-resource curation rows from normalized query results.
+ *
+ * Notes:
+ * - ontology-scoped rows are excluded from per-resource curation
+ * - resources listed in allResources are included even if they have no failures
+ *
+ * @param {OcqQueryResultRow[] | null | undefined} results
+ * @param {OcqManifest | null | undefined} manifest
+ * @param {string[] | null | undefined} allResources
+ * @returns {OcqPerResourceCurationRow[]}
+ */
 export function computePerResourceCuration(results, manifest, allResources) {
-  const reqType = buildStandardTypeMap(manifest);
-  const per = new Map();
+  const standardTypeMap = buildStandardTypeMap(manifest);
+
+  /** @type {Map<string, PerResourceAccumulator>} */
+  const perResource = new Map();
+
   const rows = Array.isArray(results) ? results : [];
 
   for (const row of rows) {
-    const resource = row.resource || 'urn:resource:unknown';
+    if (!row || !isResourceScopedRow(row)) {
+      continue;
+    }
+
+    const resource = row.resource || UNKNOWN_RESOURCE_IRI;
     const criterionId = getResultCriterionId(row);
     const status = row.status || 'fail';
     const queryId = row.queryId || null;
 
-    let type = 'requirement';
-    if (criterionId && reqType.has(criterionId)) {
-      type = reqType.get(criterionId);
+    /** @type {OcqStandardType} */
+    let standardType = 'requirement';
+    if (criterionId && standardTypeMap.has(criterionId)) {
+      standardType = /** @type {OcqStandardType} */ (standardTypeMap.get(criterionId));
     }
 
-    let entry = per.get(resource);
+    let entry = perResource.get(resource);
     if (!entry) {
-      entry = {
-        resource,
-        failedRequirements: new Set(),
-        failedRecommendations: new Set(),
-        flags: {
-          uncurated: false,
-          requiresDiscussion: false,
-          readyForRelease: false
-        }
-      };
-      per.set(resource, entry);
+      entry = createPerResourceAccumulator(resource);
+      perResource.set(resource, entry);
     }
 
     if (status === 'fail' && criterionId) {
-      if (type === 'requirement') {
-        entry.failedRequirements.add(criterionId);
-      } else if (type === 'recommendation') {
+      if (standardType === 'recommendation') {
         entry.failedRecommendations.add(criterionId);
+      } else {
+        entry.failedRequirements.add(criterionId);
       }
     }
 
@@ -110,107 +293,140 @@ export function computePerResourceCuration(results, manifest, allResources) {
   }
 
   if (Array.isArray(allResources)) {
-    for (const iri of allResources) {
-      if (!per.has(iri)) {
-        per.set(iri, {
-          resource: iri,
-          failedRequirements: new Set(),
-          failedRecommendations: new Set(),
-          flags: {
-            uncurated: false,
-            requiresDiscussion: false,
-            readyForRelease: false
-          }
-        });
+    for (const resourceIri of allResources) {
+      if (!resourceIri) {
+        continue;
+      }
+      if (!perResource.has(resourceIri)) {
+        perResource.set(resourceIri, createPerResourceAccumulator(resourceIri));
       }
     }
   }
 
-  const out = [];
-  for (const entry of per.values()) {
-    const hasReqFail = entry.failedRequirements.size > 0;
-    const hasRecFail = entry.failedRecommendations.size > 0;
+  /** @type {OcqPerResourceCurationRow[]} */
+  const output = [];
 
-    const statusIri = statusPolicy(hasReqFail, hasRecFail, entry.flags || {});
-    const statusLabel = IAO_LABELS[statusIri] || 'unknown';
+  for (const entry of perResource.values()) {
+    const hasRequirementFailure = entry.failedRequirements.size > 0;
+    const hasRecommendationFailure = entry.failedRecommendations.size > 0;
 
-    out.push({
+    const statusIri = getCurationStatusIri(
+      hasRequirementFailure,
+      hasRecommendationFailure,
+      entry.flags
+    );
+    const statusLabel = getCurationStatusLabel(statusIri);
+
+    output.push({
       resource: entry.resource,
       statusIri,
       statusLabel,
-      failedRequirements: Array.from(entry.failedRequirements),
-      failedRecommendations: Array.from(entry.failedRecommendations)
+      failedRequirements: Array.from(entry.failedRequirements).sort(),
+      failedRecommendations: Array.from(entry.failedRecommendations).sort()
     });
   }
 
-  return out;
+  output.sort((a, b) => String(a.resource).localeCompare(String(b.resource)));
+  return output;
 }
 
+/**
+ * Computes an ontology-level standards report.
+ *
+ * A standard fails if any matching failing result row exists for that criterion id.
+ * Resource counts only include resource/TBox-scoped failures.
+ *
+ * @param {OcqQueryResultRow[] | null | undefined} results
+ * @param {OcqManifest | null | undefined} manifest
+ * @param {string | null | undefined} ontologyIri
+ * @returns {OcqOntologyReport}
+ */
 export function computeOntologyReport(results, manifest, ontologyIri) {
-  const standards = new Map();
+  /** @type {Map<string, OntologyStandardAccumulator>} */
+  const standardAccumulators = new Map();
 
   if (manifest && Array.isArray(manifest.standards)) {
-    for (const r of manifest.standards) {
-      standards.set(r.id, {
-        id: r.id,
-        type: r.type === 'recommendation' ? 'recommendation' : 'requirement',
-        weight: typeof r.weight === 'number' ? r.weight : 1,
-        failedResourcesCount: 0,
-        failingResources: new Set(),
-        hasFail: false
+    for (const standard of manifest.standards) {
+      if (!standard || !standard.id) {
+        continue;
+      }
+
+      standardAccumulators.set(standard.id, {
+        id: standard.id,
+        type: getStandardType(standard),
+        weight: typeof standard.weight === 'number' ? standard.weight : 1,
+        hasFail: false,
+        failingResources: new Set()
       });
     }
   }
 
   const rows = Array.isArray(results) ? results : [];
+
   for (const row of rows) {
     const criterionId = getResultCriterionId(row);
-    const status = row.status || 'fail';
-    const scope = row.scope || 'resource';
-    const resource = row.resource || null;
+    const status = row?.status || 'fail';
+    const resource = row?.resource || null;
 
-    if (!criterionId || !standards.has(criterionId)) continue;
+    if (!criterionId || !standardAccumulators.has(criterionId)) {
+      continue;
+    }
+    if (status !== 'fail') {
+      continue;
+    }
 
-    const entry = standards.get(criterionId);
-    if (status === 'fail') {
-      entry.hasFail = true;
-      if ((scope === 'resource' || scope === 'TBox') && resource) {
-        entry.failingResources.add(resource);
-      }
+    const entry = standardAccumulators.get(criterionId);
+    if (!entry) {
+      continue;
+    }
+
+    entry.hasFail = true;
+
+    if (isResourceScopedRow(row) && resource) {
+      entry.failingResources.add(resource);
     }
   }
 
-  let hasReqFail = false;
-  let hasRecFail = false;
-  const standardList = [];
+  let hasRequirementFailure = false;
+  let hasRecommendationFailure = false;
 
-  for (const entry of standards.values()) {
-    const failedCount = entry.failingResources.size;
-    entry.failedResourcesCount = failedCount;
+  /** @type {OcqOntologyReportStandardRow[]} */
+  const standards = [];
+
+  for (const entry of standardAccumulators.values()) {
     const status = entry.hasFail ? 'fail' : 'pass';
-    entry.status = status;
+    const failedResourcesCount = entry.failingResources.size;
 
-    if (entry.type === 'requirement' && entry.hasFail) hasReqFail = true;
-    if (entry.type === 'recommendation' && entry.hasFail) hasRecFail = true;
+    if (entry.type === 'requirement' && entry.hasFail) {
+      hasRequirementFailure = true;
+    }
+    if (entry.type === 'recommendation' && entry.hasFail) {
+      hasRecommendationFailure = true;
+    }
 
-    standardList.push({
+    standards.push({
       id: entry.id,
       type: entry.type,
       weight: entry.weight,
       status,
-      failedResourcesCount: failedCount,
-      failingResources: Array.from(entry.failingResources)
+      failedResourcesCount,
+      failingResources: Array.from(entry.failingResources).sort()
     });
   }
 
-  const flags = {};
-  const statusIri = statusPolicy(hasReqFail, hasRecFail, flags);
-  const statusLabel = IAO_LABELS[statusIri] || 'unknown';
+  standards.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+  const statusIri = getCurationStatusIri(
+    hasRequirementFailure,
+    hasRecommendationFailure,
+    makeEmptyCurationFlags()
+  );
+  const statusLabel = getCurationStatusLabel(statusIri);
 
   return {
-    ontologyIri: ontologyIri || 'urn:ontology:unknown',
+    ontologyIri: ontologyIri || UNKNOWN_ONTOLOGY_IRI,
     statusIri,
     statusLabel,
-    standards: standardList
+    standards
   };
 }
