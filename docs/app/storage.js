@@ -1,140 +1,286 @@
-// app/storage.js (ES module)
-// IndexedDB persistence for OCQ runs (single + batch) and "last run" pointer.
+// app/storage.js
+// @ts-check
 
-const DB_NAME = 'ocq-db';
-const DB_VERSION = 1;
+/**
+ * IndexedDB persistence for OCQ saved runs and app-level pointers.
+ *
+ * Stable concepts:
+ * - A run is either "single" or "batch".
+ * - Payload shape is determined by the run kind.
+ * - The "last" pointer stores the most recently saved run id.
+ */
 
-const STORES = {
-  runs: 'runs',          // keyPath: id
-  appState: 'appState'   // keyPath: key
-};
+/** @typedef {import('./types.js').OcqRunKind} OcqRunKind */
+/** @typedef {import('./types.js').OcqSaveRunInput} OcqSaveRunInput */
+/** @typedef {import('./types.js').OcqSavedRun} OcqSavedRun */
+/** @typedef {import('./types.js').OcqLastRunPointer} OcqLastRunPointer */
 
+export const DB_NAME = 'ocq-db';
+export const DB_VERSION = 1;
+
+export const STORE_NAMES = Object.freeze({
+  runs: 'runs',
+  appState: 'appState'
+});
+
+/**
+ * Returns the current timestamp in ISO 8601 format.
+ *
+ * @returns {string}
+ */
 function nowIso() {
   return new Date().toISOString();
 }
 
-function makeId(prefix) {
-  const rnd = Math.random().toString(16).slice(2);
-  return `${prefix}_${Date.now()}_${rnd}`;
+/**
+ * Creates a reasonably unique id for a persisted run.
+ *
+ * @param {OcqRunKind} prefix
+ * @returns {string}
+ */
+function makeRunId(prefix) {
+  const randomSuffix = Math.random().toString(16).slice(2);
+  return `${prefix}_${Date.now()}_${randomSuffix}`;
 }
 
-function openDb() {
+/**
+ * Validates the run kind.
+ *
+ * @param {unknown} value
+ * @returns {asserts value is OcqRunKind}
+ */
+function assertRunKind(value) {
+  if (value !== 'single' && value !== 'batch') {
+    throw new TypeError(`Invalid run kind: ${String(value)}`);
+  }
+}
+
+/**
+ * Converts an IndexedDB request into a promise.
+ *
+ * @template T
+ * @param {IDBRequest<T>} request
+ * @returns {Promise<T | null>}
+ */
+function requestToPromise(request) {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-
-    req.onupgradeneeded = () => {
-      const db = req.result;
-
-      if (!db.objectStoreNames.contains(STORES.runs)) {
-        const runs = db.createObjectStore(STORES.runs, { keyPath: 'id' });
-        runs.createIndex('byCreatedAt', 'createdAt', { unique: false });
-      }
-
-      if (!db.objectStoreNames.contains(STORES.appState)) {
-        db.createObjectStore(STORES.appState, { keyPath: 'key' });
-      }
-    };
-
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    request.onsuccess = () => resolve(request.result ?? null);
+    request.onerror = () => reject(request.error);
   });
 }
 
-function tx(db, storeName, mode, fn) {
+/**
+ * Resolves when a transaction completes, and rejects on error/abort.
+ *
+ * @param {IDBTransaction} transaction
+ * @returns {Promise<void>}
+ */
+function transactionToPromise(transaction) {
   return new Promise((resolve, reject) => {
-    const t = db.transaction(storeName, mode);
-    const store = t.objectStore(storeName);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+}
 
-    let ret;
-    try {
-      ret = fn(store);
-    } catch (e) {
-      reject(e);
+/**
+ * Opens the OCQ IndexedDB database, creating stores if needed.
+ *
+ * @returns {Promise<IDBDatabase>}
+ */
+function openDatabase() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      reject(new Error('IndexedDB is not available in this environment.'));
       return;
     }
 
-    t.oncomplete = () => resolve(ret);
-    t.onerror = () => reject(t.error);
-    t.onabort = () => reject(t.error);
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+
+      if (!db.objectStoreNames.contains(STORE_NAMES.runs)) {
+        const runsStore = db.createObjectStore(STORE_NAMES.runs, { keyPath: 'id' });
+        runsStore.createIndex('byCreatedAt', 'createdAt', { unique: false });
+      }
+
+      if (!db.objectStoreNames.contains(STORE_NAMES.appState)) {
+        db.createObjectStore(STORE_NAMES.appState, { keyPath: 'key' });
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
 }
 
-function reqToPromise(req) {
-  return new Promise((resolve, reject) => {
-    req.onsuccess = () => resolve(req.result ?? null);
-    req.onerror = () => reject(req.error);
-  });
+/**
+ * Opens a transaction against a single object store, runs an operation,
+ * waits for transaction completion, then closes the database.
+ *
+ * @template T
+ * @param {string} storeName
+ * @param {'readonly' | 'readwrite'} mode
+ * @param {(store: IDBObjectStore, tx: IDBTransaction) => T | Promise<T>} operation
+ * @returns {Promise<T>}
+ */
+async function runInStore(storeName, mode, operation) {
+  const db = await openDatabase();
+
+  try {
+    const tx = db.transaction(storeName, mode);
+    const store = tx.objectStore(storeName);
+
+    const result = await operation(store, tx);
+    await transactionToPromise(tx);
+
+    return result;
+  } finally {
+    db.close();
+  }
 }
 
-export async function saveRun({ kind, label, payload, uiState }) {
-  const db = await openDb();
+/**
+ * Saves a run and updates the "last" pointer.
+ *
+ * @param {OcqSaveRunInput} input
+ * @returns {Promise<string>}
+ */
+export async function saveRun(input) {
+  if (!input || typeof input !== 'object') {
+    throw new TypeError('saveRun() requires an input object.');
+  }
 
+  const { kind, label = '', payload, uiState = null } = input;
+  assertRunKind(kind);
+
+  if (payload == null) {
+    throw new TypeError('saveRun() requires a payload.');
+  }
+
+  /** @type {OcqSavedRun} */
   const run = {
-    id: makeId(kind),            // 'single' | 'batch'
+    id: makeRunId(kind),
     kind,
-    label: label || '',
+    label: String(label || ''),
     createdAt: nowIso(),
-    payload,                     // report object (single) OR batch array
-    uiState: uiState || null
+    payload,
+    uiState
   };
 
-  await tx(db, STORES.runs, 'readwrite', (store) => reqToPromise(store.put(run)));
+  await runInStore(STORE_NAMES.runs, 'readwrite', (store) => {
+    return requestToPromise(store.put(run));
+  });
 
-  // update last pointer
-  await tx(db, STORES.appState, 'readwrite', (store) =>
-    reqToPromise(store.put({ key: 'last', runId: run.id }))
-  );
+  /** @type {OcqLastRunPointer} */
+  const lastPointer = {
+    key: 'last',
+    runId: run.id
+  };
 
-  db.close();
+  await runInStore(STORE_NAMES.appState, 'readwrite', (store) => {
+    return requestToPromise(store.put(lastPointer));
+  });
+
   return run.id;
 }
 
+/**
+ * Lists saved runs in descending createdAt order.
+ *
+ * @param {number} [limit=50]
+ * @returns {Promise<OcqSavedRun[]>}
+ */
 export async function listRuns(limit = 50) {
-  const db = await openDb();
-  const runs = await tx(db, STORES.runs, 'readonly', async (store) => {
-    const idx = store.index('byCreatedAt');
-    const out = [];
+  const normalizedLimit =
+    Number.isInteger(limit) && limit > 0 ? limit : 50;
+
+  return runInStore(STORE_NAMES.runs, 'readonly', (store) => {
+    const index = store.index('byCreatedAt');
 
     return new Promise((resolve, reject) => {
-      const cursorReq = idx.openCursor(null, 'prev');
-      cursorReq.onsuccess = () => {
-        const cursor = cursorReq.result;
-        if (!cursor) return resolve(out);
-        out.push(cursor.value);
-        if (out.length >= limit) return resolve(out);
+      /** @type {OcqSavedRun[]} */
+      const runs = [];
+
+      const cursorRequest = index.openCursor(null, 'prev');
+
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result;
+        if (!cursor) {
+          resolve(runs);
+          return;
+        }
+
+        runs.push(/** @type {OcqSavedRun} */ (cursor.value));
+
+        if (runs.length >= normalizedLimit) {
+          resolve(runs);
+          return;
+        }
+
         cursor.continue();
       };
-      cursorReq.onerror = () => reject(cursorReq.error);
+
+      cursorRequest.onerror = () => reject(cursorRequest.error);
     });
   });
-
-  db.close();
-  return runs;
 }
 
+/**
+ * Retrieves a saved run by id.
+ *
+ * @param {string} runId
+ * @returns {Promise<OcqSavedRun | null>}
+ */
 export async function getRun(runId) {
-  const db = await openDb();
-  const run = await tx(db, STORES.runs, 'readonly', (store) => reqToPromise(store.get(runId)));
-  db.close();
-  return run;
-}
-
-export async function deleteRun(runId) {
-  const db = await openDb();
-
-  const last = await tx(db, STORES.appState, 'readonly', (store) => reqToPromise(store.get('last')));
-  if (last && last.runId === runId) {
-    await tx(db, STORES.appState, 'readwrite', (store) => reqToPromise(store.delete('last')));
+  if (!runId) {
+    return null;
   }
 
-  await tx(db, STORES.runs, 'readwrite', (store) => reqToPromise(store.delete(runId)));
-  db.close();
+  return runInStore(STORE_NAMES.runs, 'readonly', (store) => {
+    return requestToPromise(/** @type {IDBRequest<OcqSavedRun>} */ (store.get(runId)));
+  });
+}
+
+/**
+ * Deletes a saved run. If the deleted run is the current "last" pointer,
+ * the pointer is removed as well.
+ *
+ * @param {string} runId
+ * @returns {Promise<boolean>}
+ */
+export async function deleteRun(runId) {
+  if (!runId) {
+    return false;
+  }
+
+  const lastPointer = await runInStore(STORE_NAMES.appState, 'readonly', (store) => {
+    return requestToPromise(/** @type {IDBRequest<OcqLastRunPointer>} */ (store.get('last')));
+  });
+
+  if (lastPointer && lastPointer.runId === runId) {
+    await runInStore(STORE_NAMES.appState, 'readwrite', (store) => {
+      return requestToPromise(store.delete('last'));
+    });
+  }
+
+  await runInStore(STORE_NAMES.runs, 'readwrite', (store) => {
+    return requestToPromise(store.delete(runId));
+  });
+
   return true;
 }
 
+/**
+ * Returns the saved run id stored in the "last" pointer, if any.
+ *
+ * @returns {Promise<string | null>}
+ */
 export async function getLastRunId() {
-  const db = await openDb();
-  const last = await tx(db, STORES.appState, 'readonly', (store) => reqToPromise(store.get('last')));
-  db.close();
-  return last?.runId || null;
+  const lastPointer = await runInStore(STORE_NAMES.appState, 'readonly', (store) => {
+    return requestToPromise(/** @type {IDBRequest<OcqLastRunPointer>} */ (store.get('last')));
+  });
+
+  return lastPointer?.runId || null;
 }
