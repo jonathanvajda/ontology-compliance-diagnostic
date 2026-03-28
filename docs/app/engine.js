@@ -159,18 +159,29 @@ function guessOntologyIri(store) {
 }
 
 async function evaluateSingleQuery(store, qMeta, queryText) {
-  const requirementId = qMeta.checksConformityTo || null;
+  const criterionId = qMeta.checksCriterion || null;
   const severity = qMeta.severity || 'info';
   const scope = qMeta.scope || 'resource';
 
   if (qMeta.kind === 'SELECT') {
     const rows = await runSelect(store, queryText);
-    console.log('query id:', qMeta.id);
-    console.log('query text:', queryText);
-    console.log('raw rows:', rows);
     const resourceVar = qMeta.resourceVar || 'resource';
 
-    const records = rows.map(row => {
+    let status;
+    switch (qMeta.polarity) {
+      case 'matchMeansFail':
+        status = 'fail';
+        break;
+      case 'matchMeansPass':
+        status = 'pass';
+        break;
+      default:
+        status = 'fail';
+        console.warn(`Unknown SELECT polarity for ${qMeta.id}: ${qMeta.polarity}`);
+        break;
+    }
+
+    return rows.map((row) => {
       const resource =
         row[resourceVar] ??
         row.resource ??
@@ -179,15 +190,13 @@ async function evaluateSingleQuery(store, qMeta, queryText) {
       return {
         resource,
         queryId: qMeta.id,
-        requirementId,
-        status: qMeta.polarity === 'matchMeansFail' ? 'fail' : 'fail',
+        criterionId,
+        status,
         severity,
         scope,
         details: row
       };
     });
-
-    return records;
   }
 
   if (qMeta.kind === 'ASK') {
@@ -210,7 +219,8 @@ async function evaluateSingleQuery(store, qMeta, queryText) {
 
       default:
         status = 'fail';
-        details = { askResult: ok, error: `Unknown polarity: ${qMeta.polarity}` };
+        console.warn(`Unknown ASK polarity for ${qMeta.id}: ${qMeta.polarity}`);
+        break;
     }
 
     const ontologyIri = guessOntologyIri(store);
@@ -219,7 +229,7 @@ async function evaluateSingleQuery(store, qMeta, queryText) {
       {
         resource: ontologyIri,
         queryId: qMeta.id,
-        requirementId,
+        criterionId,
         status,
         severity,
         scope,
@@ -235,7 +245,7 @@ async function evaluateSingleQuery(store, qMeta, queryText) {
 // 🔹 This is the main function your UI uses
 export async function evaluateAllQueries(ontologyText, fileName) {
   const store = await loadOntologyIntoStore(ontologyText, fileName || 'ontology.ttl');
-  const manifest = await loadManifest('queries/manifest.json');
+  const manifest = await loadManifest('./queries/manifest.json');
 
   const allResults = [];
 

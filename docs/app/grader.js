@@ -25,10 +25,38 @@ function statusPolicy(hasReqFail, hasRecFail, flags = {}) {
   return IAO.PENDING_FINAL_VETTING;
 }
 
-function buildRequirementTypeMap(manifest) {
+export function buildFailuresIndex(results) {
+  const byResource = new Map();
+
+  if (!Array.isArray(results)) return byResource;
+
+  for (const row of results) {
+    if (!row || row.status !== 'fail') continue;
+
+    const resource = row.resource;
+    const criterionId = getResultCriterionId(row);
+    const queryId = row.queryId;
+
+    if (!resource || !criterionId || !queryId) continue;
+
+    if (!byResource.has(resource)) byResource.set(resource, new Map());
+    const byReq = byResource.get(resource);
+
+    if (!byReq.has(criterionId)) byReq.set(criterionId, new Set());
+    byReq.get(criterionId).add(queryId);
+  }
+
+  return byResource;
+}
+
+export function getResultCriterionId(row) {
+  return row?.criterionId || row?.criterionId || null;
+}
+
+function buildStandardTypeMap(manifest) {
   const map = new Map();
-  if (manifest && Array.isArray(manifest.requirements)) {
-    for (const r of manifest.requirements) {
+  if (manifest && Array.isArray(manifest.standards)) {
+    for (const r of manifest.standards) {
       if (!r || !r.id) continue;
       const type = r.type === 'recommendation' ? 'recommendation' : 'requirement';
       map.set(r.id, type);
@@ -38,19 +66,19 @@ function buildRequirementTypeMap(manifest) {
 }
 
 export function computePerResourceCuration(results, manifest, allResources) {
-  const reqType = buildRequirementTypeMap(manifest);
+  const reqType = buildStandardTypeMap(manifest);
   const per = new Map();
   const rows = Array.isArray(results) ? results : [];
 
   for (const row of rows) {
     const resource = row.resource || 'urn:resource:unknown';
-    const requirementId = row.requirementId || null;
+    const criterionId = getResultCriterionId(row);
     const status = row.status || 'fail';
     const queryId = row.queryId || null;
 
     let type = 'requirement';
-    if (requirementId && reqType.has(requirementId)) {
-      type = reqType.get(requirementId);
+    if (criterionId && reqType.has(criterionId)) {
+      type = reqType.get(criterionId);
     }
 
     let entry = per.get(resource);
@@ -68,11 +96,11 @@ export function computePerResourceCuration(results, manifest, allResources) {
       per.set(resource, entry);
     }
 
-    if (status === 'fail' && requirementId) {
+    if (status === 'fail' && criterionId) {
       if (type === 'requirement') {
-        entry.failedRequirements.add(requirementId);
+        entry.failedRequirements.add(criterionId);
       } else if (type === 'recommendation') {
-        entry.failedRecommendations.add(requirementId);
+        entry.failedRecommendations.add(criterionId);
       }
     }
 
@@ -119,12 +147,11 @@ export function computePerResourceCuration(results, manifest, allResources) {
 }
 
 export function computeOntologyReport(results, manifest, ontologyIri) {
-  const reqType = buildRequirementTypeMap(manifest);
-  const requirements = new Map();
+  const standards = new Map();
 
-  if (manifest && Array.isArray(manifest.requirements)) {
-    for (const r of manifest.requirements) {
-      requirements.set(r.id, {
+  if (manifest && Array.isArray(manifest.standards)) {
+    for (const r of manifest.standards) {
+      standards.set(r.id, {
         id: r.id,
         type: r.type === 'recommendation' ? 'recommendation' : 'requirement',
         weight: typeof r.weight === 'number' ? r.weight : 1,
@@ -137,17 +164,17 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
 
   const rows = Array.isArray(results) ? results : [];
   for (const row of rows) {
-    const requirementId = row.requirementId || null;
+    const criterionId = getResultCriterionId(row);
     const status = row.status || 'fail';
     const scope = row.scope || 'resource';
     const resource = row.resource || null;
 
-    if (!requirementId || !requirements.has(requirementId)) continue;
+    if (!criterionId || !standards.has(criterionId)) continue;
 
-    const entry = requirements.get(requirementId);
+    const entry = standards.get(criterionId);
     if (status === 'fail') {
       entry.hasFail = true;
-      if (scope === 'resource' && resource) {
+      if ((scope === 'resource' || scope === 'TBox') && resource) {
         entry.failingResources.add(resource);
       }
     }
@@ -155,9 +182,9 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
 
   let hasReqFail = false;
   let hasRecFail = false;
-  const requirementList = [];
+  const standardList = [];
 
-  for (const entry of requirements.values()) {
+  for (const entry of standards.values()) {
     const failedCount = entry.failingResources.size;
     entry.failedResourcesCount = failedCount;
     const status = entry.hasFail ? 'fail' : 'pass';
@@ -166,7 +193,7 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
     if (entry.type === 'requirement' && entry.hasFail) hasReqFail = true;
     if (entry.type === 'recommendation' && entry.hasFail) hasRecFail = true;
 
-    requirementList.push({
+    standardList.push({
       id: entry.id,
       type: entry.type,
       weight: entry.weight,
@@ -184,6 +211,6 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
     ontologyIri: ontologyIri || 'urn:ontology:unknown',
     statusIri,
     statusLabel,
-    requirements: requirementList
+    standards: standardList
   };
 }
