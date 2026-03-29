@@ -88,11 +88,14 @@
 }
 
 .ocq-app .ocq-section {
+  max-width: 70%;
+  margin: auto;
   background: var(--ocq-surface);
   border: 1px solid var(--ont-border);
   border-radius: var(--ocq-radius);
   box-shadow: var(--ocq-shadow-sm);
   padding: var(--ocq-space-4);
+  margin-top: var(--ocq-space-4);
   margin-bottom: var(--ocq-space-4);
 }
 
@@ -174,10 +177,11 @@
 .ocq-app .ocq-toolbar-left {
   flex: 1;
   min-width: 320px;
+  max-width: 50%;
 }
 
 .ocq-app .ocq-toolbar-right {
-  display: flex;
+  max-width: 50%;
   align-items: flex-start;
   justify-content: flex-end;
 }
@@ -254,6 +258,7 @@
   border-radius: 10px;
   font-weight: 650;
   font-size: 13px;
+  line-height: normal;
   cursor: pointer;
   box-shadow: var(--ocq-shadow-sm);
 }
@@ -313,6 +318,7 @@
 
 .ocq-app .ocq-table {
   width: 70%;
+  margin: auto;
   border-collapse: separate;
   border-spacing: 0;
 

@@ -109,11 +109,6 @@ const deleteSavedRunButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('deleteSavedRunBtn')
 );
 
-/** @type {HTMLButtonElement | null} */
-const printReportButton = /** @type {HTMLButtonElement | null} */ (
-  document.getElementById('printReportBtn')
-);
-
 /** @type {HTMLElement | null} */
 const appRoot = document.getElementById('appRoot');
 
@@ -2031,12 +2026,6 @@ export async function initializeApp() {
   if (runBatchChecksButton) {
     runBatchChecksButton.addEventListener('click', () => {
       void runBatchChecks();
-    });
-  }
-
-  if (printReportButton) {
-    printReportButton.addEventListener('click', () => {
-      window.print();
     });
   }
 
