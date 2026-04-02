@@ -22,11 +22,5 @@
     "type": "git",
     "url": "git+https://github.com/jonathanvajda/ontology-curation-manager.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/jonathanvajda/ontology-curation-manager/issues"
-  },
-  "homepage": "https://github.com/jonathanvajda/ontology-curation-manager#readme"
+  "keywords": []
 }
