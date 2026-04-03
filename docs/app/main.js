@@ -2,46 +2,31 @@
 // @ts-check
 
 import {
-  evaluateAllQueries,
   loadManifest,
   DEFAULT_MANIFEST_URL
 } from './engine.js';
 
 import {
-  computePerResourceCuration,
-  computeOntologyReport,
   buildFailuresIndex,
   getResultCriterionId
 } from './grader.js';
 
 import {
-  saveRun,
-  listRuns,
-  getRun,
-  deleteRun,
-  getLastRunId
-} from './storage.js';
+  inspectFile,
+  inspectFiles
+} from './report-model.js';
 
-import {
- renderOntologyReport
-} from './render-ontology.js';
+import { saveRun, listRuns, getRun, deleteRun, getLastRunId } from './storage.js';
+
+import { renderOntologyReport } from './render-ontology.js';
 
 import { renderDashboard, getBatchKey } from './render-dashboard.js';
 
-import {
-  renderCurationTable,
-  renderResourceFailureDetailHtml
-} from './render-resources.js';
+import { renderCurationTable, renderResourceFailureDetailHtml } from './render-resources.js';
 
-import {
-  renderStandardDetail,
-  getStandardDetailEntries
-} from './render-standards.js';
+import { renderStandardDetail, getStandardDetailEntries } from './render-standards.js';
 
-import {
-  populateStandardFilter,
-  getReportStandards
-} from './criteria.js';
+import { populateStandardFilter, getReportStandards } from './criteria.js';
 
 /** @typedef {import('./types.js').OcqManifest} OcqManifest */
 /** @typedef {import('./types.js').OcqSavedRun} OcqSavedRun */
@@ -527,6 +512,55 @@ export function clearRunSelectionState() {
 }
 
 /**
+ * Clears in-memory inspection result state.
+ *
+ * @returns {void}
+ */
+export function clearInspectionDataState() {
+  lastResults = null;
+  lastPerResource = null;
+  lastPerResourceFull = null;
+  lastFailuresIndex = null;
+  lastOntologyReport = null;
+}
+
+/**
+ * Resets rendered views and transient selection state before a new inspection.
+ *
+ * @returns {void}
+ */
+export function resetInspectionView() {
+  clearRenderedViews();
+  clearRunSelectionState();
+  clearInspectionDataState();
+}
+
+/**
+ * Applies one inspected ontology report bundle to the resource/ontology panels.
+ *
+ * @param {OcqEvaluatedReport} reportObject
+ * @param {OcqManifest | null | undefined} manifest
+ * @returns {void}
+ */
+export function applyInspectionItemToUi(reportObject, manifest) {
+  lastResults = reportObject.results || [];
+  lastFailuresIndex = buildFailuresIndex(lastResults);
+  lastPerResourceFull = reportObject.perResource || [];
+  lastPerResource = reportObject.perResource || [];
+  lastOntologyReport = reportObject.ontologyReport || null;
+  lastManifest = manifest || lastManifest;
+  lastBatchReports = null;
+  selectedBatchKey = null;
+
+  if (lastManifest) {
+    populateStandardFilter(lastManifest, standardFilterSelect);
+  }
+
+  renderOntologyReport(lastOntologyReport);
+  applyResourceFilters();
+}
+
+/**
  * Applies current resource filters and rerenders the curation table.
  *
  * @returns {void}
@@ -729,7 +763,7 @@ export function onOntologyReportRowClick(event) {
   lastSelectedStandardRow = row;
   lastSelectedCriterionId = criterionId;
 
-  renderStandardDetail(criterionId);
+  renderStandardDetail(lastSelectedCriterionId, lastOntologyReport, lastResults);
   refreshDownloadOptions();
 }
 
@@ -747,7 +781,7 @@ export function loadBatchSelection(reportObject) {
   lastOntologyReport = reportObject.ontologyReport || null;
 
   if (lastManifest) {
-    populateStandardFilter(lastManifest);
+    populateStandardFilter(lastManifest, standardFilterSelect);
   }
 
   renderOntologyReport(lastOntologyReport);
@@ -896,7 +930,7 @@ export function buildStandardDetailCsv(criterionId) {
     throw new Error('No standard selected.');
   }
 
-  const entries = getStandardDetailEntries(selectedCriterionId);
+  const entries = getStandardDetailEntries(selectedCriterionId, lastResults);
 
   /** @type {Array<Array<unknown>>} */
   const rows = [['criterionId', 'resource', 'queryIds']];
@@ -990,7 +1024,7 @@ export function buildHtmlReport() {
   const report = lastOntologyReport || null;
   const perResourceRows = Array.isArray(lastPerResource) ? lastPerResource : [];
   const resultsCount = Array.isArray(lastResults) ? lastResults.length : 0;
-  const standardDetailEntries = getStandardDetailEntries(selectedCriterionId);
+  const standardDetailEntries = getStandardDetailEntries(selectedCriterionId, lastResults);
 
   const css = `
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; }
@@ -1232,31 +1266,8 @@ export async function ensureManifestLoaded() {
   }
 
   lastManifest = await loadManifest(DEFAULT_MANIFEST_URL);
-  populateStandardFilter(lastManifest);
+  populateStandardFilter(lastManifest, standardFilterSelect);
   return lastManifest;
-}
-
-/**
- * Evaluates one file and returns its full report bundle.
- *
- * @param {File} file
- * @returns {Promise<OcqEvaluatedReport>}
- */
-export async function evaluateFile(file) {
-  const text = await file.text();
-  const { results, resources, ontologyIri } = await evaluateAllQueries(text, file.name);
-  const manifest = await ensureManifestLoaded();
-
-  const perResource = computePerResourceCuration(results, manifest, resources);
-  const ontologyReport = computeOntologyReport(results, manifest, ontologyIri);
-
-  return {
-    fileName: file.name,
-    ontologyIri,
-    ontologyReport,
-    perResource,
-    results
-  };
 }
 
 /**
@@ -1322,7 +1333,7 @@ export async function hydrateRun(run) {
       )
     ) {
       lastSelectedCriterionId = selectedCriterionId;
-      renderStandardDetail(selectedCriterionId);
+      renderStandardDetail(selectedCriterionId, lastOntologyReport, lastResults);
 
       const row = ontologyReportContainer?.querySelector(
         `tr[data-standard-id="${cssEscapeAttr(selectedCriterionId)}"]`
@@ -1367,7 +1378,7 @@ export async function hydrateRun(run) {
     lastOntologyReport?.standards?.some((standard) => standard.id === selectedCriterionId)
   ) {
     lastSelectedCriterionId = selectedCriterionId;
-    renderStandardDetail(selectedCriterionId);
+    renderStandardDetail(selectedCriterionId, lastOntologyReport, lastResults);
 
     const row = ontologyReportContainer?.querySelector(
       `tr[data-standard-id="${cssEscapeAttr(selectedCriterionId)}"]`
@@ -1384,89 +1395,15 @@ export async function hydrateRun(run) {
 }
 
 /**
- * Runs checks for the first selected file.
+ * Runs one inspection over the currently selected files.
+ *
+ * One inspection may contain 1..n inspected ontology files.
  *
  * @returns {Promise<void>}
  */
-export async function runSingleChecks() {
+export async function runInspectionFromSelectedFiles() {
   if (!filesInput) {
     window.alert('File input #ontologyFiles not found.');
-    return;
-  }
-
-  const files = Array.from(filesInput.files || []);
-  const file = files[0];
-
-  if (!file) {
-    window.alert('Please select an ontology file first.');
-    return;
-  }
-
-  setStatus('Reading file…');
-  clearRenderedViews();
-  clearRunSelectionState();
-
-  lastResults = null;
-  lastPerResource = null;
-  lastPerResourceFull = null;
-  lastFailuresIndex = null;
-  lastOntologyReport = null;
-
-  try {
-    const text = await file.text();
-    setStatus('Running checks…');
-
-    const { results, resources, ontologyIri } = await evaluateAllQueries(text, file.name);
-    const manifest = await ensureManifestLoaded();
-
-    const perResource = computePerResourceCuration(results, manifest, resources);
-    const ontologyReport = computeOntologyReport(results, manifest, ontologyIri);
-
-    lastResults = results;
-    lastFailuresIndex = buildFailuresIndex(lastResults);
-    lastPerResourceFull = perResource;
-    lastPerResource = perResource;
-    lastOntologyReport = ontologyReport;
-    lastManifest = manifest;
-    lastBatchReports = null;
-    selectedBatchKey = null;
-
-    await saveRun({
-      kind: 'single',
-      label: file.name,
-      payload: {
-        fileName: file.name,
-        ontologyIri,
-        ontologyReport,
-        perResource,
-        results
-      },
-      uiState: getUiStateSnapshot()
-    });
-
-    await refreshSavedRunsUi();
-    populateStandardFilter(manifest);
-    renderOntologyReport(ontologyReport);
-    applyResourceFilters();
-
-    setStatus(
-      `Checks completed. ${results.length} result rows across ${perResource.length} resources.`
-    );
-    refreshDownloadOptions();
-  } catch (error) {
-    console.error('Error running checks:', error);
-    setStatus(error instanceof Error ? `Error: ${error.message}` : 'Error running checks.');
-  }
-}
-
-/**
- * Runs checks for all selected files.
- *
- * @returns {Promise<void>}
- */
-export async function runBatchChecks() {
-  if (!filesInput) {
-    window.alert('Batch input #ontologyFiles not found in the DOM.');
     return;
   }
 
@@ -1476,51 +1413,56 @@ export async function runBatchChecks() {
     return;
   }
 
-  setStatus('Running batch checks…');
+  setStatus(files.length === 1 ? 'Running inspection…' : 'Running inspection…');
+  resetInspectionView();
 
-  if (curationTableContainer) {
-    curationTableContainer.innerHTML = '';
+  try {
+    const manifest = await ensureManifestLoaded();
+
+    if (files.length === 1) {
+      const reportObject = await inspectFile(files[0], manifest);
+
+      applyInspectionItemToUi(reportObject, manifest);
+
+      await saveRun({
+        kind: 'single',
+        label: reportObject.fileName,
+        payload: reportObject,
+        uiState: getUiStateSnapshot()
+      });
+
+      await refreshSavedRunsUi();
+      setStatus(
+        `Inspection completed. ${reportObject.results.length} result rows across ${reportObject.perResource.length} resources.`
+      );
+      refreshDownloadOptions();
+      return;
+    }
+
+    const reports = await inspectFiles(files, manifest);
+
+    lastManifest = manifest;
+    lastBatchReports = reports;
+    selectedBatchKey = null;
+
+    clearInspectionDataState();
+    renderDashboard(lastBatchReports, selectedBatchKey);
+
+    await saveRun({
+      kind: 'batch',
+      label: `${reports.length} file(s)`,
+      payload: reports,
+      uiState: getUiStateSnapshot()
+    });
+
+    await refreshSavedRunsUi();
+    setStatus(`Completed inspection of ${reports.length} ontology files. Click a row to drill down.`);
+    refreshDownloadOptions();
+  } catch (error) {
+    console.error('Error running inspection:', error);
+    setStatus(error instanceof Error ? `Error: ${error.message}` : 'Error running inspection.');
+    refreshDownloadOptions();
   }
-  if (ontologyReportContainer) {
-    ontologyReportContainer.innerHTML = '';
-  }
-  if (standardDetailContainer) {
-    standardDetailContainer.innerHTML = '';
-  }
-
-  clearRunSelectionState();
-
-  lastResults = null;
-  lastFailuresIndex = null;
-  lastPerResourceFull = null;
-  lastPerResource = null;
-  lastOntologyReport = null;
-
-  await ensureManifestLoaded();
-
-  /** @type {OcqEvaluatedReport[]} */
-  const batchReports = [];
-
-  for (const file of files) {
-    const report = await evaluateFile(file);
-    batchReports.push(report);
-  }
-
-  lastBatchReports = batchReports;
-  selectedBatchKey = null;
-
-  renderDashboard(lastBatchReports, selectedBatchKey);
-
-  await saveRun({
-    kind: 'batch',
-    label: `${batchReports.length} file(s)`,
-    payload: lastBatchReports,
-    uiState: getUiStateSnapshot()
-  });
-
-  await refreshSavedRunsUi();
-  setStatus(`Completed ${batchReports.length} ontology checks. Click a row to drill down.`);
-  refreshDownloadOptions();
 }
 
 /**
@@ -1590,14 +1532,14 @@ export async function initializeApp() {
   }
 
   if (runChecksButton) {
-    runChecksButton.addEventListener('click', () => {
-      void runSingleChecks();
+  runChecksButton.addEventListener('click', () => {
+      void runInspectionFromSelectedFiles();
     });
   }
 
   if (runBatchChecksButton) {
     runBatchChecksButton.addEventListener('click', () => {
-      void runBatchChecks();
+      void runInspectionFromSelectedFiles();
     });
   }
 

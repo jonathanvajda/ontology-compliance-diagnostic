@@ -1,3 +1,32 @@
+// app/render-ontology.js
+// @ts-check
+
+import { getReportStandards } from './criteria.js';
+
+/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
+
+/** @type {HTMLElement | null} */
+const ontologyReportContainer = document.getElementById('ontologyReportContainer');
+
+/**
+ * Escapes text for safe HTML insertion.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+function escapeHtml(value) {
+  if (value == null) {
+    return '';
+  }
+
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /**
  * Renders the ontology report card.
  *
@@ -55,28 +84,4 @@ export function renderOntologyReport(report) {
 
   html += '</tbody></table>';
   ontologyReportContainer.innerHTML = html;
-
-  if (!ontologyReportEventsWired) {
-    ontologyReportContainer.addEventListener('click', onOntologyReportRowClick);
-
-    ontologyReportContainer.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') {
-        return;
-      }
-
-      if (!(event.target instanceof Element)) {
-        return;
-      }
-
-      const row = event.target.closest('tr[data-standard-id]');
-      if (!(row instanceof HTMLTableRowElement)) {
-        return;
-      }
-
-      event.preventDefault();
-      row.click();
-    });
-
-    ontologyReportEventsWired = true;
-  }
 }

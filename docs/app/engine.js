@@ -598,8 +598,10 @@ export async function evaluateAllQueries(
 
   for (const queryDefinition of manifest.queries) {
     try {
+      console.time(queryDefinition.id);
       const queryText = await loadQueryText(queryDefinition, queryBasePath);
       const rows = await evaluateSingleQuery(store, queryDefinition, queryText);
+      console.timeEnd(queryDefinition.id);
       allResults.push(...rows);
     } catch (error) {
       console.error(`Error evaluating query ${queryDefinition.id}:`, error);

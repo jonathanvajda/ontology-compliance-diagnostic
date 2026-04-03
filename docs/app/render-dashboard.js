@@ -1,10 +1,62 @@
+// app/render-dashboard.js
+// @ts-check
+
+/** @typedef {import('./types.js').OcqEvaluatedReport} OcqEvaluatedReport */
+/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
+/** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
+
+/** @type {HTMLElement | null} */
+const dashboardContainer = document.getElementById('dashboardContainer');
+
+/**
+ * Escapes text for safe HTML insertion.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+function escapeHtml(value) {
+  if (value == null) {
+    return '';
+  }
+
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Returns the standards array from an ontology report.
+ *
+ * @param {OcqOntologyReport | null | undefined} report
+ * @returns {OcqOntologyReportStandardRow[]}
+ */
+function getReportStandards(report) {
+  return Array.isArray(report?.standards) ? report.standards : [];
+}
+
+/**
+ * Returns the stable key for a batch row.
+ *
+ * @param {OcqEvaluatedReport} item
+ * @returns {string}
+ */
+export function getBatchKey(item) {
+  const fileName = item?.fileName ?? '';
+  const ontologyIri = item?.ontologyIri ?? item?.ontologyReport?.ontologyIri ?? '';
+  return `${fileName}::${ontologyIri}`;
+}
+
 /**
  * Renders the batch dashboard.
  *
  * @param {OcqEvaluatedReport[] | null | undefined} batchReports
+ * @param {string | null} [selectedBatchKey=null]
  * @returns {void}
  */
-export function renderDashboard(batchReports) {
+export function renderDashboard(batchReports, selectedBatchKey = null) {
   if (!dashboardContainer) {
     return;
   }
@@ -55,16 +107,4 @@ export function renderDashboard(batchReports) {
 
   html += '</tbody></table>';
   dashboardContainer.innerHTML = html;
-}
-
-/**
- * Returns the stable key for a batch row.
- *
- * @param {OcqEvaluatedReport} item
- * @returns {string}
- */
-export function getBatchKey(item) {
-  const fileName = item?.fileName ?? '';
-  const ontologyIri = item?.ontologyIri ?? item?.ontologyReport?.ontologyIri ?? '';
-  return `${fileName}::${ontologyIri}`;
 }

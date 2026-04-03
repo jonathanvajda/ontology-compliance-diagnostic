@@ -1,28 +1,125 @@
+// app/render-standards.js
+// @ts-check
+
+import { getResultCriterionId } from './grader.js';
+
+/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
+/** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
+/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
+
+/**
+ * @typedef {Object} StandardDetailEntry
+ * @property {string} resource
+ * @property {string[]} queryIds
+ */
+
+/** @type {HTMLElement | null} */
+const standardDetailContainer = document.getElementById('standardDetailContainer');
+
+/**
+ * Escapes text for safe HTML insertion.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+function escapeHtml(value) {
+  if (value == null) {
+    return '';
+  }
+
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Returns the standards array from an ontology report.
+ *
+ * @param {OcqOntologyReport | null | undefined} report
+ * @returns {OcqOntologyReportStandardRow[]}
+ */
+function getReportStandards(report) {
+  return Array.isArray(report?.standards) ? report.standards : [];
+}
+
+/**
+ * Returns standard-detail rows for a selected criterion id.
+ *
+ * @param {string | null | undefined} criterionId
+ * @param {OcqQueryResultRow[] | null | undefined} results
+ * @returns {StandardDetailEntry[]}
+ */
+export function getStandardDetailEntries(criterionId, results) {
+  const selectedCriterionId = criterionId || '';
+
+  if (!selectedCriterionId || !Array.isArray(results)) {
+    return [];
+  }
+
+  const failingRows = results.filter(
+    (row) => row.criterionId === selectedCriterionId && row.status === 'fail'
+  );
+
+  /** @type {Map<string, Set<string>>} */
+  const failuresByResource = new Map();
+
+  for (const row of failingRows) {
+    const resource = row.resource || '';
+    const queryId = row.queryId || '';
+
+    if (!resource) {
+      continue;
+    }
+
+    if (!failuresByResource.has(resource)) {
+      failuresByResource.set(resource, new Set());
+    }
+
+    const queryIds = failuresByResource.get(resource);
+    if (queryIds && queryId) {
+      queryIds.add(queryId);
+    }
+  }
+
+  return Array.from(failuresByResource.entries())
+    .map(([resource, queryIdSet]) => ({
+      resource,
+      queryIds: Array.from(queryIdSet).sort()
+    }))
+    .sort((a, b) => String(a.resource).localeCompare(String(b.resource)));
+}
+
 /**
  * Renders the standard-detail panel.
  *
  * @param {string} criterionId
+ * @param {OcqOntologyReport | null | undefined} ontologyReport
+ * @param {OcqQueryResultRow[] | null | undefined} results
  * @returns {void}
  */
-export function renderStandardDetail(criterionId) {
+export function renderStandardDetail(criterionId, ontologyReport, results) {
   if (!standardDetailContainer) {
     return;
   }
 
-  if (!lastOntologyReport || !lastResults) {
+  if (!ontologyReport || !Array.isArray(results)) {
     standardDetailContainer.innerHTML = '<p>No data available for standard details.</p>';
     return;
   }
 
-  const standards = getReportStandards(lastOntologyReport);
+  const standards = getReportStandards(ontologyReport);
   const selectedStandard = standards.find((standard) => standard.id === criterionId);
 
   if (!selectedStandard) {
-    standardDetailContainer.innerHTML = `<p>No details found for ${escapeHtml(criterionId)}.</p>`;
+    standardDetailContainer.innerHTML =
+      `<p>No details found for ${escapeHtml(criterionId)}.</p>`;
     return;
   }
 
-  const failingRows = lastResults.filter(
+  const failingRows = results.filter(
     (row) => getResultCriterionId(row) === criterionId && row.status === 'fail'
   );
 
@@ -42,7 +139,7 @@ export function renderStandardDetail(criterionId) {
     )
   ).sort();
 
-  const entries = getStandardDetailEntries(criterionId);
+  const entries = getStandardDetailEntries(criterionId, results);
 
   let html = '';
   html += '<div class="ocq-detail">';
@@ -84,8 +181,14 @@ export function renderStandardDetail(criterionId) {
 
     for (const entry of entries) {
       html += '      <tr>';
-      html += '        <td class="ocq-table-td ocq-mono">' + escapeHtml(entry.resource) + '</td>';
-      html += '        <td class="ocq-table-td ocq-mono">' + escapeHtml(entry.queryIds.join(', ')) + '</td>';
+      html +=
+        '        <td class="ocq-table-td ocq-mono">' +
+        escapeHtml(entry.resource) +
+        '</td>';
+      html +=
+        '        <td class="ocq-table-td ocq-mono">' +
+        escapeHtml(entry.queryIds.join(', ')) +
+        '</td>';
       html += '      </tr>';
     }
 
@@ -96,50 +199,4 @@ export function renderStandardDetail(criterionId) {
   html += '</div>';
 
   standardDetailContainer.innerHTML = html;
-}
-
-/**
- * Returns standard-detail rows for a selected criterion id.
- *
- * @param {string | null | undefined} criterionId
- * @returns {StandardDetailEntry[]}
- */
-export function getStandardDetailEntries(criterionId) {
-  const selectedCriterionId = criterionId || lastSelectedCriterionId || '';
-
-  if (!selectedCriterionId || !Array.isArray(lastResults)) {
-    return [];
-  }
-
-  const failingRows = lastResults.filter(
-    (row) => row.criterionId === selectedCriterionId && row.status === 'fail'
-  );
-
-  /** @type {Map<string, Set<string>>} */
-  const failuresByResource = new Map();
-
-  for (const row of failingRows) {
-    const resource = row.resource || '';
-    const queryId = row.queryId || '';
-
-    if (!resource) {
-      continue;
-    }
-
-    if (!failuresByResource.has(resource)) {
-      failuresByResource.set(resource, new Set());
-    }
-
-    const queryIds = failuresByResource.get(resource);
-    if (queryIds && queryId) {
-      queryIds.add(queryId);
-    }
-  }
-
-  return Array.from(failuresByResource.entries())
-    .map(([resource, queryIdSet]) => ({
-      resource,
-      queryIds: Array.from(queryIdSet).sort()
-    }))
-    .sort((a, b) => String(a.resource).localeCompare(String(b.resource)));
 }
