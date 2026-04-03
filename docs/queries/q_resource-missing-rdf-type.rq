@@ -1,0 +1,15 @@
+# q_resource-missing-rdf-type.rq
+# Query to find resources missing any rdf:type (owl element type or otherwise)
+
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+
+SELECT DISTINCT ?resource WHERE {
+  # First, bind ?resource to every subject in the graph
+  ?resource ?p ?o .
+  
+  # Ensure it is an IRI (this automatically excludes blank nodes and literals)
+  FILTER(isIRI(?resource))
+  
+  # Ensure it doesn't have a type statement
+  FILTER(NOT EXISTS { ?resource rdf:type ?type })
+}

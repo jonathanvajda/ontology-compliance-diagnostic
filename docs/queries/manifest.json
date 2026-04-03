@@ -13,6 +13,17 @@
       "resultShape": "RESOURCE_ONLY"
     },
     {
+      "id": "q_resource-missing-rdf-type",
+      "file": "q_resource-missing-rdf-type.rq",
+      "title": "Resources missing rdf:type",
+      "kind": "SELECT",
+      "polarity": "matchMeansFail",
+      "checksCriterion": "criterion_everyResourceHasType",
+      "scope": "TBox",
+      "severity": "error",
+      "resultShape": "RESOURCE_ONLY"
+    },
+    {
       "id": "q_avoidPunning",
       "file": "q_avoidPunning_ask.rq",
       "title": "Ontology has no mixed metatype punning among class / individual / property categories",
@@ -506,6 +517,7 @@
   ],
   "standards": [
     { "id": "criterion_uniqueLabels", "type": "requirement", "weight": 1 },
+    { "id": "criterion_everyResourceHasType", "type": "requirement", "weight": 1 },
     { "id": "criterion_noPunning", "type": "requirement", "weight": 1 },
     { "id": "criterion_annotationPropertyHasLabel", "type": "requirement", "weight": 1 },
     { "id": "criterion_annotationPropertyHasDefinition", "type": "requirement", "weight": 1 },
