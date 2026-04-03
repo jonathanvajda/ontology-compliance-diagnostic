@@ -97,3 +97,49 @@ export function renderStandardDetail(criterionId) {
 
   standardDetailContainer.innerHTML = html;
 }
+
+/**
+ * Returns standard-detail rows for a selected criterion id.
+ *
+ * @param {string | null | undefined} criterionId
+ * @returns {StandardDetailEntry[]}
+ */
+export function getStandardDetailEntries(criterionId) {
+  const selectedCriterionId = criterionId || lastSelectedCriterionId || '';
+
+  if (!selectedCriterionId || !Array.isArray(lastResults)) {
+    return [];
+  }
+
+  const failingRows = lastResults.filter(
+    (row) => row.criterionId === selectedCriterionId && row.status === 'fail'
+  );
+
+  /** @type {Map<string, Set<string>>} */
+  const failuresByResource = new Map();
+
+  for (const row of failingRows) {
+    const resource = row.resource || '';
+    const queryId = row.queryId || '';
+
+    if (!resource) {
+      continue;
+    }
+
+    if (!failuresByResource.has(resource)) {
+      failuresByResource.set(resource, new Set());
+    }
+
+    const queryIds = failuresByResource.get(resource);
+    if (queryIds && queryId) {
+      queryIds.add(queryId);
+    }
+  }
+
+  return Array.from(failuresByResource.entries())
+    .map(([resource, queryIdSet]) => ({
+      resource,
+      queryIds: Array.from(queryIdSet).sort()
+    }))
+    .sort((a, b) => String(a.resource).localeCompare(String(b.resource)));
+}

@@ -26,10 +26,7 @@ import {
  renderOntologyReport
 } from './render-ontology.js';
 
-import {
-  renderDashboard,
-  getBatchKey
-} from './render-dashboard.js';
+import { renderDashboard, getBatchKey } from './render-dashboard.js';
 
 import {
   renderCurationTable,
@@ -37,7 +34,8 @@ import {
 } from './render-resources.js';
 
 import {
-  renderStandardDetail
+  renderStandardDetail,
+  getStandardDetailEntries
 } from './render-standards.js';
 
 import {
@@ -617,52 +615,6 @@ export function clearResourceFilters() {
 }
 
 /**
- * Returns standard-detail rows for a selected criterion id.
- *
- * @param {string | null | undefined} criterionId
- * @returns {StandardDetailEntry[]}
- */
-export function getStandardDetailEntries(criterionId) {
-  const selectedCriterionId = criterionId || lastSelectedCriterionId || '';
-
-  if (!selectedCriterionId || !Array.isArray(lastResults)) {
-    return [];
-  }
-
-  const failingRows = lastResults.filter(
-    (row) => row.criterionId === selectedCriterionId && row.status === 'fail'
-  );
-
-  /** @type {Map<string, Set<string>>} */
-  const failuresByResource = new Map();
-
-  for (const row of failingRows) {
-    const resource = row.resource || '';
-    const queryId = row.queryId || '';
-
-    if (!resource) {
-      continue;
-    }
-
-    if (!failuresByResource.has(resource)) {
-      failuresByResource.set(resource, new Set());
-    }
-
-    const queryIds = failuresByResource.get(resource);
-    if (queryIds && queryId) {
-      queryIds.add(queryId);
-    }
-  }
-
-  return Array.from(failuresByResource.entries())
-    .map(([resource, queryIdSet]) => ({
-      resource,
-      queryIds: Array.from(queryIdSet).sort()
-    }))
-    .sort((a, b) => String(a.resource).localeCompare(String(b.resource)));
-}
-
-/**
  * Clears the standard-detail panel and selected row highlight.
  *
  * @returns {void}
@@ -815,7 +767,7 @@ export function onBatchRowSelected(batchKey) {
 
   if (selectedBatchKey === batchKey) {
     selectedBatchKey = null;
-    renderDashboard(lastBatchReports);
+    renderDashboard(lastBatchReports, selectedBatchKey);
     refreshDownloadOptions();
     return;
   }
@@ -831,7 +783,7 @@ export function onBatchRowSelected(batchKey) {
   }
 
   loadBatchSelection(selectedReport);
-  renderDashboard(lastBatchReports);
+  renderDashboard(lastBatchReports, selectedBatchKey);
 
   setStatus(`Selected: ${selectedReport.fileName}`);
   refreshDownloadOptions();
@@ -1340,7 +1292,7 @@ export async function hydrateRun(run) {
     lastPerResourceFull = null;
     lastPerResource = null;
 
-    renderDashboard(lastBatchReports);
+    renderDashboard(lastBatchReports, selectedBatchKey);
 
     if (selectedBatchKey) {
       const selectedReport = lastBatchReports.find(
@@ -1349,7 +1301,7 @@ export async function hydrateRun(run) {
 
       if (selectedReport) {
         loadBatchSelection(selectedReport);
-        renderDashboard(lastBatchReports);
+        renderDashboard(lastBatchReports, selectedBatchKey);
       }
     }
 
@@ -1557,7 +1509,7 @@ export async function runBatchChecks() {
   lastBatchReports = batchReports;
   selectedBatchKey = null;
 
-  renderDashboard(lastBatchReports);
+  renderDashboard(lastBatchReports, selectedBatchKey);
 
   await saveRun({
     kind: 'batch',
