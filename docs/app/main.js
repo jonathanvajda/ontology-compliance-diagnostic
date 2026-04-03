@@ -22,6 +22,29 @@ import {
   getLastRunId
 } from './storage.js';
 
+import {
+ renderOntologyReport
+} from './render-ontology.js';
+
+import {
+  renderDashboard,
+  getBatchKey
+} from './render-dashboard.js';
+
+import {
+  renderCurationTable,
+  renderResourceFailureDetailHtml
+} from './render-resources.js';
+
+import {
+  renderStandardDetail
+} from './render-standards.js';
+
+import {
+  populateStandardFilter,
+  getReportStandards
+} from './criteria.js';
+
 /** @typedef {import('./types.js').OcqManifest} OcqManifest */
 /** @typedef {import('./types.js').OcqSavedRun} OcqSavedRun */
 /** @typedef {import('./types.js').OcqUiStateSnapshot} OcqUiStateSnapshot */
@@ -361,28 +384,6 @@ export function ontologyReportToYaml(report) {
 }
 
 /**
- * Returns the standards array from an ontology report.
- *
- * @param {OcqOntologyReport | null | undefined} report
- * @returns {OcqOntologyReportStandardRow[]}
- */
-export function getReportStandards(report) {
-  return Array.isArray(report?.standards) ? report.standards : [];
-}
-
-/**
- * Returns the stable key for a batch row.
- *
- * @param {OcqEvaluatedReport} item
- * @returns {string}
- */
-export function getBatchKey(item) {
-  const fileName = item?.fileName ?? '';
-  const ontologyIri = item?.ontologyIri ?? item?.ontologyReport?.ontologyIri ?? '';
-  return `${fileName}::${ontologyIri}`;
-}
-
-/**
  * Returns the current UI state snapshot for persistence.
  *
  * @returns {OcqUiStateSnapshot}
@@ -708,106 +709,6 @@ export function wireStandardDetailCloseOnce() {
 }
 
 /**
- * Renders the standard-detail panel.
- *
- * @param {string} criterionId
- * @returns {void}
- */
-export function renderStandardDetail(criterionId) {
-  if (!standardDetailContainer) {
-    return;
-  }
-
-  if (!lastOntologyReport || !lastResults) {
-    standardDetailContainer.innerHTML = '<p>No data available for standard details.</p>';
-    return;
-  }
-
-  const standards = getReportStandards(lastOntologyReport);
-  const selectedStandard = standards.find((standard) => standard.id === criterionId);
-
-  if (!selectedStandard) {
-    standardDetailContainer.innerHTML = `<p>No details found for ${escapeHtml(criterionId)}.</p>`;
-    return;
-  }
-
-  const failingRows = lastResults.filter(
-    (row) => getResultCriterionId(row) === criterionId && row.status === 'fail'
-  );
-
-  const queryIds = Array.from(
-    new Set(
-      failingRows
-        .map((row) => row.queryId || '')
-        .filter((queryId) => queryId !== '')
-    )
-  ).sort();
-
-  const resources = Array.from(
-    new Set(
-      failingRows
-        .map((row) => row.resource || '')
-        .filter((resource) => resource !== '')
-    )
-  ).sort();
-
-  const entries = getStandardDetailEntries(criterionId);
-
-  let html = '';
-  html += '<div class="ocq-detail">';
-  html += '  <div class="ocq-detail-header">';
-  html += `    <h3 class="ocq-detail-title">Standard: ${escapeHtml(selectedStandard.id)}</h3>`;
-  html += '    <button class="ocq-btn" type="button" data-standard-close>Close</button>';
-  html += '  </div>';
-
-  html +=
-    '  <div class="ocq-detail-meta">Status: <strong>' +
-    escapeHtml(selectedStandard.status) +
-    '</strong> (' +
-    escapeHtml(selectedStandard.type) +
-    ')</div>';
-
-  html +=
-    '  <div class="ocq-detail-meta">Failing resources: <strong>' +
-    escapeHtml(resources.length) +
-    '</strong></div>';
-
-  if (queryIds.length) {
-    html +=
-      '  <div class="ocq-detail-meta">Queries involved: <span class="ocq-mono">' +
-      escapeHtml(queryIds.join(', ')) +
-      '</span></div>';
-  }
-
-  if (!entries.length) {
-    html += '  <p>No failing resources found in details.</p>';
-  } else {
-    html += '  <table class="ocq-table">';
-    html += '    <thead class="ocq-table-head">';
-    html += '      <tr>';
-    html += '        <th class="ocq-table-th">Resource IRI</th>';
-    html += '        <th class="ocq-table-th">Failing query IDs</th>';
-    html += '      </tr>';
-    html += '    </thead>';
-    html += '    <tbody>';
-
-    for (const entry of entries) {
-      html += '      <tr>';
-      html += '        <td class="ocq-table-td ocq-mono">' + escapeHtml(entry.resource) + '</td>';
-      html += '        <td class="ocq-table-td ocq-mono">' + escapeHtml(entry.queryIds.join(', ')) + '</td>';
-      html += '      </tr>';
-    }
-
-    html += '    </tbody>';
-    html += '  </table>';
-  }
-
-  html += '</div>';
-
-  standardDetailContainer.innerHTML = html;
-}
-
-/**
  * Toggles the detail row for one resource.
  *
  * @param {string} resourceIri
@@ -840,40 +741,6 @@ export function toggleResourceDetail(resourceIri) {
   }
 
   panel.innerHTML = renderResourceFailureDetailHtml(resourceIri);
-}
-
-/**
- * Builds HTML for the resource-failure detail panel.
- *
- * @param {string} resourceIri
- * @returns {string}
- */
-export function renderResourceFailureDetailHtml(resourceIri) {
-  if (!lastFailuresIndex) {
-    return '<div class="ocq-muted">No failure index available.</div>';
-  }
-
-  const byCriterion = lastFailuresIndex.get(resourceIri);
-  if (!byCriterion || byCriterion.size === 0) {
-    return '<div class="ocq-muted">No failing queries for this resource.</div>';
-  }
-
-  let html = '';
-  html += '<table class="ocq-table" style="margin-top:10px;">';
-  html += '<thead class="ocq-table-head"><tr>';
-  html += '<th class="ocq-table-th">Standardization Code</th>';
-  html += '<th class="ocq-table-th">Failing query IDs</th>';
-  html += '</tr></thead><tbody>';
-
-  for (const [criterionId, queryIdSet] of byCriterion.entries()) {
-    html += '<tr class="ocq-table-tr">';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(criterionId) + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(Array.from(queryIdSet).join(', ')) + '</td>';
-    html += '</tr>';
-  }
-
-  html += '</tbody></table>';
-  return html;
 }
 
 /**
@@ -912,218 +779,6 @@ export function onOntologyReportRowClick(event) {
 
   renderStandardDetail(criterionId);
   refreshDownloadOptions();
-}
-
-/**
- * Renders the ontology report card.
- *
- * @param {OcqOntologyReport | null | undefined} report
- * @returns {void}
- */
-export function renderOntologyReport(report) {
-  if (!ontologyReportContainer) {
-    return;
-  }
-
-  if (!report) {
-    ontologyReportContainer.innerHTML = '';
-    return;
-  }
-
-  const standards = getReportStandards(report);
-
-  let html = '<h2 class="ocq-title">Ontology report card</h2>';
-  html += '<p><strong>Ontology IRI:</strong> ' + escapeHtml(report.ontologyIri) + '</p>';
-  html += '<p><strong>Ontology curation status:</strong> ' + escapeHtml(report.statusLabel) + '</p>';
-
-  if (!standards.length) {
-    html += '<p>No standards found.</p>';
-    ontologyReportContainer.innerHTML = html;
-    return;
-  }
-
-  html += '<table class="ocq-table">';
-  html += '<thead class="ocq-table-head"><tr>';
-  html += '<th class="ocq-table-th">Standardization Code</th>';
-  html += '<th class="ocq-table-th">Type</th>';
-  html += '<th class="ocq-table-th">Status</th>';
-  html += '<th class="ocq-table-th">Failed Resources</th>';
-  html += '</tr></thead><tbody>';
-
-  for (const standard of standards) {
-    const typeLabel = standard.type === 'recommendation' ? 'recommendation' : 'requirement';
-    const failedCount = standard.failedResourcesCount || 0;
-    const statusBadgeClass =
-      standard.status === 'pass'
-        ? 'ocq-badge ocq-badge-success'
-        : 'ocq-badge ocq-badge-danger';
-
-    html += '<tr class="ocq-table-tr ocq-row-clickable" tabindex="0" data-standard-id="' +
-      escapeHtml(standard.id) +
-      '">';
-
-    html += '<td class="ocq-table-td">' + escapeHtml(standard.id) + '</td>';
-    html += '<td class="ocq-table-td">' + escapeHtml(typeLabel) + '</td>';
-    html += '<td class="ocq-table-td"><span class="' + statusBadgeClass + '">' + escapeHtml(standard.status) + '</span></td>';
-    html += '<td class="ocq-table-td">' + escapeHtml(String(failedCount)) + '</td>';
-    html += '</tr>';
-  }
-
-  html += '</tbody></table>';
-  ontologyReportContainer.innerHTML = html;
-
-  if (!ontologyReportEventsWired) {
-    ontologyReportContainer.addEventListener('click', onOntologyReportRowClick);
-
-    ontologyReportContainer.addEventListener('keydown', (event) => {
-      if (event.key !== 'Enter' && event.key !== ' ') {
-        return;
-      }
-
-      if (!(event.target instanceof Element)) {
-        return;
-      }
-
-      const row = event.target.closest('tr[data-standard-id]');
-      if (!(row instanceof HTMLTableRowElement)) {
-        return;
-      }
-
-      event.preventDefault();
-      row.click();
-    });
-
-    ontologyReportEventsWired = true;
-  }
-}
-
-/**
- * Renders the batch dashboard.
- *
- * @param {OcqEvaluatedReport[] | null | undefined} batchReports
- * @returns {void}
- */
-export function renderDashboard(batchReports) {
-  if (!dashboardContainer) {
-    return;
-  }
-
-  if (!Array.isArray(batchReports) || batchReports.length === 0) {
-    dashboardContainer.innerHTML = '<p>No ontologies evaluated.</p>';
-    return;
-  }
-
-  let html = '<h2 class="ocq-title">Ontology dashboard</h2>';
-  html += '<table class="ocq-table">';
-  html += '<thead class="ocq-table-head"><tr>';
-  html += '<th class="ocq-table-th">File</th>';
-  html += '<th class="ocq-table-th">Ontology IRI</th>';
-  html += '<th class="ocq-table-th">Status</th>';
-  html += '<th class="ocq-table-th"># Failed Requirements</th>';
-  html += '<th class="ocq-table-th"># Failed Recommendations</th>';
-  html += '</tr></thead><tbody>';
-
-  for (const item of batchReports) {
-    const report = item.ontologyReport;
-    const standards = getReportStandards(report);
-
-    const failedRequirements = standards.filter(
-      (standard) => standard.type === 'requirement' && standard.status === 'fail'
-    ).length;
-
-    const failedRecommendations = standards.filter(
-      (standard) => standard.type === 'recommendation' && standard.status === 'fail'
-    ).length;
-
-    const batchKey = getBatchKey(item);
-    const isSelected = selectedBatchKey === batchKey;
-
-    html += '<tr class="ocq-table-tr ocq-row-clickable ocq-batch-row' +
-      (isSelected ? ' ocq-batch-row--selected' : '') +
-      '" tabindex="0" role="button" data-batch-key="' +
-      escapeHtml(batchKey) +
-      '">';
-
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(item.fileName) + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(report?.ontologyIri || '') + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(report?.statusLabel || '') + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(String(failedRequirements)) + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(String(failedRecommendations)) + '</td>';
-    html += '</tr>';
-  }
-
-  html += '</tbody></table>';
-  dashboardContainer.innerHTML = html;
-}
-
-/**
- * Renders the per-resource curation table.
- *
- * @param {OcqPerResourceCurationRow[] | null | undefined} perResourceRows
- * @returns {void}
- */
-export function renderCurationTable(perResourceRows) {
-  if (!curationTableContainer) {
-    return;
-  }
-
-  if (!Array.isArray(perResourceRows) || perResourceRows.length === 0) {
-    curationTableContainer.innerHTML = '<p>No curation results to display.</p>';
-    return;
-  }
-
-  /** @type {Record<string, string>} */
-  const statusBadgeClasses = {
-    'uncurated': 'ocq-badge ocq-badge-danger',
-    'metadata incomplete': 'ocq-badge ocq-badge-warn',
-    'metadata complete': 'ocq-badge ocq-badge-success',
-    'pending final vetting': 'ocq-badge ocq-badge-info'
-  };
-
-  let html = '<h2 class="ocq-title">Per-resource curation</h2>';
-  html += '<table class="ocq-table">';
-  html += '<thead class="ocq-table-head"><tr>';
-  html += '<th class="ocq-table-th">Resource</th>';
-  html += '<th class="ocq-table-th">Suggested Curation Status</th>';
-  html += '<th class="ocq-table-th">Failed Requirements</th>';
-  html += '<th class="ocq-table-th">Failed Recommendations</th>';
-  html += '<th class="ocq-table-th">Details</th>';
-  html += '</tr></thead><tbody>';
-
-  for (const row of perResourceRows) {
-    const failedRequirements = Array.isArray(row.failedRequirements)
-      ? row.failedRequirements.join(', ')
-      : '—';
-
-    const failedRecommendations = Array.isArray(row.failedRecommendations)
-      ? row.failedRecommendations.join(', ')
-      : '—';
-
-    const statusBadgeClass = statusBadgeClasses[row.statusLabel] || 'ocq-badge';
-
-    html += '<tr>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(row.resource) + '</td>';
-    html += '<td class="ocq-table-td ocq-mono"><span class="' + statusBadgeClass + '">' + escapeHtml(row.statusLabel) + '</span></td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(failedRequirements || '—') + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(failedRecommendations || '—') + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">';
-    html += '<button class="ocq-btn ocq-btn-tertiary ocq-btn-small" type="button" data-toggle-resource-detail="' +
-      escapeHtml(row.resource) +
-      '">View</button>';
-    html += '</td>';
-    html += '</tr>';
-
-    html += '<tr class="ocq-table-tr ocq-resource-detail-row" data-resource-detail-row="' +
-      escapeHtml(row.resource) +
-      '" style="display:none;">';
-    html += '<td class="ocq-table-td" colspan="999">';
-    html += '<div class="ocq-resource-detail"></div>';
-    html += '</td>';
-    html += '</tr>';
-  }
-
-  html += '</tbody></table>';
-  curationTableContainer.innerHTML = html;
 }
 
 /**
@@ -1627,41 +1282,6 @@ export async function ensureManifestLoaded() {
   lastManifest = await loadManifest(DEFAULT_MANIFEST_URL);
   populateStandardFilter(lastManifest);
   return lastManifest;
-}
-
-/**
- * Populates the standard filter select.
- *
- * @param {OcqManifest | null | undefined} manifest
- * @returns {void}
- */
-export function populateStandardFilter(manifest) {
-  if (!standardFilterSelect) {
-    return;
-  }
-
-  const currentValue = standardFilterSelect.value;
-  standardFilterSelect.innerHTML = '<option value="">Any</option>';
-
-  const standards = Array.isArray(manifest?.standards) ? manifest.standards : [];
-
-  for (const standard of standards) {
-    if (!standard?.id) {
-      continue;
-    }
-
-    const option = document.createElement('option');
-    option.value = standard.id;
-    option.textContent = standard.id + (standard.type ? ` (${standard.type})` : '');
-    standardFilterSelect.appendChild(option);
-  }
-
-  if (
-    currentValue &&
-    Array.from(standardFilterSelect.options).some((option) => option.value === currentValue)
-  ) {
-    standardFilterSelect.value = currentValue;
-  }
 }
 
 /**
