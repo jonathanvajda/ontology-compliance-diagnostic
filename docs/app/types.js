@@ -124,6 +124,8 @@
  * @property {number} [weight]
  * @property {string} [label]
  * @property {string} [statement]
+ * @property {string} [guidance]
+ * @property {'usually low' | 'usually high' | 'case-by-case'} [remediationEffort]
  */
 
 /**
@@ -131,6 +133,7 @@
  *
  * @typedef {Object} OcqManifest
  * @property {number} [version]
+ * @property {string} [standardsUrl]
  * @property {OcqManifestQuery[]} queries
  * @property {OcqManifestStandard[]} [standards]
  */
@@ -229,6 +232,7 @@
  * @property {string} [statusFilter]
  * @property {string} [standardFilter]
  * @property {string | null} [selectedCriterionId]
+ * @property {OcqManifest | null} [manifest]
  * @property {OcqOntologyMetadata | null} [ontologyMetadata]
  * @property {OcqOntologyReport | null} [ontologyReport]
  * @property {OcqPerResourceCurationRow[]} [perResourceRows]

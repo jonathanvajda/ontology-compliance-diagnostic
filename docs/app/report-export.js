@@ -2,6 +2,7 @@
 // @ts-check
 
 import { getStandardDetailEntries } from './render-standards.js';
+import { getCriterionDefinition } from './criteria.js';
 import {
   escapeHtml,
   getReportStandards,
@@ -234,6 +235,7 @@ export function buildBatchSummaryCsv(batchReports) {
 export function buildHtmlReport(state) {
   const createdAt = new Date().toISOString();
   const metadata = state.ontologyMetadata || null;
+  const manifest = state.manifest || null;
   const report = state.ontologyReport || null;
   const perResourceRows = Array.isArray(state.perResourceRows) ? state.perResourceRows : [];
   const results = Array.isArray(state.results) ? state.results : [];
@@ -296,12 +298,24 @@ export function buildHtmlReport(state) {
     html += `<div class="meta">Overall status: <span class="pill">${escapeHtml(report.statusLabel || '')}</span></div>`;
 
     html += '<h3>Ontology-level checks</h3>';
-    html += '<table><thead><tr><th>id</th><th>type</th><th>status</th><th>failedResourcesCount</th></tr></thead><tbody>';
+    html += '<table><thead><tr><th>criterion</th><th>type</th><th>status</th><th>failedResourcesCount</th></tr></thead><tbody>';
 
     for (const standard of report.ontologyStandards || []) {
+      const criterion = getCriterionDefinition(manifest, standard.id);
       html += '<tr>';
-      html += `<td class="mono">${escapeHtml(standard.id)}</td>`;
-      html += `<td>${escapeHtml(standard.type)}</td>`;
+      html += '<td>';
+      html += `<div>${escapeHtml(criterion?.label || standard.id)}</div>`;
+      html += `<div class="mono">${escapeHtml(standard.id)}</div>`;
+      if (criterion?.guidance) {
+        html += `<div>${escapeHtml(criterion.guidance)}</div>`;
+      }
+      html += '</td>';
+      html += '<td>';
+      html += `${escapeHtml(standard.type)}`;
+      if (criterion?.remediationEffort) {
+        html += `<div>${escapeHtml(criterion.remediationEffort)}</div>`;
+      }
+      html += '</td>';
       html += `<td>${escapeHtml(standard.status)}</td>`;
       html += `<td class="mono">${escapeHtml(standard.failedResourcesCount ?? '')}</td>`;
       html += '</tr>';
@@ -310,12 +324,24 @@ export function buildHtmlReport(state) {
     html += '</tbody></table>';
 
     html += '<h3>Ontology contents checks</h3>';
-    html += '<table><thead><tr><th>id</th><th>type</th><th>status</th><th>failedResourcesCount</th></tr></thead><tbody>';
+    html += '<table><thead><tr><th>criterion</th><th>type</th><th>status</th><th>failedResourcesCount</th></tr></thead><tbody>';
 
     for (const standard of report.contentStandards || []) {
+      const criterion = getCriterionDefinition(manifest, standard.id);
       html += '<tr>';
-      html += `<td class="mono">${escapeHtml(standard.id)}</td>`;
-      html += `<td>${escapeHtml(standard.type)}</td>`;
+      html += '<td>';
+      html += `<div>${escapeHtml(criterion?.label || standard.id)}</div>`;
+      html += `<div class="mono">${escapeHtml(standard.id)}</div>`;
+      if (criterion?.guidance) {
+        html += `<div>${escapeHtml(criterion.guidance)}</div>`;
+      }
+      html += '</td>';
+      html += '<td>';
+      html += `${escapeHtml(standard.type)}`;
+      if (criterion?.remediationEffort) {
+        html += `<div>${escapeHtml(criterion.remediationEffort)}</div>`;
+      }
+      html += '</td>';
       html += `<td>${escapeHtml(standard.status)}</td>`;
       html += `<td class="mono">${escapeHtml(standard.failedResourcesCount ?? '')}</td>`;
       html += '</tr>';
@@ -326,7 +352,16 @@ export function buildHtmlReport(state) {
   html += '</div>';
 
   if (selectedCriterionId) {
+    const criterion = getCriterionDefinition(manifest, selectedCriterionId);
     html += '<div class="card"><h2>Standard detail</h2>';
+    if (criterion) {
+      html += `<div class="meta">Label: ${escapeHtml(criterion.label)}</div>`;
+      html += `<div class="meta">Criterion ID: <span class="mono">${escapeHtml(criterion.id)}</span></div>`;
+      html += `<div class="meta">Remediation effort: ${escapeHtml(criterion.remediationEffort)}</div>`;
+      if (criterion.guidance) {
+        html += `<div class="meta">Brief guidance: ${escapeHtml(criterion.guidance)}</div>`;
+      }
+    }
 
     if (!standardDetailEntries.length) {
       html += '<p>No failing resources found for selected standard.</p>';

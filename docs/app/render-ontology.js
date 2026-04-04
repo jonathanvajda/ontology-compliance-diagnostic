@@ -1,8 +1,10 @@
 // app/render-ontology.js
 // @ts-check
 
+import { getCriterionDefinition } from './criteria.js';
 import { escapeHtml, getReportStandards } from './shared.js';
 
+/** @typedef {import('./types.js').OcqManifest} OcqManifest */
 /** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
 /** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
 /** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
@@ -14,10 +16,11 @@ const ontologyReportContainer = document.getElementById('ontologyReportContainer
  * Renders the ontology report card.
  *
  * @param {OcqOntologyReport | null | undefined} report
+ * @param {OcqManifest | null | undefined} [manifest=null]
  * @param {HTMLElement | null | undefined} [container=ontologyReportContainer]
  * @returns {void}
  */
-export function renderOntologyReport(report, container = ontologyReportContainer) {
+export function renderOntologyReport(report, manifest = null, container = ontologyReportContainer) {
   if (!container) {
     return;
   }
@@ -60,7 +63,8 @@ export function renderOntologyReport(report, container = ontologyReportContainer
   html += renderStandardsTable(
     ontologyStandards,
     'No ontology-level standards found.',
-    'ontology'
+    'ontology',
+    manifest
   );
   html += '</div>';
 
@@ -70,7 +74,8 @@ export function renderOntologyReport(report, container = ontologyReportContainer
   html += renderStandardsTable(
     contentStandards,
     standards.length ? 'No content/resource standards found.' : 'No standards found.',
-    'content'
+    'content',
+    manifest
   );
   html += '</div>';
 
@@ -120,16 +125,17 @@ function renderMetadataRow(label, value) {
  * @param {OcqOntologyReportStandardRow[]} standards
  * @param {string} emptyMessage
  * @param {'ontology' | 'content'} scopeCategory
+ * @param {OcqManifest | null | undefined} manifest
  * @returns {string}
  */
-function renderStandardsTable(standards, emptyMessage, scopeCategory) {
+function renderStandardsTable(standards, emptyMessage, scopeCategory, manifest) {
   if (!standards.length) {
     return '<p>' + escapeHtml(emptyMessage) + '</p>';
   }
 
   let html = '<table class="ocq-table">';
   html += '<thead class="ocq-table-head"><tr>';
-  html += '<th class="ocq-table-th">Standardization Code</th>';
+  html += '<th class="ocq-table-th">Criterion</th>';
   html += '<th class="ocq-table-th">Type</th>';
   html += '<th class="ocq-table-th">Status</th>';
   html += '<th class="ocq-table-th">' +
@@ -138,6 +144,7 @@ function renderStandardsTable(standards, emptyMessage, scopeCategory) {
   html += '</tr></thead><tbody>';
 
   for (const standard of standards) {
+    const criterion = getCriterionDefinition(manifest, standard.id);
     const typeLabel = standard.type === 'recommendation' ? 'recommendation' : 'requirement';
     const failedCount = standard.failedResourcesCount || 0;
     const statusBadgeClass =
@@ -150,8 +157,19 @@ function renderStandardsTable(standards, emptyMessage, scopeCategory) {
       '" data-standard-scope-category="' +
       escapeHtml(standard.scopeCategory) +
       '">';
-    html += '<td class="ocq-table-td">' + escapeHtml(standard.id) + '</td>';
-    html += '<td class="ocq-table-td">' + escapeHtml(typeLabel) + '</td>';
+    html += '<td class="ocq-table-td">';
+    html += '<div>' + escapeHtml(criterion?.label || standard.id) + '</div>';
+    html += '<div class="ocq-table-meta ocq-mono">' + escapeHtml(standard.id) + '</div>';
+    if (criterion?.guidance) {
+      html += '<div class="ocq-table-meta">' + escapeHtml(criterion.guidance) + '</div>';
+    }
+    html += '</td>';
+    html += '<td class="ocq-table-td">';
+    html += '<div>' + escapeHtml(typeLabel) + '</div>';
+    if (criterion?.remediationEffort) {
+      html += '<div class="ocq-table-meta">Effort: ' + escapeHtml(criterion.remediationEffort) + '</div>';
+    }
+    html += '</td>';
     html += '<td class="ocq-table-td"><span class="' + statusBadgeClass + '">' + escapeHtml(standard.status) + '</span></td>';
     html += '<td class="ocq-table-td">' + escapeHtml(String(failedCount)) + '</td>';
     html += '</tr>';

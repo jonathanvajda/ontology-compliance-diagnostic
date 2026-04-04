@@ -1,0 +1,277 @@
+{
+  "version": 1,
+  "standards": [
+    {
+      "id": "criterion_annotationPropertyHasDefinition",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Annotation properties need definitions",
+      "guidance": "Add a skos:definition for each annotation property so editors and downstream users can understand how the annotation should be used.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_annotationPropertyHasLabel",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Annotation properties need labels",
+      "guidance": "Add an rdfs:label for each annotation property so it has a readable display name in tools, exports, and documentation.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_classHasAristotelianDefinition",
+      "type": "recommendation",
+      "weight": 1,
+      "label": "Class definitions should be Aristotelian",
+      "guidance": "Rewrite class definitions so they identify the broader parent and the distinguishing differentia, rather than only giving loose or informal prose.",
+      "remediationEffort": "case-by-case"
+    },
+    {
+      "id": "criterion_classHasDefinition",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Classes need definitions",
+      "guidance": "Add a skos:definition or accepted definition annotation for each class so curators and implementers know exactly what the class denotes.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_classHasExample",
+      "type": "recommendation",
+      "weight": 1,
+      "label": "Classes should have examples",
+      "guidance": "Add skos:example content for classes where an example would clarify intended usage, especially for abstract or easily confused terms.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_classHasIsCuratedInOntology",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Classes need curated-in-ontology",
+      "guidance": "Add cco:ont00001760 to each class so the ontology explicitly records where that class is curated and maintained.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_classHasLabel",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Classes need labels",
+      "guidance": "Add an rdfs:label for each class so people and software can identify the class without relying on the raw IRI.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_classHasParentPathToBfo",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Classes need a BFO parent path",
+      "guidance": "Assert subclass relationships so each class has a justified parent chain to BFO:Entity or another accepted top-level parent in the modeled hierarchy.",
+      "remediationEffort": "usually high"
+    },
+    {
+      "id": "criterion_classHasSubclassOf",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Classes need subclass assertions",
+      "guidance": "Add at least one rdfs:subClassOf assertion for each class so it is placed in the ontology hierarchy and can inherit intended semantics.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_dataPropertyHasDefinition",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Data properties need definitions",
+      "guidance": "Add a skos:definition for each data property so users understand the intended meaning of the literal value being asserted.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_dataPropertyHasLabel",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Data properties need labels",
+      "guidance": "Add an rdfs:label for each data property so it has a readable name in tools, exports, and documentation.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_datatypePropertyHasDefinition",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Datatype properties need definitions",
+      "guidance": "Add a skos:definition for each datatype property so users understand the intended meaning of the data value being asserted.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_datatypePropertyHasDomain",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Datatype properties need domains",
+      "guidance": "Add an rdfs:domain for each datatype property so consumers know which kinds of entities the property is intended to describe.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_datatypePropertyHasLabel",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Datatype properties need labels",
+      "guidance": "Add an rdfs:label for each datatype property so it has a readable name in tools, exports, and documentation.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_datatypePropertyHasRange",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Datatype properties need ranges",
+      "guidance": "Add an rdfs:range for each datatype property so consumers know the expected literal datatype or value space.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_everyResourceHasType",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Resources need rdf:type assertions",
+      "guidance": "Add rdf:type assertions so each resource is explicitly declared as a class, property, individual, or other supported entity type.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_namedIndividualHasDefinition",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Named individuals need definitions",
+      "guidance": "Add a skos:definition for named individuals where the ontology treats them as curated knowledge artifacts that need clear meaning and usage notes.",
+      "remediationEffort": "case-by-case"
+    },
+    {
+      "id": "criterion_namedIndividualHasLabel",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Named individuals need labels",
+      "guidance": "Add an rdfs:label for each named individual so it can be read and reviewed without relying on the IRI alone.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_noPunning",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Avoid mixed metatype punning",
+      "guidance": "Refactor entities so the same IRI is not reused across incompatible metatypes such as class, individual, and property unless there is a strong design reason.",
+      "remediationEffort": "usually high"
+    },
+    {
+      "id": "criterion_objectPropertyHasDefinition",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Object properties need definitions",
+      "guidance": "Add a skos:definition for each object property so its intended relational meaning is clear to curators and application developers.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_ObjectPropertyHasDomain",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Object properties need domains",
+      "guidance": "Add an rdfs:domain for each object property so the ontology states what kinds of subjects the relation is intended to connect from.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_objectPropertyHasLabel",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Object properties need labels",
+      "guidance": "Add an rdfs:label for each object property so users can understand and browse the relation without relying on the IRI alone.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_ObjectPropertyHasRange",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Object properties need ranges",
+      "guidance": "Add an rdfs:range for each object property so the ontology states what kinds of objects the relation is intended to connect to.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_ontologyHasAccessRights",
+      "type": "recommendation",
+      "weight": 1,
+      "label": "Ontology should state access rights",
+      "guidance": "Add dcterms:accessRights on the ontology resource to communicate any restrictions or expectations about access and reuse.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_ontologyHasCc0OrCcby4License",
+      "type": "recommendation",
+      "weight": 1,
+      "label": "Ontology should use CC0 or CC BY 4.0",
+      "guidance": "Update the ontology license to an approved open license, ideally CC0 or CC BY 4.0, so reuse expectations are clear and aligned with project policy.",
+      "remediationEffort": "case-by-case"
+    },
+    {
+      "id": "criterion_ontologyHasLicense",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Ontology needs a license",
+      "guidance": "Add dcterms:license on the ontology resource so users know the legal terms for reuse, distribution, and derivative work.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_ontologyHasVersionInfo",
+      "type": "recommendation",
+      "weight": 1,
+      "label": "Ontology should have versionInfo",
+      "guidance": "Add owl:versionInfo to the ontology so human-readable release information is available alongside the version IRI.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_ontologyHasVersionIri",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Ontology needs a version IRI",
+      "guidance": "Add owl:versionIRI to the ontology resource so each release is uniquely identified and can be referenced unambiguously.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_ontologyVersionInfoHasDateOrSemver",
+      "type": "recommendation",
+      "weight": 1,
+      "label": "versionInfo should use date or semver",
+      "guidance": "Revise owl:versionInfo so it includes either an ISO-style date or a semantic version pattern that is easy for humans to interpret.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_ontologyVersionIriAndInfoAgree",
+      "type": "requirement",
+      "weight": 1,
+      "label": "versionIRI and versionInfo must agree",
+      "guidance": "Align owl:versionIRI and owl:versionInfo so they refer to the same release identifier and do not communicate conflicting version values.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_ontologyVersionIriHasDateOrSemver",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Version IRI needs date or semver",
+      "guidance": "Revise owl:versionIRI so its release identifier includes either a date-based version or a semantic version string.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_ontologyVersionIriIsValid",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Version IRI must be a valid IRI",
+      "guidance": "Correct owl:versionIRI so it is stored as an actual IRI and resolves to syntactically valid IRI content rather than a malformed or literal value.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_ontologyVersionIriUsesIso8601Date",
+      "type": "recommendation",
+      "weight": 1,
+      "label": "Version IRI should use ISO 8601 dates",
+      "guidance": "If your release strategy is date-based, format the date portion of owl:versionIRI using an ISO 8601 pattern so releases sort and compare cleanly.",
+      "remediationEffort": "usually low"
+    },
+    {
+      "id": "criterion_uniqueLabels",
+      "type": "requirement",
+      "weight": 1,
+      "label": "Labels should be unique",
+      "guidance": "Review duplicate rdfs:label values and disambiguate them where needed so labels remain reliable for search, editing, and downstream use.",
+      "remediationEffort": "case-by-case"
+    }
+  ]
+}

@@ -47,6 +47,7 @@ let cachedComunicaEngine = null;
 
 export const DEFAULT_MANIFEST_URL = './queries/manifest.json';
 export const DEFAULT_QUERY_BASE_PATH = 'queries/';
+export const DEFAULT_STANDARDS_MANIFEST_URL = './queries/standards-manifest.json';
 
 export const RDF_TYPE_IRI = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 export const RDFS_LABEL_IRI = 'http://www.w3.org/2000/01/rdf-schema#label';
@@ -386,7 +387,42 @@ export async function loadManifest(manifestUrl = DEFAULT_MANIFEST_URL) {
     throw new Error('Manifest JSON is invalid: expected an object with a queries array.');
   }
 
-  return /** @type {OcqManifest} */ (rawManifest);
+  /** @type {OcqManifest} */
+  const manifest = /** @type {OcqManifest} */ (rawManifest);
+  const standardsUrl = typeof manifest.standardsUrl === 'string' && manifest.standardsUrl.trim()
+    ? manifest.standardsUrl.trim()
+    : (
+      !Array.isArray(manifest.standards)
+        ? DEFAULT_STANDARDS_MANIFEST_URL
+        : ''
+    );
+
+  if (standardsUrl) {
+    const resolvedUrl = new URL(standardsUrl, new URL(manifestUrl, window.location.href)).toString();
+    const standardsResponse = await fetch(resolvedUrl);
+
+    if (!standardsResponse.ok) {
+      throw new Error(
+        `Failed to fetch standards manifest: ${standardsResponse.status} ${standardsResponse.statusText}`
+      );
+    }
+
+    /** @type {unknown} */
+    const rawStandardsManifest = await standardsResponse.json();
+    /** @type {{ standards?: unknown }} */
+    const standardsManifestLike =
+      rawStandardsManifest && typeof rawStandardsManifest === 'object'
+        ? /** @type {{ standards?: unknown }} */ (rawStandardsManifest)
+        : {};
+
+    if (!Array.isArray(standardsManifestLike.standards)) {
+      throw new Error('Standards manifest JSON is invalid: expected an object with a standards array.');
+    }
+
+    manifest.standards = standardsManifestLike.standards;
+  }
+
+  return manifest;
 }
 
 /**

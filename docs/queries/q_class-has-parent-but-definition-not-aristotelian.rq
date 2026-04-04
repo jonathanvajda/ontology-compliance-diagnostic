@@ -6,10 +6,10 @@ PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
 PREFIX obo:  <http://purl.obolibrary.org/obo/>
 
-SELECT ?term ?termLabel ?def
+SELECT ?resource ?termLabel ?def
        (GROUP_CONCAT(DISTINCT ?parentLabel; separator=" | ") AS ?candidateParents)
 WHERE {
-  ?term a owl:Class ;
+  ?resource a owl:Class ;
         rdfs:subClassOf ?parent ;
         ?defProp ?def .
 
@@ -17,7 +17,7 @@ WHERE {
 
   FILTER(isIRI(?parent))
   ?parent rdfs:label ?parentLabel .
-  OPTIONAL { ?term rdfs:label ?termLabel }
+  OPTIONAL { ?resource rdfs:label ?termLabel }
 
   FILTER(LANG(?def) = "" || LANGMATCHES(LANG(?def), "en"))
   FILTER(LANG(?parentLabel) = "" || LANGMATCHES(LANG(?parentLabel), "en"))
@@ -43,6 +43,6 @@ WHERE {
     ) AS ?looksAristotelian
   )
 }
-GROUP BY ?term ?termLabel ?def
+GROUP BY ?resource ?termLabel ?def
 HAVING(MAX(?looksAristotelian) = 0)
-ORDER BY LCASE(STR(COALESCE(?termLabel, STR(?term))))
+ORDER BY LCASE(STR(COALESCE(?termLabel, STR(?resource))))

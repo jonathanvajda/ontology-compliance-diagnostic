@@ -1,9 +1,11 @@
 // app/render-standards.js
 // @ts-check
 
+import { getCriterionDefinition } from './criteria.js';
 import { getResultCriterionId } from './grader.js';
 import { escapeHtml, getReportStandards } from './shared.js';
 
+/** @typedef {import('./types.js').OcqManifest} OcqManifest */
 /** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
 
@@ -67,6 +69,7 @@ export function getStandardDetailEntries(criterionId, results) {
  * Renders the standard-detail panel.
  *
  * @param {string} criterionId
+ * @param {OcqManifest | null | undefined} manifest
  * @param {OcqOntologyReport | null | undefined} ontologyReport
  * @param {OcqQueryResultRow[] | null | undefined} results
  * @param {HTMLElement | null | undefined} [container=standardDetailContainer]
@@ -74,6 +77,7 @@ export function getStandardDetailEntries(criterionId, results) {
  */
 export function renderStandardDetail(
   criterionId,
+  manifest,
   ontologyReport,
   results,
   container = standardDetailContainer
@@ -89,6 +93,7 @@ export function renderStandardDetail(
 
   const standards = getReportStandards(ontologyReport);
   const selectedStandard = standards.find((standard) => standard.id === criterionId);
+  const criterion = getCriterionDefinition(manifest, criterionId);
 
   if (!selectedStandard) {
     container.innerHTML =
@@ -117,31 +122,68 @@ export function renderStandardDetail(
   ).sort();
 
   const entries = getStandardDetailEntries(criterionId, results);
+  const relatedQueries = Array.isArray(criterion?.queries) ? criterion.queries : [];
 
   let html = '';
   html += '<div class="ocq-modal-dialog ocq-detail" role="dialog" aria-modal="true" aria-labelledby="ocqStandardDetailTitle">';
   html += '  <div class="ocq-detail-header">';
-  html += `    <h3 id="ocqStandardDetailTitle" class="ocq-detail-title">Standard: ${escapeHtml(selectedStandard.id)}</h3>`;
-  html += '    <button class="ocq-modal-close" type="button" data-standard-close aria-label="Close standard detail">×</button>';
+  html += `    <h3 id="ocqStandardDetailTitle" class="ocq-detail-title">${escapeHtml(criterion?.label || selectedStandard.id)}</h3>`;
+  html += '    <button class="ocq-modal-close" type="button" data-standard-close aria-label="Close standard detail">&times;</button>';
   html += '  </div>';
 
+  html += '  <div class="ocq-detail-section">';
+  html += '    <div class="ocq-detail-section-title">Criterion</div>';
+  html += `    <div class="ocq-detail-meta ocq-mono">${escapeHtml(selectedStandard.id)}</div>`;
   html +=
-    '  <div class="ocq-detail-meta">Status: <strong>' +
+    '    <div class="ocq-detail-meta">Status: <strong>' +
     escapeHtml(selectedStandard.status) +
     '</strong> (' +
     escapeHtml(selectedStandard.type) +
     ')</div>';
-
   html +=
-    '  <div class="ocq-detail-meta">Failing resources: <strong>' +
+    '    <div class="ocq-detail-meta">Remediation effort: <strong>' +
+    escapeHtml(criterion?.remediationEffort || 'case-by-case') +
+    '</strong></div>';
+  html +=
+    '    <div class="ocq-detail-meta">Failing resources: <strong>' +
     escapeHtml(resources.length) +
     '</strong></div>';
+  html += '  </div>';
 
-  if (queryIds.length) {
-    html +=
-      '  <div class="ocq-detail-meta">Queries involved: <span class="ocq-mono">' +
-      escapeHtml(queryIds.join(', ')) +
-      '</span></div>';
+  if (criterion?.guidance) {
+    html += '  <div class="ocq-detail-section">';
+    html += '    <div class="ocq-detail-section-title">Brief guidance</div>';
+    html += `    <p>${escapeHtml(criterion.guidance)}</p>`;
+    html += '  </div>';
+  }
+
+  if (relatedQueries.length || queryIds.length) {
+    html += '  <div class="ocq-detail-section">';
+    html += '    <div class="ocq-detail-section-title">Related checks</div>';
+    html += '    <ul class="ocq-detail-list">';
+
+    for (const query of relatedQueries) {
+      const queryTitle = String(query?.title || '').trim();
+      const queryId = String(query?.id || '').trim();
+      const queryLabel = queryTitle || queryId;
+
+      if (!queryLabel) {
+        continue;
+      }
+
+      html += '      <li>' + escapeHtml(queryLabel);
+      if (queryId && queryTitle && queryId !== queryTitle) {
+        html += ` <span class="ocq-table-meta ocq-mono">(${escapeHtml(queryId)})</span>`;
+      }
+      html += '</li>';
+    }
+
+    if (!relatedQueries.length && queryIds.length) {
+      html += `      <li><span class="ocq-mono">${escapeHtml(queryIds.join(', '))}</span></li>`;
+    }
+
+    html += '    </ul>';
+    html += '  </div>';
   }
 
   if (!entries.length) {

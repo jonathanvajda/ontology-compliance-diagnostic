@@ -432,6 +432,29 @@
   font-size: 13px;
 }
 
+.ocq-app .ocq-table-meta {
+  margin-top: 4px;
+  color: var(--ont-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ocq-app .ocq-detail-section {
+  margin-top: var(--ocq-space-3);
+}
+
+.ocq-app .ocq-detail-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ont-text);
+  margin-bottom: 6px;
+}
+
+.ocq-app .ocq-detail-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
 .ocq-app .ocq-modal {
   display: none;
   position: fixed;

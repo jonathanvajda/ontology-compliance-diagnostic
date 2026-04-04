@@ -1,5 +1,6 @@
 {
   "version": 3,
+  "standardsUrl": "./standards-manifest.json",
   "queries": [
     {
       "id": "q_ontology-has-dcterms-accessRights",
@@ -417,39 +418,5 @@
       "resultShape": "RESOURCE_ONLY",
       "resourceVar": "resource"
     }
-  ],
-  "standards": [
-    { "id": "criterion_uniqueLabels", "type": "requirement", "weight": 1 },
-    { "id": "criterion_everyResourceHasType", "type": "requirement", "weight": 1 },
-    { "id": "criterion_noPunning", "type": "requirement", "weight": 1 },
-    { "id": "criterion_annotationPropertyHasLabel", "type": "requirement", "weight": 1 },
-    { "id": "criterion_annotationPropertyHasDefinition", "type": "requirement", "weight": 1 },
-    { "id": "criterion_classHasIsCuratedInOntology", "type": "requirement", "weight": 1 },
-    { "id": "criterion_classHasParentPathToBfo", "type": "requirement", "weight": 1 },
-    { "id": "criterion_classHasLabel", "type": "requirement", "weight": 1 },
-    { "id": "criterion_classHasDefinition", "type": "requirement", "weight": 1 },
-    { "id": "criterion_classHasSubclassOf", "type": "requirement", "weight": 1 },
-    { "id": "criterion_classHasAristotelianDefinition", "type": "recommendation", "weight": 1 },
-    { "id": "criterion_dataPropertyHasLabel", "type": "requirement", "weight": 1 },
-    { "id": "criterion_dataPropertyHasDefinition", "type": "requirement", "weight": 1 },
-    { "id": "criterion_dataPropertyHasDomain", "type": "requirement", "weight": 1 },
-    { "id": "criterion_dataPropertyHasRange", "type": "requirement", "weight": 1 },
-    { "id": "criterion_datatypePropertyHasLabel", "type": "requirement", "weight": 1 },
-    { "id": "criterion_datatypePropertyHasDefinition", "type": "requirement", "weight": 1 },
-    { "id": "criterion_namedIndividualHasDefinition", "type": "requirement", "weight": 1 },
-    { "id": "criterion_namedIndividualHasLabel", "type": "requirement", "weight": 1 },
-    { "id": "criterion_objectPropertyHasLabel", "type": "requirement", "weight": 1 },
-    { "id": "criterion_objectPropertyHasDefinition", "type": "requirement", "weight": 1 },
-    { "id": "criterion_objectPropertyHasDomain", "type": "requirement", "weight": 1 },
-    { "id": "criterion_objectPropertyHasRange", "type": "requirement", "weight": 1 },
-    { "id": "criterion_classHasExample", "type": "recommendation", "weight": 1 },
-    { "id": "criterion_ontologyLicenseUsesOpenLicenseUrl", "type": "requirement", "weight": 1 },
-    { "id": "criterion_ontologyHasVersionInfo", "type": "recommendation", "weight": 1 },
-    { "id": "criterion_ontologyVersionInfoHasDateOrSemver", "type": "recommendation", "weight": 1 },
-    { "id": "criterion_ontologyHasVersionIri", "type": "requirement", "weight": 1 },
-    { "id": "criterion_ontologyVersionIriIsValid", "type": "requirement", "weight": 1 },
-    { "id": "criterion_ontologyVersionIriHasDateOrSemver", "type": "requirement", "weight": 1 },
-    { "id": "criterion_ontologyVersionIriUsesIso8601Date", "type": "recommendation", "weight": 1 },
-    { "id": "criterion_ontologyVersionIriAndInfoAgree", "type": "requirement", "weight": 1 }
   ]
 }

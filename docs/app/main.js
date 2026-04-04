@@ -271,7 +271,7 @@ function initTheme() {
  */
 function clearRenderedViews() {
   renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
-  renderOntologyReport(null, ontologyReportContainer);
+  renderOntologyReport(null, lastManifest, ontologyReportContainer);
   renderCurationTable([], curationTableContainer);
 
   if (standardDetailContainer) {
@@ -360,7 +360,7 @@ function renderResourceFilterSummary() {
  * @returns {void}
  */
 function renderActiveInspectionViews() {
-  renderOntologyReport(lastOntologyReport, ontologyReportContainer);
+  renderOntologyReport(lastOntologyReport, lastManifest, ontologyReportContainer);
   renderCurationTable(lastPerResource, curationTableContainer);
   renderResourceFilterSummary();
 }
@@ -487,6 +487,7 @@ function restoreSelectedCriterion(criterionId) {
   lastSelectedCriterionId = selectedCriterionId;
   renderStandardDetail(
     selectedCriterionId,
+    lastManifest,
     lastOntologyReport,
     lastResults,
     standardDetailContainer
@@ -569,6 +570,7 @@ function getExportState() {
     statusFilter: statusFilterSelect ? statusFilterSelect.value : '',
     standardFilter: standardFilterSelect ? standardFilterSelect.value : '',
     selectedCriterionId: lastSelectedCriterionId,
+    manifest: lastManifest,
     ontologyMetadata: lastOntologyMetadata,
     ontologyReport: lastOntologyReport,
     perResourceRows: Array.isArray(lastPerResource) ? lastPerResource : [],
@@ -886,6 +888,7 @@ async function initializeApp() {
 
       renderStandardDetail(
         criterionId,
+        lastManifest,
         lastOntologyReport,
         lastResults,
         standardDetailContainer
