@@ -15,9 +15,10 @@ const dashboardContainer = document.getElementById('dashboardContainer');
  * @returns {string}
  */
 export function getBatchKey(item) {
+  const inspectedAt = item?.inspectedAt ?? '';
   const fileName = item?.fileName ?? '';
   const ontologyIri = item?.ontologyIri ?? item?.ontologyReport?.ontologyIri ?? '';
-  return `${fileName}::${ontologyIri}`;
+  return `${inspectedAt}::${fileName}::${ontologyIri}`;
 }
 
 /**
@@ -45,23 +46,32 @@ export function renderDashboard(
   let html = '<h2 class="ocq-title">Ontology dashboard</h2>';
   html += '<table class="ocq-table">';
   html += '<thead class="ocq-table-head"><tr>';
+  html += '<th class="ocq-table-th">Run</th>';
   html += '<th class="ocq-table-th">File</th>';
   html += '<th class="ocq-table-th">Ontology IRI</th>';
+  html += '<th class="ocq-table-th">Title</th>';
+  html += '<th class="ocq-table-th">Version</th>';
   html += '<th class="ocq-table-th">Status</th>';
-  html += '<th class="ocq-table-th"># Failed Requirements</th>';
-  html += '<th class="ocq-table-th"># Failed Recommendations</th>';
+  html += '<th class="ocq-table-th">Ontology Fails</th>';
+  html += '<th class="ocq-table-th">Element Fails</th>';
   html += '</tr></thead><tbody>';
 
   for (const item of batchReports) {
     const report = item.ontologyReport;
-    const standards = getReportStandards(report);
+    const ontologyStandards = Array.isArray(report?.ontologyStandards)
+      ? report.ontologyStandards
+      : [];
+    const contentStandards = Array.isArray(report?.contentStandards)
+      ? report.contentStandards
+      : getReportStandards(report).filter((standard) => standard.scopeCategory !== 'ontology');
+    const metadata = item.ontologyMetadata || report?.metadata || null;
 
-    const failedRequirements = standards.filter(
-      (standard) => standard.type === 'requirement' && standard.status === 'fail'
+    const failedOntologyChecks = ontologyStandards.filter(
+      (standard) => standard.status === 'fail'
     ).length;
 
-    const failedRecommendations = standards.filter(
-      (standard) => standard.type === 'recommendation' && standard.status === 'fail'
+    const failedContentChecks = contentStandards.filter(
+      (standard) => standard.status === 'fail'
     ).length;
 
     const batchKey = getBatchKey(item);
@@ -73,11 +83,14 @@ export function renderDashboard(
       escapeHtml(batchKey) +
       '">';
 
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(item.inspectedAt || '') + '</td>';
     html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(item.fileName) + '</td>';
     html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(report?.ontologyIri || '') + '</td>';
+    html += '<td class="ocq-table-td">' + escapeHtml(metadata?.title || '') + '</td>';
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(metadata?.versionInfo || metadata?.versionIri || '') + '</td>';
     html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(report?.statusLabel || '') + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(String(failedRequirements)) + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(String(failedRecommendations)) + '</td>';
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(String(failedOntologyChecks)) + '</td>';
+    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(String(failedContentChecks)) + '</td>';
     html += '</tr>';
   }
 

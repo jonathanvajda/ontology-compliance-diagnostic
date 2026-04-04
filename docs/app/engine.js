@@ -13,6 +13,7 @@
 
 /** @typedef {import('./types.js').OcqManifest} OcqManifest */
 /** @typedef {import('./types.js').OcqManifestQuery} OcqManifestQuery */
+/** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
 /** @typedef {import('./types.js').OcqQueryResultStatus} OcqQueryResultStatus */
 /** @typedef {import('./types.js').OcqQueryScope} OcqQueryScope */
@@ -29,6 +30,7 @@
  * @property {OcqQueryResultRow[]} results
  * @property {string[]} resources
  * @property {string} ontologyIri
+ * @property {OcqOntologyMetadata} ontologyMetadata
  */
 
 /** @type {Window & { N3?: any, Comunica?: any }} */
@@ -49,6 +51,13 @@ export const DEFAULT_QUERY_BASE_PATH = 'queries/';
 export const RDF_TYPE_IRI = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 export const RDFS_LABEL_IRI = 'http://www.w3.org/2000/01/rdf-schema#label';
 export const OWL_ONTOLOGY_IRI = 'http://www.w3.org/2002/07/owl#Ontology';
+export const OWL_IMPORTS_IRI = 'http://www.w3.org/2002/07/owl#imports';
+export const OWL_VERSION_IRI = 'http://www.w3.org/2002/07/owl#versionIRI';
+export const OWL_VERSION_INFO_IRI = 'http://www.w3.org/2002/07/owl#versionInfo';
+export const DCTERMS_TITLE_IRI = 'http://purl.org/dc/terms/title';
+export const DCTERMS_DESCRIPTION_IRI = 'http://purl.org/dc/terms/description';
+export const DCTERMS_LICENSE_IRI = 'http://purl.org/dc/terms/license';
+export const DCTERMS_ACCESS_RIGHTS_IRI = 'http://purl.org/dc/terms/accessRights';
 export const UNKNOWN_ONTOLOGY_IRI = 'urn:ontology:unknown';
 
 export const SUPPORTED_RDF_FORMATS = Object.freeze({
@@ -429,6 +438,34 @@ export function guessOntologyIri(store) {
 }
 
 /**
+ * Returns the first object value for one subject/predicate pair.
+ *
+ * @param {any} store
+ * @param {string} subjectIri
+ * @param {string} predicateIri
+ * @returns {string | null}
+ */
+export function getFirstObjectValue(store, subjectIri, predicateIri) {
+  const quad = store.getQuads(subjectIri, predicateIri, null, null)[0];
+  return quad?.object?.value || null;
+}
+
+/**
+ * Returns all object values for one subject/predicate pair.
+ *
+ * @param {any} store
+ * @param {string} subjectIri
+ * @param {string} predicateIri
+ * @returns {string[]}
+ */
+export function getObjectValues(store, subjectIri, predicateIri) {
+  return store
+    .getQuads(subjectIri, predicateIri, null, null)
+    .map((quad) => quad?.object?.value || '')
+    .filter((value) => value !== '');
+}
+
+/**
  * Returns the set of labeled resources based on rdfs:label.
  *
  * @param {any} store
@@ -445,6 +482,35 @@ export function collectLabeledResources(store) {
   }
 
   return Array.from(labeled);
+}
+
+/**
+ * Extracts ontology metadata and simple run facts from the loaded store.
+ *
+ * @param {any} store
+ * @param {string} fileName
+ * @returns {OcqOntologyMetadata}
+ */
+export function extractOntologyMetadata(store, fileName) {
+  const ontologyIri = guessOntologyIri(store);
+  const labeledResources = collectLabeledResources(store);
+  const quads = store.getQuads(null, null, null, null);
+
+  return {
+    fileName: fileName || 'ontology.ttl',
+    ontologyIri,
+    title:
+      getFirstObjectValue(store, ontologyIri, DCTERMS_TITLE_IRI) ||
+      getFirstObjectValue(store, ontologyIri, RDFS_LABEL_IRI),
+    description: getFirstObjectValue(store, ontologyIri, DCTERMS_DESCRIPTION_IRI),
+    versionIri: getFirstObjectValue(store, ontologyIri, OWL_VERSION_IRI),
+    versionInfo: getFirstObjectValue(store, ontologyIri, OWL_VERSION_INFO_IRI),
+    license: getFirstObjectValue(store, ontologyIri, DCTERMS_LICENSE_IRI),
+    accessRights: getFirstObjectValue(store, ontologyIri, DCTERMS_ACCESS_RIGHTS_IRI),
+    imports: getObjectValues(store, ontologyIri, OWL_IMPORTS_IRI).sort(),
+    tripleCount: quads.length,
+    labeledResourceCount: labeledResources.length
+  };
 }
 
 /**
@@ -592,6 +658,7 @@ export async function evaluateAllQueries(
 
   const store = await loadOntologyIntoStore(ontologyText, fileName);
   const manifest = await loadManifest(manifestUrl);
+  const ontologyMetadata = extractOntologyMetadata(store, fileName);
 
   /** @type {OcqQueryResultRow[]} */
   const allResults = [];
@@ -611,6 +678,7 @@ export async function evaluateAllQueries(
   return {
     results: allResults,
     resources: collectLabeledResources(store),
-    ontologyIri: guessOntologyIri(store)
+    ontologyIri: ontologyMetadata.ontologyIri,
+    ontologyMetadata
   };
 }

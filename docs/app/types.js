@@ -28,8 +28,10 @@
  * A single evaluated ontology report bundle.
  *
  * @typedef {Object} OcqEvaluatedReport
+ * @property {string} inspectedAt
  * @property {string} fileName
  * @property {string} ontologyIri
+ * @property {OcqOntologyMetadata | null} ontologyMetadata
  * @property {OcqOntologyReport | null} ontologyReport
  * @property {OcqPerResourceCurationRow[]} perResource
  * @property {OcqQueryResultRow[]} results
@@ -176,6 +178,7 @@
  * @typedef {Object} OcqOntologyReportStandardRow
  * @property {string} id
  * @property {OcqStandardType} type
+ * @property {'ontology' | 'content'} scopeCategory
  * @property {number} weight
  * @property {'pass' | 'fail'} status
  * @property {number} failedResourcesCount
@@ -183,12 +186,32 @@
  */
 
 /**
+ * Extracted ontology metadata and run-level facts for one evaluated ontology.
+ *
+ * @typedef {Object} OcqOntologyMetadata
+ * @property {string} fileName
+ * @property {string} ontologyIri
+ * @property {string | null} title
+ * @property {string | null} description
+ * @property {string | null} versionIri
+ * @property {string | null} versionInfo
+ * @property {string | null} license
+ * @property {string | null} accessRights
+ * @property {string[]} imports
+ * @property {number} tripleCount
+ * @property {number} labeledResourceCount
+ */
+
+/**
  * Ontology-level report returned by grader.js.
  *
  * @typedef {Object} OcqOntologyReport
  * @property {string} ontologyIri
+ * @property {OcqOntologyMetadata | null} metadata
  * @property {string} statusIri
  * @property {string} statusLabel
+ * @property {OcqOntologyReportStandardRow[]} ontologyStandards
+ * @property {OcqOntologyReportStandardRow[]} contentStandards
  * @property {OcqOntologyReportStandardRow[]} standards
  */
 
@@ -206,6 +229,7 @@
  * @property {string} [statusFilter]
  * @property {string} [standardFilter]
  * @property {string | null} [selectedCriterionId]
+ * @property {OcqOntologyMetadata | null} [ontologyMetadata]
  * @property {OcqOntologyReport | null} [ontologyReport]
  * @property {OcqPerResourceCurationRow[]} [perResourceRows]
  * @property {OcqQueryResultRow[]} [results]

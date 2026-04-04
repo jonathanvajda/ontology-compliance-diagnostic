@@ -6,7 +6,7 @@ import {
   DEFAULT_MANIFEST_URL
 } from './engine.js';
 import { buildFailuresIndex } from './grader.js';
-import { inspectFile, inspectFiles } from './report-model.js';
+import { inspectFiles } from './report-model.js';
 import { saveRun, listRuns, getRun, deleteRun, getLastRunId } from './storage.js';
 import { populateStandardFilter } from './criteria.js';
 import {
@@ -35,11 +35,11 @@ import {
 /** @typedef {import('./types.js').OcqEvaluatedReport} OcqEvaluatedReport */
 /** @typedef {import('./types.js').OcqFailureIndex} OcqFailureIndex */
 /** @typedef {import('./types.js').OcqManifest} OcqManifest */
+/** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
 /** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
 /** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
 /** @typedef {import('./types.js').OcqSavedRun} OcqSavedRun */
-/** @typedef {import('./types.js').OcqSingleRunPayload} OcqSingleRunPayload */
 /** @typedef {import('./types.js').OcqUiStateSnapshot} OcqUiStateSnapshot */
 
 /**
@@ -130,6 +130,8 @@ let lastPerResourceFull = null;
 let lastFailuresIndex = null;
 /** @type {OcqOntologyReport | null} */
 let lastOntologyReport = null;
+/** @type {OcqOntologyMetadata | null} */
+let lastOntologyMetadata = null;
 /** @type {OcqEvaluatedReport[] | null} */
 let lastBatchReports = null;
 /** @type {string | null} */
@@ -268,7 +270,7 @@ function initTheme() {
  * @returns {void}
  */
 function clearRenderedViews() {
-  renderDashboard([], null, dashboardContainer);
+  renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
   renderOntologyReport(null, ontologyReportContainer);
   renderCurationTable([], curationTableContainer);
 
@@ -305,6 +307,7 @@ function clearInspectionDataState() {
   lastPerResource = null;
   lastPerResourceFull = null;
   lastFailuresIndex = null;
+  lastOntologyMetadata = null;
   lastOntologyReport = null;
 }
 
@@ -316,7 +319,6 @@ function clearInspectionDataState() {
 function resetInspectionView() {
   clearStandardSelection();
   selectedBatchKey = null;
-  lastBatchReports = null;
   clearInspectionDataState();
   clearRenderedViews();
 }
@@ -425,17 +427,21 @@ function clearResourceFilters() {
  *
  * @param {OcqEvaluatedReport} reportObject
  * @param {OcqManifest | null | undefined} manifest
+ * @param {boolean} [preserveBatchReports=false]
  * @returns {void}
  */
-function applyInspectionItemToState(reportObject, manifest) {
+function applyInspectionItemToState(reportObject, manifest, preserveBatchReports = false) {
   lastResults = reportObject.results || [];
   lastFailuresIndex = buildFailuresIndex(lastResults);
   lastPerResourceFull = reportObject.perResource || [];
   lastPerResource = reportObject.perResource || [];
+  lastOntologyMetadata = reportObject.ontologyMetadata || null;
   lastOntologyReport = reportObject.ontologyReport || null;
   lastManifest = manifest || lastManifest;
-  lastBatchReports = null;
-  selectedBatchKey = null;
+  if (!preserveBatchReports) {
+    lastBatchReports = null;
+    selectedBatchKey = null;
+  }
 
   if (lastManifest) {
     populateStandardFilter(lastManifest, standardFilterSelect);
@@ -489,8 +495,20 @@ function restoreSelectedCriterion(criterionId) {
  * @returns {void}
  */
 function loadBatchSelection(reportObject) {
-  applyInspectionItemToState(reportObject, lastManifest);
+  applyInspectionItemToState(reportObject, lastManifest, true);
   applyResourceFilters();
+}
+
+/**
+ * Appends new reports to the cumulative dashboard list.
+ *
+ * @param {OcqEvaluatedReport[] | null | undefined} reports
+ * @returns {void}
+ */
+function appendBatchReports(reports) {
+  const nextReports = Array.isArray(reports) ? reports : [];
+  const existingReports = Array.isArray(lastBatchReports) ? lastBatchReports : [];
+  lastBatchReports = existingReports.concat(nextReports);
 }
 
 /**
@@ -505,12 +523,7 @@ function onBatchRowSelected(batchKey) {
   }
 
   if (selectedBatchKey === batchKey) {
-    selectedBatchKey = null;
-    clearInspectionDataState();
-    clearStandardSelection();
     renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
-    renderActiveInspectionViews();
-    refreshDownloadOptions();
     return;
   }
 
@@ -539,6 +552,7 @@ function getExportState() {
     statusFilter: statusFilterSelect ? statusFilterSelect.value : '',
     standardFilter: standardFilterSelect ? standardFilterSelect.value : '',
     selectedCriterionId: lastSelectedCriterionId,
+    ontologyMetadata: lastOntologyMetadata,
     ontologyReport: lastOntologyReport,
     perResourceRows: Array.isArray(lastPerResource) ? lastPerResource : [],
     results: Array.isArray(lastResults) ? lastResults : []
@@ -721,7 +735,7 @@ async function hydrateRun(run) {
   }
 
   const reportObject = !Array.isArray(payload) && payload
-    ? /** @type {OcqSingleRunPayload} */ (payload)
+    ? /** @type {OcqEvaluatedReport} */ (payload)
     : null;
 
   if (!reportObject) {
@@ -759,46 +773,38 @@ async function runInspectionFromSelectedFiles() {
 
   try {
     const manifest = await ensureManifestLoaded();
-
-    if (files.length === 1) {
-      const reportObject = await inspectFile(files[0], manifest);
-      applyInspectionItemToState(reportObject, manifest);
-      applyResourceFilters();
-
-      await saveRun({
-        kind: 'single',
-        label: reportObject.fileName,
-        payload: reportObject,
-        uiState: getUiStateSnapshot()
-      });
-
-      await refreshSavedRunsUi();
-      setStatus(
-        `Inspection completed. ${reportObject.results.length} result rows across ${reportObject.perResource.length} resources.`
-      );
-      refreshDownloadOptions();
-      return;
-    }
-
     const reports = await inspectFiles(files, manifest);
     lastManifest = manifest;
-    lastBatchReports = reports;
-    selectedBatchKey = null;
+    appendBatchReports(reports);
     clearInspectionDataState();
     clearStandardSelection();
     renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
-    renderActiveInspectionViews();
 
-    await saveRun({
-      kind: 'batch',
-      label: `${reports.length} file(s)`,
-      payload: reports,
-      uiState: getUiStateSnapshot()
-    });
+    if (reports.length) {
+      selectedBatchKey = getBatchKey(reports[reports.length - 1]);
+      loadBatchSelection(reports[reports.length - 1]);
+      renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
+    } else {
+      renderActiveInspectionViews();
+    }
 
-    await refreshSavedRunsUi();
-    setStatus(`Completed inspection of ${reports.length} ontology files. Click a row to drill down.`);
+    setStatus(`Completed inspection of ${files.length} ontology file(s). Dashboard now lists ${lastBatchReports?.length || 0} ontology result(s).`);
     refreshDownloadOptions();
+
+    void (async () => {
+      try {
+        await saveRun({
+          kind: 'batch',
+          label: `${reports.length} ontology file(s)`,
+          payload: reports,
+          uiState: getUiStateSnapshot()
+        });
+
+        await refreshSavedRunsUi();
+      } catch (error) {
+        console.error('Error saving batch run:', error);
+      }
+    })();
   } catch (error) {
     console.error('Error running inspection:', error);
     setStatus(error instanceof Error ? `Error: ${error.message}` : 'Error running inspection.');
@@ -963,9 +969,8 @@ async function initializeApp() {
   }
 
   if (runChecksButton) {
-    runChecksButton.addEventListener('click', () => {
-      void runInspectionFromSelectedFiles();
-    });
+    runChecksButton.disabled = true;
+    runChecksButton.title = 'Deprecated. Use Run batch checks.';
   }
 
   if (runBatchChecksButton) {

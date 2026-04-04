@@ -10,6 +10,7 @@ import {
 
 /** @typedef {import('./types.js').OcqEvaluatedReport} OcqEvaluatedReport */
 /** @typedef {import('./types.js').OcqExportState} OcqExportState */
+/** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
 /** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
 /** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
@@ -232,6 +233,7 @@ export function buildBatchSummaryCsv(batchReports) {
  */
 export function buildHtmlReport(state) {
   const createdAt = new Date().toISOString();
+  const metadata = state.ontologyMetadata || null;
   const report = state.ontologyReport || null;
   const perResourceRows = Array.isArray(state.perResourceRows) ? state.perResourceRows : [];
   const results = Array.isArray(state.results) ? state.results : [];
@@ -270,16 +272,47 @@ export function buildHtmlReport(state) {
   html += `<div class="meta">Selected standard: <span class="mono">${escapeHtml(selectedCriterionId || '(none)')}</span></div>`;
   html += '</div>';
 
-  html += '<div class="card"><h2>Ontology report</h2>';
+  html += '<div class="card"><h2>Ontology metadata</h2>';
+  if (!metadata) {
+    html += '<p>No ontology metadata loaded.</p>';
+  } else {
+    html += `<div class="meta">File: <span class="mono">${escapeHtml(metadata.fileName || '')}</span></div>`;
+    html += `<div class="meta">Ontology IRI: <span class="mono">${escapeHtml(metadata.ontologyIri || '')}</span></div>`;
+    html += `<div class="meta">Title: ${escapeHtml(metadata.title || 'Not found')}</div>`;
+    html += `<div class="meta">Version IRI: <span class="mono">${escapeHtml(metadata.versionIri || 'Not found')}</span></div>`;
+    html += `<div class="meta">Version info: <span class="mono">${escapeHtml(metadata.versionInfo || 'Not found')}</span></div>`;
+    html += `<div class="meta">License: <span class="mono">${escapeHtml(metadata.license || 'Not found')}</span></div>`;
+    html += `<div class="meta">Access rights: <span class="mono">${escapeHtml(metadata.accessRights || 'Not found')}</span></div>`;
+    html += `<div class="meta">Imports: <span class="mono">${escapeHtml((metadata.imports || []).join(', ') || 'None found')}</span></div>`;
+    html += `<div class="meta">Triple count: <span class="mono">${escapeHtml(metadata.tripleCount || 0)}</span></div>`;
+    html += `<div class="meta">Labeled resources: <span class="mono">${escapeHtml(metadata.labeledResourceCount || 0)}</span></div>`;
+  }
+  html += '</div>';
+
+  html += '<div class="card"><h2>Ontology standards</h2>';
   if (!report) {
     html += '<p>No ontology report loaded.</p>';
   } else {
-    html += `<div class="meta">Ontology IRI: <span class="mono">${escapeHtml(report.ontologyIri || '')}</span></div>`;
     html += `<div class="meta">Overall status: <span class="pill">${escapeHtml(report.statusLabel || '')}</span></div>`;
 
+    html += '<h3>Ontology-level checks</h3>';
     html += '<table><thead><tr><th>id</th><th>type</th><th>status</th><th>failedResourcesCount</th></tr></thead><tbody>';
 
-    for (const standard of getReportStandards(report)) {
+    for (const standard of report.ontologyStandards || []) {
+      html += '<tr>';
+      html += `<td class="mono">${escapeHtml(standard.id)}</td>`;
+      html += `<td>${escapeHtml(standard.type)}</td>`;
+      html += `<td>${escapeHtml(standard.status)}</td>`;
+      html += `<td class="mono">${escapeHtml(standard.failedResourcesCount ?? '')}</td>`;
+      html += '</tr>';
+    }
+
+    html += '</tbody></table>';
+
+    html += '<h3>Ontology contents checks</h3>';
+    html += '<table><thead><tr><th>id</th><th>type</th><th>status</th><th>failedResourcesCount</th></tr></thead><tbody>';
+
+    for (const standard of report.contentStandards || []) {
       html += '<tr>';
       html += `<td class="mono">${escapeHtml(standard.id)}</td>`;
       html += `<td>${escapeHtml(standard.type)}</td>`;

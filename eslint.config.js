@@ -46,6 +46,7 @@ export default [
         URL: "readonly",
         console: "readonly",
         document: "readonly",
+        fetch: "readonly",
         localStorage: "readonly",
         window: "readonly"
       }

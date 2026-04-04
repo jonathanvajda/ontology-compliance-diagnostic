@@ -17,6 +17,8 @@ import {
  * @typedef {Object} BuildInspectionItemInput
  * @property {string} fileName
  * @property {string} ontologyIri
+ * @property {string | null | undefined} inspectedAt
+ * @property {import('./types.js').OcqOntologyMetadata | null | undefined} ontologyMetadata
  * @property {OcqQueryResultRow[]} results
  * @property {string[]} resources
  * @property {OcqManifest | null | undefined} manifest
@@ -33,16 +35,20 @@ import {
 export function buildInspectionItem(input) {
   const fileName = String(input?.fileName || '');
   const ontologyIri = String(input?.ontologyIri || '');
+  const inspectedAt = String(input?.inspectedAt || new Date().toISOString());
+  const ontologyMetadata = input?.ontologyMetadata || null;
   const results = Array.isArray(input?.results) ? input.results : [];
   const resources = Array.isArray(input?.resources) ? input.resources : [];
   const manifest = input?.manifest || null;
 
   const perResource = computePerResourceCuration(results, manifest, resources);
-  const ontologyReport = computeOntologyReport(results, manifest, ontologyIri);
+  const ontologyReport = computeOntologyReport(results, manifest, ontologyIri, ontologyMetadata);
 
   return {
+    inspectedAt,
     fileName,
     ontologyIri,
+    ontologyMetadata,
     ontologyReport,
     perResource,
     results
@@ -62,7 +68,7 @@ export async function inspectOntologyText(ontologyText, fileName, manifest) {
     throw new TypeError('inspectOntologyText() requires ontologyText to be a string.');
   }
 
-  const { results, resources, ontologyIri } = await evaluateAllQueries(
+  const { results, resources, ontologyIri, ontologyMetadata } = await evaluateAllQueries(
     ontologyText,
     fileName || 'ontology.ttl'
   );
@@ -70,6 +76,8 @@ export async function inspectOntologyText(ontologyText, fileName, manifest) {
   return buildInspectionItem({
     fileName,
     ontologyIri,
+    inspectedAt: new Date().toISOString(),
+    ontologyMetadata,
     results,
     resources,
     manifest

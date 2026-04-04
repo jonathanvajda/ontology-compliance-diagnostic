@@ -3,6 +3,7 @@
 
 /** @typedef {import('./types.js').OcqManifest} OcqManifest */
 /** @typedef {import('./types.js').OcqManifestStandard} OcqManifestStandard */
+/** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
 /** @typedef {import('./types.js').OcqStandardType} OcqStandardType */
 /** @typedef {import('./types.js').OcqCurationFlags} OcqCurationFlags */
@@ -27,6 +28,7 @@
  * @typedef {Object} OntologyStandardAccumulator
  * @property {string} id
  * @property {OcqStandardType} type
+ * @property {'ontology' | 'content'} scopeCategory
  * @property {number} weight
  * @property {boolean} hasFail
  * @property {Set<string>} failingResources
@@ -150,6 +152,34 @@ export function buildStandardTypeMap(manifest) {
   }
 
   return standardTypeMap;
+}
+
+/**
+ * Builds a map from criterion id to high-level scope category.
+ *
+ * @param {OcqManifest | null | undefined} manifest
+ * @returns {Map<string, 'ontology' | 'content'>}
+ */
+export function buildCriterionScopeCategoryMap(manifest) {
+  /** @type {Map<string, 'ontology' | 'content'>} */
+  const criterionScopeMap = new Map();
+
+  if (!manifest || !Array.isArray(manifest.queries)) {
+    return criterionScopeMap;
+  }
+
+  for (const query of manifest.queries) {
+    if (!query?.checksCriterion) {
+      continue;
+    }
+
+    criterionScopeMap.set(
+      query.checksCriterion,
+      query.scope === 'ontology' ? 'ontology' : 'content'
+    );
+  }
+
+  return criterionScopeMap;
 }
 
 /**
@@ -339,11 +369,13 @@ export function computePerResourceCuration(results, manifest, allResources) {
  * @param {OcqQueryResultRow[] | null | undefined} results
  * @param {OcqManifest | null | undefined} manifest
  * @param {string | null | undefined} ontologyIri
+ * @param {OcqOntologyMetadata | null | undefined} [ontologyMetadata]
  * @returns {OcqOntologyReport}
  */
-export function computeOntologyReport(results, manifest, ontologyIri) {
+export function computeOntologyReport(results, manifest, ontologyIri, ontologyMetadata) {
   /** @type {Map<string, OntologyStandardAccumulator>} */
   const standardAccumulators = new Map();
+  const criterionScopeMap = buildCriterionScopeCategoryMap(manifest);
 
   if (manifest && Array.isArray(manifest.standards)) {
     for (const standard of manifest.standards) {
@@ -354,6 +386,7 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
       standardAccumulators.set(standard.id, {
         id: standard.id,
         type: getStandardType(standard),
+        scopeCategory: criterionScopeMap.get(standard.id) || 'content',
         weight: typeof standard.weight === 'number' ? standard.weight : 1,
         hasFail: false,
         failingResources: new Set()
@@ -392,6 +425,10 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
 
   /** @type {OcqOntologyReportStandardRow[]} */
   const standards = [];
+  /** @type {OcqOntologyReportStandardRow[]} */
+  const ontologyStandards = [];
+  /** @type {OcqOntologyReportStandardRow[]} */
+  const contentStandards = [];
 
   for (const entry of standardAccumulators.values()) {
     const status = entry.hasFail ? 'fail' : 'pass';
@@ -407,6 +444,7 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
     standards.push({
       id: entry.id,
       type: entry.type,
+      scopeCategory: entry.scopeCategory,
       weight: entry.weight,
       status,
       failedResourcesCount,
@@ -415,6 +453,14 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
   }
 
   standards.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+  for (const standard of standards) {
+    if (standard.scopeCategory === 'ontology') {
+      ontologyStandards.push(standard);
+    } else {
+      contentStandards.push(standard);
+    }
+  }
 
   const statusIri = getCurationStatusIri(
     hasRequirementFailure,
@@ -425,8 +471,11 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
 
   return {
     ontologyIri: ontologyIri || UNKNOWN_ONTOLOGY_IRI,
+    metadata: ontologyMetadata || null,
     statusIri,
     statusLabel,
+    ontologyStandards,
+    contentStandards,
     standards
   };
 }

@@ -134,13 +134,13 @@
           />
 
           <p>
-            Select an ontology file (e.g., TTL) and click "Run checks".<br />
-            Results will be logged to the browser console, and a per-resource curation table will appear below.
+            Select one or more ontology files and click "Run batch checks".<br />
+            The dashboard accumulates ontology runs, and selecting a row opens the ontology metadata, ontology checks, and element checks below.
           </p>
 
           <div class="ocq-actions">
-            <button id="runChecksBtn" class="ocq-btn ocq-btn-primary" type="button">Run checks</button>
-            <button id="runBatchBtn" class="ocq-btn ocq-btn-secondary" type="button">Run batch checks</button>
+            <button id="runChecksBtn" class="ocq-btn ocq-btn-secondary" type="button" disabled aria-disabled="true">Run checks (deprecated)</button>
+            <button id="runBatchBtn" class="ocq-btn ocq-btn-primary" type="button">Run batch checks</button>
           </div>
 
           <p class="ocq-help">
