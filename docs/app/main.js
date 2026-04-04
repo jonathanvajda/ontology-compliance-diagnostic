@@ -81,6 +81,8 @@ const printReportButton = /** @type {HTMLButtonElement | null} */ (
 );
 /** @type {HTMLElement | null} */
 const statusElement = document.getElementById('status');
+/** @type {HTMLElement | null} */
+const queryCounterElement = document.getElementById('queryCounter');
 /** @type {HTMLInputElement | null} */
 const resourceSearchInput = /** @type {HTMLInputElement | null} */ (
   document.getElementById('resourceSearch')
@@ -126,6 +128,8 @@ const clearFiltersButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('clearFiltersBtn')
 );
 /** @type {HTMLElement | null} */
+const curationFiltersContainer = document.getElementById('curationFiltersContainer');
+/** @type {HTMLElement | null} */
 const curationFiltersSummaryElement = document.getElementById('curationFiltersSummary');
 
 /** @type {OcqManifest | null} */
@@ -156,6 +160,10 @@ let lastSelectedCriterionId = null;
 let lastSelectedStandardRow = null;
 /** @type {OcqPreparedOntologyFile[]} */
 let preparedOntologyFiles = [];
+/** @type {Array<{ fileName: string, completedQueries: number, totalQueries: number }>} */
+let queryProgressEntries = [];
+/** @type {boolean} */
+let preflightCollapsed = false;
 
 /**
  * Sets the status text.
@@ -183,6 +191,128 @@ function updateRunButtonState() {
   runInspectionButton.disabled = !isReady;
   runInspectionButton.classList.toggle('ocq-btn-primary', isReady);
   runInspectionButton.classList.toggle('ocq-btn-secondary', !isReady);
+}
+
+/**
+ * Renders the query progress panel.
+ *
+ * @returns {void}
+ */
+function renderQueryProgress() {
+  if (!queryCounterElement) {
+    return;
+  }
+
+  if (!Array.isArray(queryProgressEntries) || !queryProgressEntries.length) {
+    queryCounterElement.innerHTML = '';
+    return;
+  }
+
+  let html = '<div class="ocq-progress-board">';
+
+  for (const entry of queryProgressEntries) {
+    const total = Math.max(0, Number(entry.totalQueries) || 0);
+    const completed = Math.min(total, Math.max(0, Number(entry.completedQueries) || 0));
+    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const isComplete = total > 0 && completed >= total;
+    const progressLabel = isComplete ? 'Inspection complete' : `${completed} of ${total}`;
+
+    html += '<div class="ocq-progress-card">';
+    html += '<div class="ocq-progress-header">';
+    html += `<strong>${escapeHtml(entry.fileName)}</strong>`;
+    html += `<span class="ocq-mono">${escapeHtml(progressLabel)}</span>`;
+    html += '</div>';
+    html += '<div class="ocq-progress-track" aria-hidden="true">';
+    html += `<div class="ocq-progress-fill" style="width:${escapeHtml(String(percent))}%"></div>`;
+    html += '</div>';
+    html += `<div class="ocq-progress-meta"><span>${escapeHtml(`${percent}%`)}</span></div>`;
+    html += '</div>';
+  }
+
+  html += '</div>';
+  queryCounterElement.innerHTML = html;
+}
+
+/**
+ * Resets the query progress panel.
+ *
+ * @returns {void}
+ */
+function clearQueryProgress() {
+  queryProgressEntries = [];
+  renderQueryProgress();
+}
+
+/**
+ * Initializes query progress entries for the selected files.
+ *
+ * @param {File[]} files
+ * @param {number} totalQueries
+ * @returns {void}
+ */
+function initializeQueryProgress(files, totalQueries) {
+  queryProgressEntries = files.map((file) => ({
+    fileName: file.name,
+    completedQueries: 0,
+    totalQueries
+  }));
+  renderQueryProgress();
+}
+
+/**
+ * Updates query progress for one ontology.
+ *
+ * @param {{ fileName: string, completedQueries: number, totalQueries: number }} progress
+ * @returns {void}
+ */
+function updateQueryProgress(progress) {
+  const fileName = String(progress?.fileName || '');
+  if (!fileName) {
+    return;
+  }
+
+  const existing = queryProgressEntries.find((entry) => entry.fileName === fileName);
+  if (existing) {
+    existing.completedQueries = progress.completedQueries;
+    existing.totalQueries = progress.totalQueries;
+  } else {
+    queryProgressEntries.push({
+      fileName,
+      completedQueries: progress.completedQueries,
+      totalQueries: progress.totalQueries
+    });
+  }
+
+  renderQueryProgress();
+}
+
+/**
+ * Renders completed query progress from existing reports.
+ *
+ * @param {OcqEvaluatedReport[] | null | undefined} reports
+ * @param {OcqManifest | null | undefined} manifest
+ * @returns {void}
+ */
+function syncQueryProgressFromReports(reports, manifest) {
+  const items = Array.isArray(reports) ? reports : [];
+  const totalQueries = Array.isArray(manifest?.queries) ? manifest.queries.length : 0;
+
+  queryProgressEntries = items.map((report) => {
+    const observedQueries = new Set(
+      Array.isArray(report?.results)
+        ? report.results.map((row) => String(row?.queryId || '')).filter((queryId) => queryId)
+        : []
+    ).size;
+    const completedQueries = totalQueries > 0 ? totalQueries : observedQueries;
+
+    return {
+      fileName: String(report?.fileName || ''),
+      completedQueries,
+      totalQueries
+    };
+  });
+
+  renderQueryProgress();
 }
 
 /**
@@ -303,6 +433,7 @@ function clearRenderedViews() {
   renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
   renderOntologyReport(null, lastInspectionScope, lastManifest, ontologyReportContainer);
   renderCurationTable([], curationTableContainer);
+  updateCurationFiltersVisibility();
 
   if (standardDetailContainer) {
     standardDetailContainer.innerHTML = '';
@@ -316,6 +447,7 @@ function clearRenderedViews() {
  */
 function clearPreflightState() {
   preparedOntologyFiles = [];
+  preflightCollapsed = false;
   renderPreflightUi();
   updateRunButtonState();
 }
@@ -367,6 +499,7 @@ function clearInspectionDataState() {
   lastOntologyMetadata = null;
   lastOntologyReport = null;
   lastInspectionScope = null;
+  updateCurationFiltersVisibility();
 }
 
 /**
@@ -379,6 +512,7 @@ function resetInspectionView() {
   selectedBatchKey = null;
   clearInspectionDataState();
   clearRenderedViews();
+  clearQueryProgress();
 }
 
 /**
@@ -397,6 +531,20 @@ function renderResourceFilterSummary() {
 }
 
 /**
+ * Shows resource filters only when curation rows are available.
+ *
+ * @returns {void}
+ */
+function updateCurationFiltersVisibility() {
+  if (!curationFiltersContainer) {
+    return;
+  }
+
+  const hasRows = Array.isArray(lastPerResourceFull) && lastPerResourceFull.length > 0;
+  curationFiltersContainer.hidden = !hasRows;
+}
+
+/**
  * Renders the currently selected ontology/resource views.
  *
  * @returns {void}
@@ -409,6 +557,7 @@ function renderActiveInspectionViews() {
     ontologyReportContainer
   );
   renderCurationTable(lastPerResource, curationTableContainer);
+  updateCurationFiltersVisibility();
   renderResourceFilterSummary();
 }
 
@@ -424,13 +573,16 @@ function renderPreflightUi() {
 
   if (!preparedOntologyFiles.length) {
     preflightContainer.innerHTML = `
-      <h2 class="ocq-title">Inspection staging</h2>
-      <p class="ocq-muted">Analyze selected files to review ontology metadata, imports, and candidate namespaces before running checks.</p>
+      <p class="ocq-muted ocq-inline-preflight-empty">Load files to review ontology metadata, imports, and candidate namespaces before running inspection.</p>
     `;
     return;
   }
 
-  let html = '<h2 class="ocq-title">Inspection staging</h2>';
+  let html = '<details class="ocq-preflight-shell"' + (preflightCollapsed ? '' : ' open') + '>';
+  html += '<summary class="ocq-preflight-summary">';
+  html += '<span class="ocq-title">Inspection staging options</span>';
+  html += `<span class="ocq-muted">${escapeHtml(`${preparedOntologyFiles.length} file(s) ready`)}</span>`;
+  html += '</summary>';
   html += '<p class="ocq-muted">Choose which namespaces should count as in-scope for resource-level inspection. Ontology-level checks will still run on the ontology itself.</p>';
   html += '<div class="ocq-preflight-list">';
 
@@ -488,6 +640,7 @@ function renderPreflightUi() {
   }
 
   html += '</div>';
+  html += '</details>';
   preflightContainer.innerHTML = html;
 }
 
@@ -589,6 +742,13 @@ function applyInspectionItemToState(reportObject, manifest, preserveBatchReports
   if (lastManifest) {
     populateStandardFilter(lastManifest, standardFilterSelect);
   }
+
+  syncQueryProgressFromReports(
+    preserveBatchReports && Array.isArray(lastBatchReports) && lastBatchReports.length
+      ? lastBatchReports
+      : [reportObject],
+    lastManifest
+  );
 }
 
 /**
@@ -759,6 +919,7 @@ async function analyzeSelectedFiles() {
     }
 
     preparedOntologyFiles = nextPreparedFiles;
+    preflightCollapsed = false;
     renderPreflightUi();
     updateRunButtonState();
     setStatus(`Analyzed ${preparedOntologyFiles.length} ontology file(s). Review namespaces, then run batch checks.`);
@@ -984,6 +1145,7 @@ async function hydrateRun(run) {
     lastBatchReports = batchPayload;
     selectedBatchKey = run.uiState?.selectedBatchKey || null;
     clearInspectionDataState();
+    syncQueryProgressFromReports(lastBatchReports, lastManifest);
     renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
 
     if (selectedBatchKey) {
@@ -1046,16 +1208,26 @@ async function runInspectionFromSelectedFiles() {
 
   setStatus('Running inspection...');
   resetInspectionView();
+  preflightCollapsed = true;
+  renderPreflightUi();
 
   try {
     const manifest = await ensureManifestLoaded();
+    initializeQueryProgress(files, Array.isArray(manifest?.queries) ? manifest.queries.length : 0);
     const inspectionScopesByFileName = new Map(
       preparedOntologyFiles.map((prepared) => [
         prepared.file.name,
         prepared.inspectionScope
       ])
     );
-    const reportsWithScope = await inspectFiles(files, manifest, inspectionScopesByFileName);
+    const reportsWithScope = await inspectFiles(files, manifest, inspectionScopesByFileName, {
+      onQueryProgress: (progress) => {
+        updateQueryProgress(progress);
+        setStatus(
+          `Running inspection for ${progress.fileName}: ${progress.completedQueries} of ${progress.totalQueries} queries complete.`
+        );
+      }
+    });
     lastManifest = manifest;
     appendBatchReports(reportsWithScope);
     clearInspectionDataState();
@@ -1103,6 +1275,8 @@ async function initializeApp() {
   initTheme();
   renderPreflightUi();
   updateRunButtonState();
+  updateCurationFiltersVisibility();
+  clearQueryProgress();
 
   if (curationTableContainer) {
     curationTableContainer.addEventListener('click', (event) => {
@@ -1251,6 +1425,8 @@ async function initializeApp() {
   if (filesInput) {
     filesInput.addEventListener('change', () => {
       clearPreflightState();
+      clearQueryProgress();
+      preflightCollapsed = false;
       setStatus('Selected files changed. Analyze files to review scope before running checks.');
     });
   }

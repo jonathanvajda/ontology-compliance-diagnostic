@@ -24,6 +24,7 @@
  * @typedef {Object} EvaluateAllQueriesOptions
  * @property {string} [manifestUrl]
  * @property {string} [queryBasePath]
+ * @property {(progress: { fileName: string, queryId: string, completedQueries: number, totalQueries: number }) => void} [onQueryProgress]
  */
 
 /**
@@ -788,9 +789,11 @@ export async function evaluateAllQueries(
   const store = await loadOntologyIntoStore(ontologyText, fileName);
   const manifest = await loadManifest(manifestUrl);
   const ontologyMetadata = extractOntologyMetadata(store, fileName);
+  const totalQueries = Array.isArray(manifest.queries) ? manifest.queries.length : 0;
 
   /** @type {OcqQueryResultRow[]} */
   const allResults = [];
+  let completedQueries = 0;
 
   for (const queryDefinition of manifest.queries) {
     try {
@@ -801,6 +804,16 @@ export async function evaluateAllQueries(
       allResults.push(...rows);
     } catch (error) {
       console.error(`Error evaluating query ${queryDefinition.id}:`, error);
+    } finally {
+      completedQueries += 1;
+      if (typeof options.onQueryProgress === 'function') {
+        options.onQueryProgress({
+          fileName,
+          queryId: queryDefinition.id,
+          completedQueries,
+          totalQueries
+        });
+      }
     }
   }
 

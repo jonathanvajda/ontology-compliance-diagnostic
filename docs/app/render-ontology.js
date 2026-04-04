@@ -85,7 +85,7 @@ export function renderOntologyReport(
   html += '<div class="ocq-detail" style="margin-top:1rem;">';
   html += '<h3 class="ocq-detail-title">Ontology-level standards</h3>';
   html += '<p class="ocq-muted">These checks evaluate the ontology itself and its ontology annotations.</p>';
-  html += renderStandardsTable(
+  html += renderStandardsSection(
     ontologyStandards,
     'No ontology-level standards found.',
     'ontology',
@@ -96,7 +96,7 @@ export function renderOntologyReport(
   html += '<div class="ocq-detail" style="margin-top:1rem;">';
   html += '<h3 class="ocq-detail-title">Ontology contents standards</h3>';
   html += '<p class="ocq-muted">These checks evaluate classes, properties, individuals, and other resources within the ontology.</p>';
-  html += renderStandardsTable(
+  html += renderStandardsSection(
     contentStandards,
     standards.length ? 'No content/resource standards found.' : 'No standards found.',
     'content',
@@ -141,7 +141,7 @@ function renderOntologyMetadata(metadata) {
  * @returns {string}
  */
 function renderMetadataRow(label, value) {
-  return '<div><dt><strong>' + escapeHtml(label) + ':</strong></dt><dd>' + escapeHtml(value) + '</dd></div>';
+  return '<div class="ocq-meta-row"><dt><strong>' + escapeHtml(label) + ':</strong></dt><dd>' + escapeHtml(value) + '</dd></div>';
 }
 
 /**
@@ -153,12 +153,108 @@ function renderMetadataRow(label, value) {
  * @param {OcqManifest | null | undefined} manifest
  * @returns {string}
  */
-function renderStandardsTable(standards, emptyMessage, scopeCategory, manifest) {
+function renderStandardsSection(standards, emptyMessage, scopeCategory, manifest) {
   if (!standards.length) {
     return '<p>' + escapeHtml(emptyMessage) + '</p>';
   }
 
-  let html = '<table class="ocq-table">';
+  const failedStandards = standards.filter((standard) => standard.status === 'fail');
+  const passedStandards = standards.filter((standard) => standard.status === 'pass');
+
+  let html = renderStandardsSummary(standards, scopeCategory);
+
+  html += '<div class="ocq-standards-group">';
+  html += '<h4 class="ocq-standards-group-title">Needs attention</h4>';
+
+  if (!failedStandards.length) {
+    html += '<p class="ocq-muted">No failed standards in this section.</p>';
+  } else {
+    html += renderStandardsTable(
+      failedStandards,
+      scopeCategory,
+      manifest
+    );
+  }
+
+  html += '</div>';
+
+  html += '<details class="ocq-standards-group ocq-standards-pass-group">';
+  html += `<summary>Passed checks (${escapeHtml(String(passedStandards.length))})</summary>`;
+
+  if (!passedStandards.length) {
+    html += '<p class="ocq-muted">No passed standards to display.</p>';
+  } else {
+    html += renderStandardsTable(
+      passedStandards,
+      scopeCategory,
+      manifest
+    );
+  }
+
+  html += '</details>';
+
+  return html;
+}
+
+/**
+ * Renders a standards summary block.
+ *
+ * @param {OcqOntologyReportStandardRow[]} standards
+ * @param {'ontology' | 'content'} scopeCategory
+ * @returns {string}
+ */
+function renderStandardsSummary(standards, scopeCategory) {
+  const requirementStandards = standards.filter((standard) => standard.type === 'requirement');
+  const recommendationStandards = standards.filter(
+    (standard) => standard.type === 'recommendation'
+  );
+
+  let html = '<div class="ocq-summary-grid">';
+  html += renderSummaryMetricCard(
+    scopeCategory === 'ontology' ? 'Requirements passed' : 'Element requirements passed',
+    requirementStandards
+  );
+  html += renderSummaryMetricCard(
+    scopeCategory === 'ontology' ? 'Recommendations passed' : 'Element recommendations passed',
+    recommendationStandards
+  );
+  html += '</div>';
+  return html;
+}
+
+/**
+ * Renders one summary metric card.
+ *
+ * @param {string} label
+ * @param {OcqOntologyReportStandardRow[]} standards
+ * @returns {string}
+ */
+function renderSummaryMetricCard(label, standards) {
+  const total = standards.length;
+  const passed = standards.filter((standard) => standard.status === 'pass').length;
+  const percent = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+  let html = '<div class="ocq-summary-card">';
+  html += `<div class="ocq-summary-label">${escapeHtml(label)}</div>`;
+  html += `<div class="ocq-summary-value ocq-mono">${escapeHtml(`${passed} of ${total}`)}</div>`;
+  html += '<div class="ocq-progress-track" aria-hidden="true">';
+  html += `<div class="ocq-progress-fill" style="width:${escapeHtml(String(percent))}%"></div>`;
+  html += '</div>';
+  html += `<div class="ocq-summary-meta">${escapeHtml(`${percent}%`)}</div>`;
+  html += '</div>';
+  return html;
+}
+
+/**
+ * Renders one standards table.
+ *
+ * @param {OcqOntologyReportStandardRow[]} standards
+ * @param {'ontology' | 'content'} scopeCategory
+ * @param {OcqManifest | null | undefined} manifest
+ * @returns {string}
+ */
+function renderStandardsTable(standards, scopeCategory, manifest) {
+  let html = '<table class="ocq-table ocq-table-wide">';
   html += '<thead class="ocq-table-head"><tr>';
   html += '<th class="ocq-table-th">Criterion</th>';
   html += '<th class="ocq-table-th">Type</th>';

@@ -13,6 +13,19 @@ import {
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
 
 /**
+ * @typedef {Object} InspectProgress
+ * @property {string} fileName
+ * @property {string} queryId
+ * @property {number} completedQueries
+ * @property {number} totalQueries
+ */
+
+/**
+ * @typedef {Object} InspectFilesOptions
+ * @property {(progress: InspectProgress) => void} [onQueryProgress]
+ */
+
+/**
  * Input for building one inspected ontology report bundle.
  *
  * @typedef {Object} BuildInspectionItemInput
@@ -72,16 +85,26 @@ export function buildInspectionItem(input) {
  * @param {string} fileName
  * @param {OcqManifest | null | undefined} manifest
  * @param {OcqInspectionScope | null | undefined} [inspectionScope]
+ * @param {InspectFilesOptions} [options]
  * @returns {Promise<OcqEvaluatedReport>}
  */
-export async function inspectOntologyText(ontologyText, fileName, manifest, inspectionScope) {
+export async function inspectOntologyText(
+  ontologyText,
+  fileName,
+  manifest,
+  inspectionScope,
+  options = {}
+) {
   if (typeof ontologyText !== 'string') {
     throw new TypeError('inspectOntologyText() requires ontologyText to be a string.');
   }
 
   const { results, resources, ontologyIri, ontologyMetadata } = await evaluateAllQueries(
     ontologyText,
-    fileName || 'ontology.ttl'
+    fileName || 'ontology.ttl',
+    {
+      onQueryProgress: options.onQueryProgress
+    }
   );
 
   return buildInspectionItem({
@@ -102,15 +125,16 @@ export async function inspectOntologyText(ontologyText, fileName, manifest, insp
  * @param {File} file
  * @param {OcqManifest | null | undefined} manifest
  * @param {OcqInspectionScope | null | undefined} [inspectionScope]
+ * @param {InspectFilesOptions} [options]
  * @returns {Promise<OcqEvaluatedReport>}
  */
-export async function inspectFile(file, manifest, inspectionScope) {
+export async function inspectFile(file, manifest, inspectionScope, options = {}) {
   if (!(file instanceof File)) {
     throw new TypeError('inspectFile() requires a File.');
   }
 
   const text = await file.text();
-  return inspectOntologyText(text, file.name, manifest, inspectionScope);
+  return inspectOntologyText(text, file.name, manifest, inspectionScope, options);
 }
 
 /**
@@ -119,9 +143,10 @@ export async function inspectFile(file, manifest, inspectionScope) {
  * @param {File[]} files
  * @param {OcqManifest | null | undefined} manifest
  * @param {Map<string, OcqInspectionScope> | null | undefined} [inspectionScopesByFileName]
+ * @param {InspectFilesOptions} [options]
  * @returns {Promise<OcqEvaluatedReport[]>}
  */
-export async function inspectFiles(files, manifest, inspectionScopesByFileName) {
+export async function inspectFiles(files, manifest, inspectionScopesByFileName, options = {}) {
   const fileList = Array.isArray(files) ? files : [];
 
   /** @type {OcqEvaluatedReport[]} */
@@ -133,7 +158,7 @@ export async function inspectFiles(files, manifest, inspectionScopesByFileName) 
     }
 
     const inspectionScope = inspectionScopesByFileName?.get(file.name) || null;
-    const report = await inspectFile(file, manifest, inspectionScope);
+    const report = await inspectFile(file, manifest, inspectionScope, options);
     reports.push(report);
   }
 
