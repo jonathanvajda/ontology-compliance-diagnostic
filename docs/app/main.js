@@ -60,12 +60,12 @@ const filesInput = /** @type {HTMLInputElement | null} */ (
   document.getElementById('ontologyFiles')
 );
 /** @type {HTMLButtonElement | null} */
-const runBatchChecksButton = /** @type {HTMLButtonElement | null} */ (
-  document.getElementById('runBatchBtn')
+const runInspectionButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('runInspectionBtn')
 );
 /** @type {HTMLButtonElement | null} */
-const analyzeFilesButton = /** @type {HTMLButtonElement | null} */ (
-  document.getElementById('analyzeFilesBtn')
+const loadFilesForInspectionButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('loadFilesForInspectionBtn')
 );
 /** @type {HTMLSelectElement | null} */
 const downloadActionSelect = /** @type {HTMLSelectElement | null} */ (
@@ -74,6 +74,10 @@ const downloadActionSelect = /** @type {HTMLSelectElement | null} */ (
 /** @type {HTMLButtonElement | null} */
 const downloadSelectedButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('downloadSelectedBtn')
+);
+/** @type {HTMLButtonElement | null} */
+const printReportButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('printReportBtn')
 );
 /** @type {HTMLElement | null} */
 const statusElement = document.getElementById('status');
@@ -171,11 +175,14 @@ function setStatus(message) {
  * @returns {void}
  */
 function updateRunButtonState() {
-  if (!runBatchChecksButton) {
+  if (!runInspectionButton) {
     return;
   }
 
-  runBatchChecksButton.disabled = preparedOntologyFiles.length === 0;
+  const isReady = preparedOntologyFiles.length > 0;
+  runInspectionButton.disabled = !isReady;
+  runInspectionButton.classList.toggle('ocq-btn-primary', isReady);
+  runInspectionButton.classList.toggle('ocq-btn-secondary', !isReady);
 }
 
 /**
@@ -814,12 +821,35 @@ const downloadActions = {
 };
 
 /**
+ * Returns true when the current state can be printed.
+ *
+ * @returns {boolean}
+ */
+function isPrintAvailable() {
+  return !!lastOntologyReport || (Array.isArray(lastResults) && lastResults.length > 0);
+}
+
+/**
+ * Updates the print button availability.
+ *
+ * @returns {void}
+ */
+function updatePrintButtonState() {
+  if (!printReportButton) {
+    return;
+  }
+
+  printReportButton.disabled = !isPrintAvailable();
+}
+
+/**
  * Refreshes download-option availability.
  *
  * @returns {void}
  */
 function refreshDownloadOptions() {
   if (!downloadActionSelect || !downloadSelectedButton) {
+    updatePrintButtonState();
     return;
   }
 
@@ -842,6 +872,7 @@ function refreshDownloadOptions() {
   }
 
   downloadSelectedButton.disabled = !downloadActionSelect.value;
+  updatePrintButtonState();
 }
 
 /**
@@ -873,6 +904,43 @@ function handleDownloadSelected() {
     console.error(error);
     setStatus(error instanceof Error ? error.message : 'Download failed.');
   }
+}
+
+/**
+ * Opens a print-friendly report window for the current state.
+ *
+ * @returns {void}
+ */
+function handlePrintReport() {
+  if (!isPrintAvailable()) {
+    setStatus('Nothing to print yet. Run or load a report first.');
+    updatePrintButtonState();
+    return;
+  }
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    setStatus('Print window was blocked. Allow pop-ups and try again.');
+    return;
+  }
+
+  const reportHtml = buildHtmlReport(getExportState());
+  const printHtml = reportHtml.replace(
+    '</body>',
+    `<script>
+      window.addEventListener('load', () => {
+        window.print();
+      });
+      window.addEventListener('afterprint', () => {
+        window.close();
+      });
+    </script></body>`
+  );
+
+  printWindow.document.open();
+  printWindow.document.write(printHtml);
+  printWindow.document.close();
+  setStatus('Opened print view.');
 }
 
 /**
@@ -1228,15 +1296,20 @@ async function initializeApp() {
     downloadSelectedButton.addEventListener('click', handleDownloadSelected);
   }
 
-  if (runBatchChecksButton) {
-    runBatchChecksButton.disabled = true;
-    runBatchChecksButton.addEventListener('click', () => {
+  if (printReportButton) {
+    printReportButton.disabled = true;
+    printReportButton.addEventListener('click', handlePrintReport);
+  }
+
+  if (runInspectionButton) {
+    runInspectionButton.disabled = true;
+    runInspectionButton.addEventListener('click', () => {
       void runInspectionFromSelectedFiles();
     });
   }
 
-  if (analyzeFilesButton) {
-    analyzeFilesButton.addEventListener('click', () => {
+  if (loadFilesForInspectionButton) {
+    loadFilesForInspectionButton.addEventListener('click', () => {
       void analyzeSelectedFiles();
     });
   }
@@ -1288,6 +1361,7 @@ async function initializeApp() {
 
   updateRunButtonState();
   refreshDownloadOptions();
+  updatePrintButtonState();
 }
 
 void initializeApp();
