@@ -43,6 +43,7 @@ import {
 /** @typedef {import('./types.js').OcqPreparedOntologyFile} OcqPreparedOntologyFile */
 /** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
+/** @typedef {import('./types.js').OcqResourceDetail} OcqResourceDetail */
 /** @typedef {import('./types.js').OcqSavedRun} OcqSavedRun */
 /** @typedef {import('./types.js').OcqUiStateSnapshot} OcqUiStateSnapshot */
 
@@ -146,6 +147,8 @@ let lastFailuresIndex = null;
 let lastOntologyReport = null;
 /** @type {OcqOntologyMetadata | null} */
 let lastOntologyMetadata = null;
+/** @type {Record<string, OcqResourceDetail> | null} */
+let lastResourceDetails = null;
 /** @type {OcqEvaluatedReport[] | null} */
 let lastBatchReports = null;
 /** @type {import('./types.js').OcqInspectionScope | null} */
@@ -432,7 +435,7 @@ function initTheme() {
 function clearRenderedViews() {
   renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
   renderOntologyReport(null, lastInspectionScope, lastManifest, ontologyReportContainer);
-  renderCurationTable([], curationTableContainer);
+  renderCurationTable([], lastFailuresIndex, lastResourceDetails, curationTableContainer);
   updateCurationFiltersVisibility();
 
   if (standardDetailContainer) {
@@ -497,6 +500,7 @@ function clearInspectionDataState() {
   lastPerResourceFull = null;
   lastFailuresIndex = null;
   lastOntologyMetadata = null;
+  lastResourceDetails = null;
   lastOntologyReport = null;
   lastInspectionScope = null;
   updateCurationFiltersVisibility();
@@ -556,7 +560,7 @@ function renderActiveInspectionViews() {
     lastManifest,
     ontologyReportContainer
   );
-  renderCurationTable(lastPerResource, curationTableContainer);
+  renderCurationTable(lastPerResource, lastFailuresIndex, lastResourceDetails, curationTableContainer);
   updateCurationFiltersVisibility();
   renderResourceFilterSummary();
 }
@@ -732,6 +736,7 @@ function applyInspectionItemToState(reportObject, manifest, preserveBatchReports
   lastPerResourceFull = reportObject.perResource || [];
   lastPerResource = reportObject.perResource || [];
   lastOntologyMetadata = reportObject.ontologyMetadata || null;
+  lastResourceDetails = reportObject.resourceDetails || {};
   lastOntologyReport = reportObject.ontologyReport || null;
   lastManifest = manifest || lastManifest;
   if (!preserveBatchReports) {
@@ -1294,7 +1299,12 @@ async function initializeApp() {
         return;
       }
 
-      toggleResourceDetail(resourceIri, lastFailuresIndex, curationTableContainer);
+      toggleResourceDetail(
+        resourceIri,
+        lastFailuresIndex,
+        lastResourceDetails,
+        curationTableContainer
+      );
     });
   }
 

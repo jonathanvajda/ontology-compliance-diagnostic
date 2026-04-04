@@ -35,6 +35,7 @@ import {
  * @property {import('./types.js').OcqOntologyMetadata | null | undefined} ontologyMetadata
  * @property {OcqQueryResultRow[]} results
  * @property {string[]} resources
+ * @property {Record<string, import('./types.js').OcqResourceDetail>} [resourceDetails]
  * @property {OcqInspectionScope | null | undefined} inspectionScope
  * @property {OcqManifest | null | undefined} manifest
  */
@@ -54,6 +55,7 @@ export function buildInspectionItem(input) {
   const ontologyMetadata = input?.ontologyMetadata || null;
   const results = Array.isArray(input?.results) ? input.results : [];
   const resources = Array.isArray(input?.resources) ? input.resources : [];
+  const resourceDetails = input?.resourceDetails || {};
   const inspectionScope = input?.inspectionScope || null;
   const manifest = input?.manifest || null;
 
@@ -74,6 +76,7 @@ export function buildInspectionItem(input) {
     inspectionScope,
     ontologyReport,
     perResource,
+    resourceDetails,
     results
   };
 }
@@ -99,7 +102,7 @@ export async function inspectOntologyText(
     throw new TypeError('inspectOntologyText() requires ontologyText to be a string.');
   }
 
-  const { results, resources, ontologyIri, ontologyMetadata } = await evaluateAllQueries(
+  const { results, resources, resourceDetails, ontologyIri, ontologyMetadata } = await evaluateAllQueries(
     ontologyText,
     fileName || 'ontology.ttl',
     {
@@ -114,6 +117,7 @@ export async function inspectOntologyText(
     ontologyMetadata,
     results,
     resources,
+    resourceDetails,
     inspectionScope,
     manifest
   });

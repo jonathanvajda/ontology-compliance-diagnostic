@@ -745,3 +745,33 @@
 .ocq-app .ocq-table-wide {
   width: 100%;
 }
+
+.ocq-app .ocq-resource-detail-section + .ocq-resource-detail-section {
+  margin-top: 14px;
+}
+
+.ocq-app .ocq-resource-meta-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.ocq-app .ocq-resource-meta-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 1fr;
+  gap: 12px;
+}
+
+.ocq-app .ocq-resource-meta-row dt,
+.ocq-app .ocq-resource-meta-row dd {
+  margin: 0;
+}
+
+.ocq-app .ocq-resource-meta-row dt {
+  color: var(--ont-muted);
+  font-weight: 700;
+}
+
+.ocq-app .ocq-resource-meta-row dd {
+  word-break: break-word;
+}

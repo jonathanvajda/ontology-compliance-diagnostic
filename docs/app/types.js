@@ -55,15 +55,33 @@
 /**
  * A single evaluated ontology report bundle.
  *
+ * @typedef {Object} OcqResourceDetailField
+ * @property {string} id
+ * @property {string} label
+ * @property {string[]} values
+ */
+
+/**
+ * A compact resource detail block extracted from the inspected ontology.
+ *
+ * @typedef {Object} OcqResourceDetail
+ * @property {string} resource
+ * @property {OcqResourceDetailField[]} fields
+ */
+
+/**
+ * A single evaluated ontology report bundle.
+ *
  * @typedef {Object} OcqEvaluatedReport
  * @property {string} inspectedAt
  * @property {string} fileName
  * @property {string} ontologyIri
  * @property {OcqOntologyMetadata | null} ontologyMetadata
  * @property {OcqInspectionScope | null} [inspectionScope]
- * @property {OcqOntologyReport | null} ontologyReport
- * @property {OcqPerResourceCurationRow[]} perResource
- * @property {OcqQueryResultRow[]} results
+  * @property {OcqOntologyReport | null} ontologyReport
+  * @property {OcqPerResourceCurationRow[]} perResource
+ * @property {Record<string, OcqResourceDetail>} [resourceDetails]
+  * @property {OcqQueryResultRow[]} results
  */
 
 /**
