@@ -13,22 +13,29 @@
 
 /** @typedef {import('./types.js').OcqManifest} OcqManifest */
 /** @typedef {import('./types.js').OcqManifestQuery} OcqManifestQuery */
+/** @typedef {import('./types.js').OcqPreflightSummary} OcqPreflightSummary */
+/** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
 /** @typedef {import('./types.js').OcqQueryResultStatus} OcqQueryResultStatus */
 /** @typedef {import('./types.js').OcqQueryScope} OcqQueryScope */
+/** @typedef {import('./types.js').OcqResourceDetail} OcqResourceDetail */
+/** @typedef {import('./types.js').OcqResourceDetailField} OcqResourceDetailField */
 /** @typedef {import('./types.js').OcqSeverity} OcqSeverity */
 
 /**
  * @typedef {Object} EvaluateAllQueriesOptions
  * @property {string} [manifestUrl]
  * @property {string} [queryBasePath]
+ * @property {(progress: { fileName: string, queryId: string, completedQueries: number, totalQueries: number }) => void} [onQueryProgress]
  */
 
 /**
  * @typedef {Object} EvaluateAllQueriesOutput
  * @property {OcqQueryResultRow[]} results
  * @property {string[]} resources
+ * @property {Record<string, OcqResourceDetail>} resourceDetails
  * @property {string} ontologyIri
+ * @property {OcqOntologyMetadata} ontologyMetadata
  */
 
 /** @type {Window & { N3?: any, Comunica?: any }} */
@@ -45,11 +52,79 @@ let cachedComunicaEngine = null;
 
 export const DEFAULT_MANIFEST_URL = './queries/manifest.json';
 export const DEFAULT_QUERY_BASE_PATH = 'queries/';
+export const DEFAULT_STANDARDS_MANIFEST_URL = './queries/standards-manifest.json';
 
 export const RDF_TYPE_IRI = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type';
 export const RDFS_LABEL_IRI = 'http://www.w3.org/2000/01/rdf-schema#label';
 export const OWL_ONTOLOGY_IRI = 'http://www.w3.org/2002/07/owl#Ontology';
+export const OWL_IMPORTS_IRI = 'http://www.w3.org/2002/07/owl#imports';
+export const OWL_VERSION_IRI = 'http://www.w3.org/2002/07/owl#versionIRI';
+export const OWL_VERSION_INFO_IRI = 'http://www.w3.org/2002/07/owl#versionInfo';
+export const DCTERMS_TITLE_IRI = 'http://purl.org/dc/terms/title';
+export const DCTERMS_DESCRIPTION_IRI = 'http://purl.org/dc/terms/description';
+export const DCTERMS_LICENSE_IRI = 'http://purl.org/dc/terms/license';
+export const DCTERMS_ACCESS_RIGHTS_IRI = 'http://purl.org/dc/terms/accessRights';
+export const DCTERMS_BIBLIOGRAPHIC_CITATION_IRI = 'http://purl.org/dc/terms/bibliographicCitation';
 export const UNKNOWN_ONTOLOGY_IRI = 'urn:ontology:unknown';
+export const OWL_NAMED_INDIVIDUAL_IRI = 'http://www.w3.org/2002/07/owl#NamedIndividual';
+export const OWL_CLASS_IRI = 'http://www.w3.org/2002/07/owl#Class';
+export const OWL_OBJECT_PROPERTY_IRI = 'http://www.w3.org/2002/07/owl#ObjectProperty';
+export const OWL_DATATYPE_PROPERTY_IRI = 'http://www.w3.org/2002/07/owl#DatatypeProperty';
+export const OWL_ANNOTATION_PROPERTY_IRI = 'http://www.w3.org/2002/07/owl#AnnotationProperty';
+export const OWL_INVERSE_OF_IRI = 'http://www.w3.org/2002/07/owl#inverseOf';
+export const RDFS_COMMENT_IRI = 'http://www.w3.org/2000/01/rdf-schema#comment';
+export const RDFS_SUBCLASS_OF_IRI = 'http://www.w3.org/2000/01/rdf-schema#subClassOf';
+export const RDFS_SUBPROPERTY_OF_IRI = 'http://www.w3.org/2000/01/rdf-schema#subPropertyOf';
+export const RDFS_DOMAIN_IRI = 'http://www.w3.org/2000/01/rdf-schema#domain';
+export const RDFS_RANGE_IRI = 'http://www.w3.org/2000/01/rdf-schema#range';
+export const RDFS_IS_DEFINED_BY_IRI = 'http://www.w3.org/2000/01/rdf-schema#isDefinedBy';
+export const SKOS_DEFINITION_IRI = 'http://www.w3.org/2004/02/skos/core#definition';
+export const SKOS_ALT_LABEL_IRI = 'http://www.w3.org/2004/02/skos/core#altLabel';
+export const SKOS_EXAMPLE_IRI = 'http://www.w3.org/2004/02/skos/core#example';
+export const SKOS_SCOPE_NOTE_IRI = 'http://www.w3.org/2004/02/skos/core#scopeNote';
+export const OBO_IAO_0000115_IRI = 'http://purl.obolibrary.org/obo/IAO_0000115';
+export const OBO_IAO_0000118_IRI = 'http://purl.obolibrary.org/obo/IAO_0000118';
+export const OBO_IAO_0000112_IRI = 'http://purl.obolibrary.org/obo/IAO_0000112';
+export const OBO_IAO_0000119_IRI = 'http://purl.obolibrary.org/obo/IAO_0000119';
+export const OBO_IAO_0000114_IRI = 'http://purl.obolibrary.org/obo/IAO_0000114';
+export const OBO_IAO_0000232_IRI = 'http://purl.obolibrary.org/obo/IAO_0000232';
+export const CCO_ACRONYM_IRI = 'http://www.ontologyrepository.com/CommonCoreOntologies/ont00001753';
+export const CCO_CURATED_IN_ONTOLOGY_IRI = 'http://www.ontologyrepository.com/CommonCoreOntologies/ont00001760';
+
+/** @type {Array<{ id: string, predicateIri: string, label: string }>} */
+const RESOURCE_DETAIL_PREDICATES = Object.freeze([
+  { id: 'rdfType', predicateIri: RDF_TYPE_IRI, label: 'RDF type' },
+  { id: 'label', predicateIri: RDFS_LABEL_IRI, label: 'Label' },
+  { id: 'definitionSkos', predicateIri: SKOS_DEFINITION_IRI, label: 'Definition' },
+  { id: 'definitionIao', predicateIri: OBO_IAO_0000115_IRI, label: 'Definition (IAO:0000115)' },
+  { id: 'altLabelSkos', predicateIri: SKOS_ALT_LABEL_IRI, label: 'Alternative label' },
+  { id: 'altTermIao', predicateIri: OBO_IAO_0000118_IRI, label: 'Alternative term (IAO:0000118)' },
+  { id: 'acronym', predicateIri: CCO_ACRONYM_IRI, label: 'Acronym' },
+  { id: 'exampleSkos', predicateIri: SKOS_EXAMPLE_IRI, label: 'Example' },
+  { id: 'exampleIao', predicateIri: OBO_IAO_0000112_IRI, label: 'Example of usage (IAO:0000112)' },
+  { id: 'scopeNote', predicateIri: SKOS_SCOPE_NOTE_IRI, label: 'Scope note' },
+  { id: 'bibliographicCitation', predicateIri: DCTERMS_BIBLIOGRAPHIC_CITATION_IRI, label: 'Bibliographic citation' },
+  { id: 'definitionSource', predicateIri: OBO_IAO_0000119_IRI, label: 'Definition source (IAO:0000119)' },
+  { id: 'isDefinedBy', predicateIri: RDFS_IS_DEFINED_BY_IRI, label: 'Is defined by' },
+  { id: 'curatedInOntology', predicateIri: CCO_CURATED_IN_ONTOLOGY_IRI, label: 'Is curated in ontology' },
+  { id: 'curationStatus', predicateIri: OBO_IAO_0000114_IRI, label: 'Has curation status' },
+  { id: 'curatorNote', predicateIri: OBO_IAO_0000232_IRI, label: 'Curator note' },
+  { id: 'subClassOf', predicateIri: RDFS_SUBCLASS_OF_IRI, label: 'SubClassOf' },
+  { id: 'subPropertyOf', predicateIri: RDFS_SUBPROPERTY_OF_IRI, label: 'SubPropertyOf' },
+  { id: 'inverseOf', predicateIri: OWL_INVERSE_OF_IRI, label: 'Inverse property' },
+  { id: 'domain', predicateIri: RDFS_DOMAIN_IRI, label: 'Domain' },
+  { id: 'range', predicateIri: RDFS_RANGE_IRI, label: 'Range' },
+  { id: 'comment', predicateIri: RDFS_COMMENT_IRI, label: 'Comment' }
+]);
+
+/** @type {Readonly<Record<string, string>>} */
+const KNOWN_IRI_LABELS = Object.freeze({
+  [OWL_CLASS_IRI]: 'owl:Class',
+  [OWL_NAMED_INDIVIDUAL_IRI]: 'owl:NamedIndividual',
+  [OWL_OBJECT_PROPERTY_IRI]: 'owl:ObjectProperty',
+  [OWL_DATATYPE_PROPERTY_IRI]: 'owl:DatatypeProperty',
+  [OWL_ANNOTATION_PROPERTY_IRI]: 'owl:AnnotationProperty'
+});
 
 export const SUPPORTED_RDF_FORMATS = Object.freeze({
   TURTLE: 'text/turtle',
@@ -377,7 +452,42 @@ export async function loadManifest(manifestUrl = DEFAULT_MANIFEST_URL) {
     throw new Error('Manifest JSON is invalid: expected an object with a queries array.');
   }
 
-  return /** @type {OcqManifest} */ (rawManifest);
+  /** @type {OcqManifest} */
+  const manifest = /** @type {OcqManifest} */ (rawManifest);
+  const standardsUrl = typeof manifest.standardsUrl === 'string' && manifest.standardsUrl.trim()
+    ? manifest.standardsUrl.trim()
+    : (
+      !Array.isArray(manifest.standards)
+        ? DEFAULT_STANDARDS_MANIFEST_URL
+        : ''
+    );
+
+  if (standardsUrl) {
+    const resolvedUrl = new URL(standardsUrl, new URL(manifestUrl, window.location.href)).toString();
+    const standardsResponse = await fetch(resolvedUrl);
+
+    if (!standardsResponse.ok) {
+      throw new Error(
+        `Failed to fetch standards manifest: ${standardsResponse.status} ${standardsResponse.statusText}`
+      );
+    }
+
+    /** @type {unknown} */
+    const rawStandardsManifest = await standardsResponse.json();
+    /** @type {{ standards?: unknown }} */
+    const standardsManifestLike =
+      rawStandardsManifest && typeof rawStandardsManifest === 'object'
+        ? /** @type {{ standards?: unknown }} */ (rawStandardsManifest)
+        : {};
+
+    if (!Array.isArray(standardsManifestLike.standards)) {
+      throw new Error('Standards manifest JSON is invalid: expected an object with a standards array.');
+    }
+
+    manifest.standards = standardsManifestLike.standards;
+  }
+
+  return manifest;
 }
 
 /**
@@ -429,6 +539,108 @@ export function guessOntologyIri(store) {
 }
 
 /**
+ * Returns the first object value for one subject/predicate pair.
+ *
+ * @param {any} store
+ * @param {string} subjectIri
+ * @param {string} predicateIri
+ * @returns {string | null}
+ */
+export function getFirstObjectValue(store, subjectIri, predicateIri) {
+  const quad = store.getQuads(subjectIri, predicateIri, null, null)[0];
+  return quad?.object?.value || null;
+}
+
+/**
+ * Returns all object values for one subject/predicate pair.
+ *
+ * @param {any} store
+ * @param {string} subjectIri
+ * @param {string} predicateIri
+ * @returns {string[]}
+ */
+export function getObjectValues(store, subjectIri, predicateIri) {
+  return store
+    .getQuads(subjectIri, predicateIri, null, null)
+    .map((quad) => quad?.object?.value || '')
+    .filter((value) => value !== '');
+}
+
+/**
+ * Returns all normalized object values for one subject/predicate pair.
+ *
+ * @param {any} store
+ * @param {string} subjectIri
+ * @param {string} predicateIri
+ * @returns {string[]}
+ */
+export function getNormalizedObjectValues(store, subjectIri, predicateIri) {
+  const values = getObjectValues(store, subjectIri, predicateIri)
+    .map((value) => KNOWN_IRI_LABELS[value] || value)
+    .filter((value) => value !== '');
+
+  return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Extracts compact resource details for one resource IRI.
+ *
+ * @param {any} store
+ * @param {string} resourceIri
+ * @returns {OcqResourceDetail}
+ */
+export function extractResourceDetail(store, resourceIri) {
+  /** @type {OcqResourceDetailField[]} */
+  const fields = [];
+
+  for (const descriptor of RESOURCE_DETAIL_PREDICATES) {
+    const values = getNormalizedObjectValues(store, resourceIri, descriptor.predicateIri);
+    if (!values.length) {
+      continue;
+    }
+
+    fields.push({
+      id: descriptor.id,
+      label: descriptor.label,
+      values
+    });
+  }
+
+  return {
+    resource: resourceIri,
+    fields
+  };
+}
+
+/**
+ * Extracts compact resource details for all relevant resources in the store.
+ *
+ * @param {any} store
+ * @param {string[]} resources
+ * @param {OcqQueryResultRow[]} [results=[]]
+ * @returns {Record<string, OcqResourceDetail>}
+ */
+export function extractResourceDetails(store, resources, results = []) {
+  /** @type {Set<string>} */
+  const resourceSet = new Set(Array.isArray(resources) ? resources.filter(Boolean) : []);
+
+  for (const row of Array.isArray(results) ? results : []) {
+    if (row?.resource) {
+      resourceSet.add(row.resource);
+    }
+  }
+
+  /** @type {Record<string, OcqResourceDetail>} */
+  const detailsByResource = {};
+
+  for (const resourceIri of resourceSet) {
+    detailsByResource[resourceIri] = extractResourceDetail(store, resourceIri);
+  }
+
+  return detailsByResource;
+}
+
+/**
  * Returns the set of labeled resources based on rdfs:label.
  *
  * @param {any} store
@@ -445,6 +657,127 @@ export function collectLabeledResources(store) {
   }
 
   return Array.from(labeled);
+}
+
+/**
+ * Extracts ontology metadata and simple run facts from the loaded store.
+ *
+ * @param {any} store
+ * @param {string} fileName
+ * @returns {OcqOntologyMetadata}
+ */
+export function extractOntologyMetadata(store, fileName) {
+  const ontologyIri = guessOntologyIri(store);
+  const labeledResources = collectLabeledResources(store);
+  const quads = store.getQuads(null, null, null, null);
+
+  return {
+    fileName: fileName || 'ontology.ttl',
+    ontologyIri,
+    title:
+      getFirstObjectValue(store, ontologyIri, DCTERMS_TITLE_IRI) ||
+      getFirstObjectValue(store, ontologyIri, RDFS_LABEL_IRI),
+    description: getFirstObjectValue(store, ontologyIri, DCTERMS_DESCRIPTION_IRI),
+    versionIri: getFirstObjectValue(store, ontologyIri, OWL_VERSION_IRI),
+    versionInfo: getFirstObjectValue(store, ontologyIri, OWL_VERSION_INFO_IRI),
+    license: getFirstObjectValue(store, ontologyIri, DCTERMS_LICENSE_IRI),
+    accessRights: getFirstObjectValue(store, ontologyIri, DCTERMS_ACCESS_RIGHTS_IRI),
+    imports: getObjectValues(store, ontologyIri, OWL_IMPORTS_IRI).sort(),
+    tripleCount: quads.length,
+    labeledResourceCount: labeledResources.length
+  };
+}
+
+/**
+ * Derives a namespace stem from an IRI.
+ *
+ * @param {string} iri
+ * @returns {string | null}
+ */
+export function getNamespaceFromIri(iri) {
+  if (typeof iri !== 'string' || !/^https?:|^urn:/.test(iri)) {
+    return null;
+  }
+
+  const hashIndex = iri.lastIndexOf('#');
+  if (hashIndex >= 0) {
+    return iri.slice(0, hashIndex + 1);
+  }
+
+  const slashIndex = iri.lastIndexOf('/');
+  if (slashIndex >= 0) {
+    return iri.slice(0, slashIndex + 1);
+  }
+
+  return null;
+}
+
+/**
+ * Extracts namespace candidates from RDF terms present in the store.
+ *
+ * @param {any} store
+ * @returns {string[]}
+ */
+export function extractNamespacesFromStore(store) {
+  const namespaces = new Set();
+  const quads = store?.getQuads ? store.getQuads(null, null, null, null) : [];
+
+  for (const quad of quads) {
+    const values = [
+      quad?.subject?.termType === 'NamedNode' ? quad.subject.value : null,
+      quad?.predicate?.termType === 'NamedNode' ? quad.predicate.value : null,
+      quad?.object?.termType === 'NamedNode' ? quad.object.value : null
+    ];
+
+    for (const value of values) {
+      const namespace = getNamespaceFromIri(value || '');
+      if (namespace) {
+        namespaces.add(namespace);
+      }
+    }
+  }
+
+  return Array.from(namespaces).sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Derives default included namespaces for one ontology summary.
+ *
+ * @param {OcqPreflightSummary} summary
+ * @returns {string[]}
+ */
+export function deriveDefaultIncludedNamespaces(summary) {
+  const ontologyNamespace = getNamespaceFromIri(summary?.ontologyIri || '');
+
+  if (ontologyNamespace) {
+    return [ontologyNamespace];
+  }
+
+  return Array.isArray(summary?.discoveredNamespaces)
+    ? summary.discoveredNamespaces.slice(0, 3)
+    : [];
+}
+
+/**
+ * Builds a lightweight preflight summary from ontology text.
+ *
+ * @param {string} ontologyText
+ * @param {string} [fileName='ontology.ttl']
+ * @returns {Promise<OcqPreflightSummary>}
+ */
+export async function buildPreflightSummary(ontologyText, fileName = 'ontology.ttl') {
+  const store = await loadOntologyIntoStore(ontologyText, fileName);
+  const metadata = extractOntologyMetadata(store, fileName);
+  const discoveredNamespaces = extractNamespacesFromStore(store);
+
+  return {
+    fileName: fileName || 'ontology.ttl',
+    ontologyIri: metadata.ontologyIri,
+    metadata,
+    imports: Array.isArray(metadata.imports) ? metadata.imports : [],
+    discoveredNamespaces,
+    resourceCountEstimate: metadata.labeledResourceCount || 0
+  };
 }
 
 /**
@@ -592,23 +925,43 @@ export async function evaluateAllQueries(
 
   const store = await loadOntologyIntoStore(ontologyText, fileName);
   const manifest = await loadManifest(manifestUrl);
+  const ontologyMetadata = extractOntologyMetadata(store, fileName);
+  const totalQueries = Array.isArray(manifest.queries) ? manifest.queries.length : 0;
+  const resources = collectLabeledResources(store);
 
   /** @type {OcqQueryResultRow[]} */
   const allResults = [];
+  let completedQueries = 0;
 
   for (const queryDefinition of manifest.queries) {
     try {
+      console.time(queryDefinition.id);
       const queryText = await loadQueryText(queryDefinition, queryBasePath);
       const rows = await evaluateSingleQuery(store, queryDefinition, queryText);
+      console.timeEnd(queryDefinition.id);
       allResults.push(...rows);
     } catch (error) {
       console.error(`Error evaluating query ${queryDefinition.id}:`, error);
+    } finally {
+      completedQueries += 1;
+      if (typeof options.onQueryProgress === 'function') {
+        options.onQueryProgress({
+          fileName,
+          queryId: queryDefinition.id,
+          completedQueries,
+          totalQueries
+        });
+      }
     }
   }
 
+  const resourceDetails = extractResourceDetails(store, resources, allResults);
+
   return {
     results: allResults,
-    resources: collectLabeledResources(store),
-    ontologyIri: guessOntologyIri(store)
+    resources,
+    resourceDetails,
+    ontologyIri: ontologyMetadata.ontologyIri,
+    ontologyMetadata
   };
 }

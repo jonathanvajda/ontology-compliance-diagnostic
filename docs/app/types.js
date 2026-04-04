@@ -25,14 +25,63 @@
  */
 
 /**
+ * User-selected scope for resource-level inspection.
+ *
+ * @typedef {Object} OcqInspectionScope
+ * @property {string[]} includedNamespaces
+ */
+
+/**
+ * Lightweight preflight summary shown before inspection runs.
+ *
+ * @typedef {Object} OcqPreflightSummary
+ * @property {string} fileName
+ * @property {string} ontologyIri
+ * @property {OcqOntologyMetadata | null} metadata
+ * @property {string[]} imports
+ * @property {string[]} discoveredNamespaces
+ * @property {number} resourceCountEstimate
+ */
+
+/**
+ * Prepared file entry used during preflight/staging.
+ *
+ * @typedef {Object} OcqPreparedOntologyFile
+ * @property {File} file
+ * @property {OcqPreflightSummary} summary
+ * @property {OcqInspectionScope} inspectionScope
+ */
+
+/**
+ * A single evaluated ontology report bundle.
+ *
+ * @typedef {Object} OcqResourceDetailField
+ * @property {string} id
+ * @property {string} label
+ * @property {string[]} values
+ */
+
+/**
+ * A compact resource detail block extracted from the inspected ontology.
+ *
+ * @typedef {Object} OcqResourceDetail
+ * @property {string} resource
+ * @property {OcqResourceDetailField[]} fields
+ */
+
+/**
  * A single evaluated ontology report bundle.
  *
  * @typedef {Object} OcqEvaluatedReport
+ * @property {string} inspectedAt
  * @property {string} fileName
  * @property {string} ontologyIri
- * @property {OcqOntologyReport | null} ontologyReport
- * @property {OcqPerResourceCurationRow[]} perResource
- * @property {OcqQueryResultRow[]} results
+ * @property {OcqOntologyMetadata | null} ontologyMetadata
+ * @property {OcqInspectionScope | null} [inspectionScope]
+  * @property {OcqOntologyReport | null} ontologyReport
+  * @property {OcqPerResourceCurationRow[]} perResource
+ * @property {Record<string, OcqResourceDetail>} [resourceDetails]
+  * @property {OcqQueryResultRow[]} results
  */
 
 /**
@@ -122,6 +171,8 @@
  * @property {number} [weight]
  * @property {string} [label]
  * @property {string} [statement]
+ * @property {string} [guidance]
+ * @property {'usually low' | 'usually high' | 'case-by-case'} [remediationEffort]
  */
 
 /**
@@ -129,6 +180,7 @@
  *
  * @typedef {Object} OcqManifest
  * @property {number} [version]
+ * @property {string} [standardsUrl]
  * @property {OcqManifestQuery[]} queries
  * @property {OcqManifestStandard[]} [standards]
  */
@@ -176,6 +228,7 @@
  * @typedef {Object} OcqOntologyReportStandardRow
  * @property {string} id
  * @property {OcqStandardType} type
+ * @property {'ontology' | 'content'} scopeCategory
  * @property {number} weight
  * @property {'pass' | 'fail'} status
  * @property {number} failedResourcesCount
@@ -183,12 +236,32 @@
  */
 
 /**
+ * Extracted ontology metadata and run-level facts for one evaluated ontology.
+ *
+ * @typedef {Object} OcqOntologyMetadata
+ * @property {string} fileName
+ * @property {string} ontologyIri
+ * @property {string | null} title
+ * @property {string | null} description
+ * @property {string | null} versionIri
+ * @property {string | null} versionInfo
+ * @property {string | null} license
+ * @property {string | null} accessRights
+ * @property {string[]} imports
+ * @property {number} tripleCount
+ * @property {number} labeledResourceCount
+ */
+
+/**
  * Ontology-level report returned by grader.js.
  *
  * @typedef {Object} OcqOntologyReport
  * @property {string} ontologyIri
+ * @property {OcqOntologyMetadata | null} metadata
  * @property {string} statusIri
  * @property {string} statusLabel
+ * @property {OcqOntologyReportStandardRow[]} ontologyStandards
+ * @property {OcqOntologyReportStandardRow[]} contentStandards
  * @property {OcqOntologyReportStandardRow[]} standards
  */
 
@@ -197,6 +270,21 @@
  * Map<resourceIri, Map<criterionId, Set<queryId>>>
  *
  * @typedef {Map<string, Map<string, Set<string>>>} OcqFailureIndex
+ */
+
+/**
+ * Current UI data passed into report/export builders.
+ *
+ * @typedef {Object} OcqExportState
+ * @property {string} [statusFilter]
+ * @property {string} [standardFilter]
+ * @property {string | null} [selectedCriterionId]
+ * @property {OcqManifest | null} [manifest]
+ * @property {OcqInspectionScope | null} [inspectionScope]
+ * @property {OcqOntologyMetadata | null} [ontologyMetadata]
+ * @property {OcqOntologyReport | null} [ontologyReport]
+ * @property {OcqPerResourceCurationRow[]} [perResourceRows]
+ * @property {OcqQueryResultRow[]} [results]
  */
 
 export {};

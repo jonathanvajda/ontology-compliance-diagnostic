@@ -305,11 +305,85 @@
   min-height: 18px;
 }
 
+.ocq-app .ocq-progress-board {
+  display: grid;
+  gap: 10px;
+}
+
+.ocq-app .ocq-progress-card,
+.ocq-app .ocq-summary-card {
+  border: 1px solid var(--ont-border);
+  border-radius: var(--ocq-radius-sm);
+  background: var(--ocq-surface-2);
+  padding: 12px 14px;
+}
+
+.ocq-app .ocq-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.ocq-app .ocq-progress-track {
+  width: 100%;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ont-border) 55%, var(--ocq-surface));
+}
+
+.ocq-app .ocq-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--ont-accent), var(--ont-link-hover));
+}
+
+.ocq-app .ocq-progress-meta,
+.ocq-app .ocq-summary-meta {
+  margin-top: 8px;
+  color: var(--ont-muted);
+  font-size: 12px;
+}
+
 .ocq-app .ocq-help {
   margin: 10px 0 0 0;
   color: var(--ont-muted);
   font-size: 12.8px;
   line-height: 1.4;
+}
+
+.ocq-app .ocq-inline-preflight {
+  margin-top: 14px;
+}
+
+.ocq-app .ocq-inline-preflight-empty {
+  margin: 0;
+}
+
+.ocq-app .ocq-preflight-shell {
+  border: 1px solid var(--ont-border);
+  border-radius: var(--ocq-radius-sm);
+  background: var(--ocq-surface-2);
+  padding: 12px;
+}
+
+.ocq-app .ocq-preflight-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.ocq-app .ocq-preflight-summary::-webkit-details-marker {
+  display: none;
+}
+
+.ocq-app .ocq-preflight-shell[open] .ocq-preflight-summary {
+  margin-bottom: 10px;
 }
 
 /* =========================
@@ -432,6 +506,93 @@
   font-size: 13px;
 }
 
+.ocq-app .ocq-meta-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.ocq-app .ocq-meta-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) 1fr;
+  gap: 10px;
+  margin: 0;
+}
+
+.ocq-app .ocq-meta-row dt,
+.ocq-app .ocq-meta-row dd {
+  margin: 0;
+}
+
+.ocq-app .ocq-table-meta {
+  margin-top: 4px;
+  color: var(--ont-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.ocq-app .ocq-detail-section {
+  margin-top: var(--ocq-space-3);
+}
+
+.ocq-app .ocq-detail-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ont-text);
+  margin-bottom: 6px;
+}
+
+.ocq-app .ocq-detail-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.ocq-app .ocq-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: color-mix(in srgb, #000 45%, transparent);
+  padding: 5vh 4vw;
+  align-items: center;
+  justify-content: center;
+}
+
+.ocq-app .ocq-modal.ocq-modal-open {
+  display: flex;
+}
+
+.ocq-app .ocq-modal-dialog {
+  width: min(1100px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  margin: 0;
+  position: relative;
+}
+
+.ocq-app .ocq-modal-close {
+  appearance: none;
+  border: 1px solid var(--ont-border);
+  background: var(--ocq-surface);
+  color: var(--ont-text);
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.ocq-app .ocq-modal-close:hover {
+  background: var(--ocq-surface-2);
+}
+
+.ocq-app .ocq-modal-close:focus-visible {
+  outline: none;
+  box-shadow: var(--ocq-focus-ring);
+}
+
 .ocq-app .ocq-mono {
   font-family: var(--ont-font-mono);
   font-size: 12.5px;
@@ -463,4 +624,154 @@
   outline: 2px solid var(--ocq-accent-border);
   outline-offset: -2px;
   background: var(--ocq-accent-bg);
+}
+
+.ocq-app .ocq-preflight-list {
+  display: grid;
+  gap: var(--ocq-space-3);
+}
+
+.ocq-app .ocq-preflight-card {
+  border: 1px solid var(--ont-border);
+  border-radius: var(--ocq-radius-sm);
+  background: var(--ocq-surface-2);
+  padding: var(--ocq-space-3);
+}
+
+.ocq-app .ocq-preflight-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ocq-space-3);
+  flex-wrap: wrap;
+}
+
+.ocq-app .ocq-preflight-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ocq-app .ocq-preflight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--ocq-space-3);
+  margin-top: var(--ocq-space-3);
+}
+
+.ocq-app .ocq-preflight-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ocq-app .ocq-checkbox-list {
+  display: grid;
+  gap: 6px;
+}
+
+.ocq-app .ocq-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.ocq-app .ocq-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ocq-app .ocq-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--ont-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--ocq-surface);
+}
+
+.ocq-app .ocq-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin: 0 0 var(--ocq-space-3) 0;
+}
+
+.ocq-app .ocq-summary-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ont-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ocq-app .ocq-summary-value {
+  margin: 8px 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ont-text);
+}
+
+.ocq-app .ocq-standards-group {
+  margin-top: var(--ocq-space-3);
+}
+
+.ocq-app .ocq-standards-group-title {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ocq-app .ocq-standards-pass-group {
+  border: 1px solid var(--ont-border);
+  border-radius: var(--ocq-radius-sm);
+  background: var(--ocq-surface-2);
+  padding: 12px;
+}
+
+.ocq-app .ocq-standards-pass-group summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ont-text);
+}
+
+.ocq-app .ocq-standards-pass-group[open] summary {
+  margin-bottom: 12px;
+}
+
+.ocq-app .ocq-table-wide {
+  width: 100%;
+}
+
+.ocq-app .ocq-resource-detail-section + .ocq-resource-detail-section {
+  margin-top: 14px;
+}
+
+.ocq-app .ocq-resource-meta-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.ocq-app .ocq-resource-meta-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 1fr;
+  gap: 12px;
+}
+
+.ocq-app .ocq-resource-meta-row dt,
+.ocq-app .ocq-resource-meta-row dd {
+  margin: 0;
+}
+
+.ocq-app .ocq-resource-meta-row dt {
+  color: var(--ont-muted);
+  font-weight: 700;
+}
+
+.ocq-app .ocq-resource-meta-row dd {
+  word-break: break-word;
 }

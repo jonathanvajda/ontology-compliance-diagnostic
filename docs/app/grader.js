@@ -3,6 +3,8 @@
 
 /** @typedef {import('./types.js').OcqManifest} OcqManifest */
 /** @typedef {import('./types.js').OcqManifestStandard} OcqManifestStandard */
+/** @typedef {import('./types.js').OcqInspectionScope} OcqInspectionScope */
+/** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
 /** @typedef {import('./types.js').OcqStandardType} OcqStandardType */
 /** @typedef {import('./types.js').OcqCurationFlags} OcqCurationFlags */
@@ -27,6 +29,7 @@
  * @typedef {Object} OntologyStandardAccumulator
  * @property {string} id
  * @property {OcqStandardType} type
+ * @property {'ontology' | 'content'} scopeCategory
  * @property {number} weight
  * @property {boolean} hasFail
  * @property {Set<string>} failingResources
@@ -153,6 +156,34 @@ export function buildStandardTypeMap(manifest) {
 }
 
 /**
+ * Builds a map from criterion id to high-level scope category.
+ *
+ * @param {OcqManifest | null | undefined} manifest
+ * @returns {Map<string, 'ontology' | 'content'>}
+ */
+export function buildCriterionScopeCategoryMap(manifest) {
+  /** @type {Map<string, 'ontology' | 'content'>} */
+  const criterionScopeMap = new Map();
+
+  if (!manifest || !Array.isArray(manifest.queries)) {
+    return criterionScopeMap;
+  }
+
+  for (const query of manifest.queries) {
+    if (!query?.checksCriterion) {
+      continue;
+    }
+
+    criterionScopeMap.set(
+      query.checksCriterion,
+      query.scope === 'ontology' ? 'ontology' : 'content'
+    );
+  }
+
+  return criterionScopeMap;
+}
+
+/**
  * Returns true if a result row should count as a resource-scoped failure.
  *
  * Ontology-scoped failures are intentionally excluded from per-resource views.
@@ -163,6 +194,30 @@ export function buildStandardTypeMap(manifest) {
 export function isResourceScopedRow(row) {
   const scope = row?.scope || 'resource';
   return scope === 'resource' || scope === 'TBox';
+}
+
+/**
+ * Returns true when a resource IRI falls within the selected inspection scope.
+ *
+ * @param {string | null | undefined} resourceIri
+ * @param {OcqInspectionScope | null | undefined} inspectionScope
+ * @returns {boolean}
+ */
+export function isInInspectionScope(resourceIri, inspectionScope) {
+  const includedNamespaces = Array.isArray(inspectionScope?.includedNamespaces)
+    ? inspectionScope.includedNamespaces.filter((namespace) => typeof namespace === 'string' && namespace !== '')
+    : [];
+
+  if (!includedNamespaces.length) {
+    return true;
+  }
+
+  const iri = resourceIri || '';
+  if (!iri) {
+    return false;
+  }
+
+  return includedNamespaces.some((namespace) => iri.startsWith(namespace));
 }
 
 /**
@@ -189,9 +244,10 @@ export function createPerResourceAccumulator(resource) {
  * Only resource-scoped failures are indexed.
  *
  * @param {OcqQueryResultRow[] | null | undefined} results
+ * @param {OcqInspectionScope | null | undefined} [inspectionScope]
  * @returns {OcqFailureIndex}
  */
-export function buildFailuresIndex(results) {
+export function buildFailuresIndex(results, inspectionScope) {
   /** @type {OcqFailureIndex} */
   const byResource = new Map();
 
@@ -204,6 +260,9 @@ export function buildFailuresIndex(results) {
       continue;
     }
     if (!isResourceScopedRow(row)) {
+      continue;
+    }
+    if (!isInInspectionScope(row.resource, inspectionScope)) {
       continue;
     }
 
@@ -247,9 +306,10 @@ export function buildFailuresIndex(results) {
  * @param {OcqQueryResultRow[] | null | undefined} results
  * @param {OcqManifest | null | undefined} manifest
  * @param {string[] | null | undefined} allResources
+ * @param {OcqInspectionScope | null | undefined} [inspectionScope]
  * @returns {OcqPerResourceCurationRow[]}
  */
-export function computePerResourceCuration(results, manifest, allResources) {
+export function computePerResourceCuration(results, manifest, allResources, inspectionScope) {
   const standardTypeMap = buildStandardTypeMap(manifest);
 
   /** @type {Map<string, PerResourceAccumulator>} */
@@ -259,6 +319,9 @@ export function computePerResourceCuration(results, manifest, allResources) {
 
   for (const row of rows) {
     if (!row || !isResourceScopedRow(row)) {
+      continue;
+    }
+    if (!isInInspectionScope(row.resource, inspectionScope)) {
       continue;
     }
 
@@ -295,6 +358,9 @@ export function computePerResourceCuration(results, manifest, allResources) {
   if (Array.isArray(allResources)) {
     for (const resourceIri of allResources) {
       if (!resourceIri) {
+        continue;
+      }
+      if (!isInInspectionScope(resourceIri, inspectionScope)) {
         continue;
       }
       if (!perResource.has(resourceIri)) {
@@ -339,11 +405,14 @@ export function computePerResourceCuration(results, manifest, allResources) {
  * @param {OcqQueryResultRow[] | null | undefined} results
  * @param {OcqManifest | null | undefined} manifest
  * @param {string | null | undefined} ontologyIri
+ * @param {OcqOntologyMetadata | null | undefined} [ontologyMetadata]
+ * @param {OcqInspectionScope | null | undefined} [inspectionScope]
  * @returns {OcqOntologyReport}
  */
-export function computeOntologyReport(results, manifest, ontologyIri) {
+export function computeOntologyReport(results, manifest, ontologyIri, ontologyMetadata, inspectionScope) {
   /** @type {Map<string, OntologyStandardAccumulator>} */
   const standardAccumulators = new Map();
+  const criterionScopeMap = buildCriterionScopeCategoryMap(manifest);
 
   if (manifest && Array.isArray(manifest.standards)) {
     for (const standard of manifest.standards) {
@@ -354,6 +423,7 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
       standardAccumulators.set(standard.id, {
         id: standard.id,
         type: getStandardType(standard),
+        scopeCategory: criterionScopeMap.get(standard.id) || 'content',
         weight: typeof standard.weight === 'number' ? standard.weight : 1,
         hasFail: false,
         failingResources: new Set()
@@ -380,6 +450,13 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
       continue;
     }
 
+    if (
+      entry.scopeCategory !== 'ontology' &&
+      !isInInspectionScope(resource, inspectionScope)
+    ) {
+      continue;
+    }
+
     entry.hasFail = true;
 
     if (isResourceScopedRow(row) && resource) {
@@ -392,6 +469,10 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
 
   /** @type {OcqOntologyReportStandardRow[]} */
   const standards = [];
+  /** @type {OcqOntologyReportStandardRow[]} */
+  const ontologyStandards = [];
+  /** @type {OcqOntologyReportStandardRow[]} */
+  const contentStandards = [];
 
   for (const entry of standardAccumulators.values()) {
     const status = entry.hasFail ? 'fail' : 'pass';
@@ -407,6 +488,7 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
     standards.push({
       id: entry.id,
       type: entry.type,
+      scopeCategory: entry.scopeCategory,
       weight: entry.weight,
       status,
       failedResourcesCount,
@@ -415,6 +497,14 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
   }
 
   standards.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+
+  for (const standard of standards) {
+    if (standard.scopeCategory === 'ontology') {
+      ontologyStandards.push(standard);
+    } else {
+      contentStandards.push(standard);
+    }
+  }
 
   const statusIri = getCurationStatusIri(
     hasRequirementFailure,
@@ -425,8 +515,11 @@ export function computeOntologyReport(results, manifest, ontologyIri) {
 
   return {
     ontologyIri: ontologyIri || UNKNOWN_ONTOLOGY_IRI,
+    metadata: ontologyMetadata || null,
     statusIri,
     statusLabel,
+    ontologyStandards,
+    contentStandards,
     standards
   };
 }

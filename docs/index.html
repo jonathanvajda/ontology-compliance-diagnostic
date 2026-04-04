@@ -134,13 +134,13 @@
           />
 
           <p>
-            Select an ontology file (e.g., TTL) and click "Run checks".<br />
-            Results will be logged to the browser console, and a per-resource curation table will appear below.
+            Select one or more ontology files to inspect. Select options and then run the quality assurance inspection.<br />
+            The dashboard accumulates ontology runs, and selecting a row opens the ontology metadata, ontology checks, and element checks below.
           </p>
 
           <div class="ocq-actions">
-            <button id="runChecksBtn" class="ocq-btn ocq-btn-primary" type="button">Run checks</button>
-            <button id="runBatchBtn" class="ocq-btn ocq-btn-secondary" type="button">Run batch checks</button>
+            <button id="loadFilesForInspectionBtn" class="ocq-btn ocq-btn-primary" type="button">Load files</button>
+            <button id="runInspectionBtn" class="ocq-btn ocq-btn-secondary" type="button">Run Inspection</button>
           </div>
 
           <p class="ocq-help">
@@ -186,10 +186,12 @@
             <br />
             <button id="loadSavedRunBtn" class="ocq-btn ocq-btn-tertiary" type="button">Load</button>
             <button id="deleteSavedRunBtn" class="ocq-btn ocq-btn-tertiary" type="button">Delete</button>
-            <button id="printReportBtn" class="ocq-btn ocq-btn-tertiary" type="button">Print</button>
+            <button id="printReportBtn" class="ocq-btn ocq-btn-tertiary" type="button" disabled>Print</button>
           </div>
         </div>
       </div>
+
+      <div id="preflightContainer" class="ocq-inline-preflight"></div>
 
       <div id="status" class="ocq-status" aria-live="polite"></div>
       <div id="queryCounter" class="ocq-status" aria-live="polite"></div>
@@ -199,9 +201,9 @@
 
     <div id="ontologyReportContainer" class="ocq-section ocq-card"></div>
 
-    <div id="standardDetailContainer" class="ocq-section ocq-card"></div>
+    <div id="standardDetailContainer" class="ocq-modal" aria-hidden="true"></div>
 
-    <div id="curationFiltersContainer" class="ocq-section ocq-card">
+    <div id="curationFiltersContainer" class="ocq-section ocq-card" hidden>
       <h2 class="ocq-title">Resource filters</h2>
 
       <div id="curationFilters" class="ocq-filters">
