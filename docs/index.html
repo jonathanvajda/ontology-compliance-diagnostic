@@ -134,12 +134,12 @@
           />
 
           <p>
-            Select one or more ontology files and click "Run batch checks".<br />
+            Select one or more ontology files to inspect. Select options and then run the quality assurance inspection.<br />
             The dashboard accumulates ontology runs, and selecting a row opens the ontology metadata, ontology checks, and element checks below.
           </p>
 
           <div class="ocq-actions">
-            <button id="runChecksBtn" class="ocq-btn ocq-btn-secondary" type="button" disabled aria-disabled="true">Run checks (deprecated)</button>
+            <button id="analyzeFilesBtn" class="ocq-btn ocq-btn-secondary" type="button">Analyze files</button>
             <button id="runBatchBtn" class="ocq-btn ocq-btn-primary" type="button">Run batch checks</button>
           </div>
 
@@ -196,6 +196,8 @@
     </div>
 
     <div id="dashboardContainer" class="ocq-section ocq-card"></div>
+
+    <div id="preflightContainer" class="ocq-section ocq-card"></div>
 
     <div id="ontologyReportContainer" class="ocq-section ocq-card"></div>
 
