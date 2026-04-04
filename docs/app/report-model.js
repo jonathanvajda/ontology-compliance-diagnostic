@@ -9,6 +9,7 @@ import {
 
 /** @typedef {import('./types.js').OcqManifest} OcqManifest */
 /** @typedef {import('./types.js').OcqEvaluatedReport} OcqEvaluatedReport */
+/** @typedef {import('./types.js').OcqInspectionScope} OcqInspectionScope */
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
 
 /**
@@ -21,6 +22,7 @@ import {
  * @property {import('./types.js').OcqOntologyMetadata | null | undefined} ontologyMetadata
  * @property {OcqQueryResultRow[]} results
  * @property {string[]} resources
+ * @property {OcqInspectionScope | null | undefined} inspectionScope
  * @property {OcqManifest | null | undefined} manifest
  */
 
@@ -39,16 +41,24 @@ export function buildInspectionItem(input) {
   const ontologyMetadata = input?.ontologyMetadata || null;
   const results = Array.isArray(input?.results) ? input.results : [];
   const resources = Array.isArray(input?.resources) ? input.resources : [];
+  const inspectionScope = input?.inspectionScope || null;
   const manifest = input?.manifest || null;
 
-  const perResource = computePerResourceCuration(results, manifest, resources);
-  const ontologyReport = computeOntologyReport(results, manifest, ontologyIri, ontologyMetadata);
+  const perResource = computePerResourceCuration(results, manifest, resources, inspectionScope);
+  const ontologyReport = computeOntologyReport(
+    results,
+    manifest,
+    ontologyIri,
+    ontologyMetadata,
+    inspectionScope
+  );
 
   return {
     inspectedAt,
     fileName,
     ontologyIri,
     ontologyMetadata,
+    inspectionScope,
     ontologyReport,
     perResource,
     results
@@ -61,9 +71,10 @@ export function buildInspectionItem(input) {
  * @param {string} ontologyText
  * @param {string} fileName
  * @param {OcqManifest | null | undefined} manifest
+ * @param {OcqInspectionScope | null | undefined} [inspectionScope]
  * @returns {Promise<OcqEvaluatedReport>}
  */
-export async function inspectOntologyText(ontologyText, fileName, manifest) {
+export async function inspectOntologyText(ontologyText, fileName, manifest, inspectionScope) {
   if (typeof ontologyText !== 'string') {
     throw new TypeError('inspectOntologyText() requires ontologyText to be a string.');
   }
@@ -80,6 +91,7 @@ export async function inspectOntologyText(ontologyText, fileName, manifest) {
     ontologyMetadata,
     results,
     resources,
+    inspectionScope,
     manifest
   });
 }
@@ -89,15 +101,16 @@ export async function inspectOntologyText(ontologyText, fileName, manifest) {
  *
  * @param {File} file
  * @param {OcqManifest | null | undefined} manifest
+ * @param {OcqInspectionScope | null | undefined} [inspectionScope]
  * @returns {Promise<OcqEvaluatedReport>}
  */
-export async function inspectFile(file, manifest) {
+export async function inspectFile(file, manifest, inspectionScope) {
   if (!(file instanceof File)) {
     throw new TypeError('inspectFile() requires a File.');
   }
 
   const text = await file.text();
-  return inspectOntologyText(text, file.name, manifest);
+  return inspectOntologyText(text, file.name, manifest, inspectionScope);
 }
 
 /**
@@ -105,9 +118,10 @@ export async function inspectFile(file, manifest) {
  *
  * @param {File[]} files
  * @param {OcqManifest | null | undefined} manifest
+ * @param {Map<string, OcqInspectionScope> | null | undefined} [inspectionScopesByFileName]
  * @returns {Promise<OcqEvaluatedReport[]>}
  */
-export async function inspectFiles(files, manifest) {
+export async function inspectFiles(files, manifest, inspectionScopesByFileName) {
   const fileList = Array.isArray(files) ? files : [];
 
   /** @type {OcqEvaluatedReport[]} */
@@ -118,7 +132,8 @@ export async function inspectFiles(files, manifest) {
       continue;
     }
 
-    const report = await inspectFile(file, manifest);
+    const inspectionScope = inspectionScopesByFileName?.get(file.name) || null;
+    const report = await inspectFile(file, manifest, inspectionScope);
     reports.push(report);
   }
 

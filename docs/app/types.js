@@ -25,6 +25,34 @@
  */
 
 /**
+ * User-selected scope for resource-level inspection.
+ *
+ * @typedef {Object} OcqInspectionScope
+ * @property {string[]} includedNamespaces
+ */
+
+/**
+ * Lightweight preflight summary shown before inspection runs.
+ *
+ * @typedef {Object} OcqPreflightSummary
+ * @property {string} fileName
+ * @property {string} ontologyIri
+ * @property {OcqOntologyMetadata | null} metadata
+ * @property {string[]} imports
+ * @property {string[]} discoveredNamespaces
+ * @property {number} resourceCountEstimate
+ */
+
+/**
+ * Prepared file entry used during preflight/staging.
+ *
+ * @typedef {Object} OcqPreparedOntologyFile
+ * @property {File} file
+ * @property {OcqPreflightSummary} summary
+ * @property {OcqInspectionScope} inspectionScope
+ */
+
+/**
  * A single evaluated ontology report bundle.
  *
  * @typedef {Object} OcqEvaluatedReport
@@ -32,6 +60,7 @@
  * @property {string} fileName
  * @property {string} ontologyIri
  * @property {OcqOntologyMetadata | null} ontologyMetadata
+ * @property {OcqInspectionScope | null} [inspectionScope]
  * @property {OcqOntologyReport | null} ontologyReport
  * @property {OcqPerResourceCurationRow[]} perResource
  * @property {OcqQueryResultRow[]} results
@@ -233,6 +262,7 @@
  * @property {string} [standardFilter]
  * @property {string | null} [selectedCriterionId]
  * @property {OcqManifest | null} [manifest]
+ * @property {OcqInspectionScope | null} [inspectionScope]
  * @property {OcqOntologyMetadata | null} [ontologyMetadata]
  * @property {OcqOntologyReport | null} [ontologyReport]
  * @property {OcqPerResourceCurationRow[]} [perResourceRows]

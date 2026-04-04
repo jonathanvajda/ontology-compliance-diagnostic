@@ -3,13 +3,16 @@
 
 import {
   loadManifest,
-  DEFAULT_MANIFEST_URL
+  DEFAULT_MANIFEST_URL,
+  buildPreflightSummary,
+  deriveDefaultIncludedNamespaces
 } from './engine.js';
 import { buildFailuresIndex } from './grader.js';
 import { inspectFiles } from './report-model.js';
 import { saveRun, listRuns, getRun, deleteRun, getLastRunId } from './storage.js';
 import { populateStandardFilter } from './criteria.js';
 import {
+  escapeHtml,
   cssEscapeAttr,
   getTimestampForFileName,
   safeFilePart
@@ -37,6 +40,7 @@ import {
 /** @typedef {import('./types.js').OcqManifest} OcqManifest */
 /** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
 /** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
+/** @typedef {import('./types.js').OcqPreparedOntologyFile} OcqPreparedOntologyFile */
 /** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
 /** @typedef {import('./types.js').OcqSavedRun} OcqSavedRun */
@@ -56,12 +60,12 @@ const filesInput = /** @type {HTMLInputElement | null} */ (
   document.getElementById('ontologyFiles')
 );
 /** @type {HTMLButtonElement | null} */
-const runChecksButton = /** @type {HTMLButtonElement | null} */ (
-  document.getElementById('runChecksBtn')
-);
-/** @type {HTMLButtonElement | null} */
 const runBatchChecksButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('runBatchBtn')
+);
+/** @type {HTMLButtonElement | null} */
+const analyzeFilesButton = /** @type {HTMLButtonElement | null} */ (
+  document.getElementById('analyzeFilesBtn')
 );
 /** @type {HTMLSelectElement | null} */
 const downloadActionSelect = /** @type {HTMLSelectElement | null} */ (
@@ -85,6 +89,8 @@ const ontologyReportContainer = document.getElementById('ontologyReportContainer
 const standardDetailContainer = document.getElementById('standardDetailContainer');
 /** @type {HTMLElement | null} */
 const dashboardContainer = document.getElementById('dashboardContainer');
+/** @type {HTMLElement | null} */
+const preflightContainer = document.getElementById('preflightContainer');
 /** @type {HTMLSelectElement | null} */
 const savedRunsSelect = /** @type {HTMLSelectElement | null} */ (
   document.getElementById('savedRunsSelect')
@@ -134,6 +140,8 @@ let lastOntologyReport = null;
 let lastOntologyMetadata = null;
 /** @type {OcqEvaluatedReport[] | null} */
 let lastBatchReports = null;
+/** @type {import('./types.js').OcqInspectionScope | null} */
+let lastInspectionScope = null;
 /** @type {string | null} */
 let selectedBatchKey = null;
 /** @type {number | null} */
@@ -142,6 +150,8 @@ let resourceSearchTimer = null;
 let lastSelectedCriterionId = null;
 /** @type {HTMLTableRowElement | null} */
 let lastSelectedStandardRow = null;
+/** @type {OcqPreparedOntologyFile[]} */
+let preparedOntologyFiles = [];
 
 /**
  * Sets the status text.
@@ -153,6 +163,19 @@ function setStatus(message) {
   if (statusElement) {
     statusElement.textContent = message;
   }
+}
+
+/**
+ * Enables or disables the run button based on preflight readiness.
+ *
+ * @returns {void}
+ */
+function updateRunButtonState() {
+  if (!runBatchChecksButton) {
+    return;
+  }
+
+  runBatchChecksButton.disabled = preparedOntologyFiles.length === 0;
 }
 
 /**
@@ -271,12 +294,23 @@ function initTheme() {
  */
 function clearRenderedViews() {
   renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
-  renderOntologyReport(null, lastManifest, ontologyReportContainer);
+  renderOntologyReport(null, lastInspectionScope, lastManifest, ontologyReportContainer);
   renderCurationTable([], curationTableContainer);
 
   if (standardDetailContainer) {
     standardDetailContainer.innerHTML = '';
   }
+}
+
+/**
+ * Clears current preflight state and UI.
+ *
+ * @returns {void}
+ */
+function clearPreflightState() {
+  preparedOntologyFiles = [];
+  renderPreflightUi();
+  updateRunButtonState();
 }
 
 /**
@@ -325,6 +359,7 @@ function clearInspectionDataState() {
   lastFailuresIndex = null;
   lastOntologyMetadata = null;
   lastOntologyReport = null;
+  lastInspectionScope = null;
 }
 
 /**
@@ -360,9 +395,93 @@ function renderResourceFilterSummary() {
  * @returns {void}
  */
 function renderActiveInspectionViews() {
-  renderOntologyReport(lastOntologyReport, lastManifest, ontologyReportContainer);
+  renderOntologyReport(
+    lastOntologyReport,
+    lastInspectionScope,
+    lastManifest,
+    ontologyReportContainer
+  );
   renderCurationTable(lastPerResource, curationTableContainer);
   renderResourceFilterSummary();
+}
+
+/**
+ * Renders the preflight staging UI.
+ *
+ * @returns {void}
+ */
+function renderPreflightUi() {
+  if (!preflightContainer) {
+    return;
+  }
+
+  if (!preparedOntologyFiles.length) {
+    preflightContainer.innerHTML = `
+      <h2 class="ocq-title">Inspection staging</h2>
+      <p class="ocq-muted">Analyze selected files to review ontology metadata, imports, and candidate namespaces before running checks.</p>
+    `;
+    return;
+  }
+
+  let html = '<h2 class="ocq-title">Inspection staging</h2>';
+  html += '<p class="ocq-muted">Choose which namespaces should count as in-scope for resource-level inspection. Ontology-level checks will still run on the ontology itself.</p>';
+  html += '<div class="ocq-preflight-list">';
+
+  for (const prepared of preparedOntologyFiles) {
+    const summary = prepared.summary;
+    const selectedNamespaces = prepared.inspectionScope?.includedNamespaces || [];
+    const imports = Array.isArray(summary.imports) ? summary.imports : [];
+    const discoveredNamespaces = Array.isArray(summary.discoveredNamespaces)
+      ? summary.discoveredNamespaces
+      : [];
+
+    html += '<div class="ocq-preflight-card">';
+    html += '<div class="ocq-preflight-header">';
+    html += `<h3 class="ocq-preflight-title">${escapeHtml(summary.fileName)}</h3>`;
+    html += `<span class="ocq-chip">${escapeHtml(String(summary.resourceCountEstimate))} labeled resources</span>`;
+    html += '</div>';
+    html += '<div class="ocq-preflight-grid">';
+    html += '<div class="ocq-preflight-block">';
+    html += '<strong>Ontology</strong>';
+    html += `<div class="ocq-table-meta ocq-mono">${escapeHtml(summary.ontologyIri || 'urn:ontology:unknown')}</div>`;
+    html += `<div class="ocq-table-meta">Title: ${escapeHtml(summary.metadata?.title || 'Not found')}</div>`;
+    html += `<div class="ocq-table-meta">Version IRI: ${escapeHtml(summary.metadata?.versionIri || 'Not found')}</div>`;
+    html += '</div>';
+    html += '<div class="ocq-preflight-block">';
+    html += '<strong>Imports</strong>';
+
+    if (imports.length) {
+      html += '<div class="ocq-chip-list">';
+      for (const importIri of imports) {
+        html += `<span class="ocq-chip ocq-mono">${escapeHtml(importIri)}</span>`;
+      }
+      html += '</div>';
+    } else {
+      html += '<div class="ocq-table-meta">None found</div>';
+    }
+
+    html += '</div>';
+    html += '<div class="ocq-preflight-block">';
+    html += '<strong>Included namespaces</strong>';
+    html += '<div class="ocq-checkbox-list">';
+
+    for (const namespace of discoveredNamespaces) {
+      const checkboxId = `scope-${encodeURIComponent(summary.fileName)}-${encodeURIComponent(namespace)}`;
+      const isChecked = selectedNamespaces.includes(namespace);
+      html += '<label class="ocq-checkbox" for="' + escapeHtml(checkboxId) + '">';
+      html += '<input type="checkbox" data-scope-file="' + escapeHtml(summary.fileName) + '" data-scope-namespace="' + escapeHtml(namespace) + '" id="' + escapeHtml(checkboxId) + '"' + (isChecked ? ' checked' : '') + ' />';
+      html += '<span class="ocq-mono">' + escapeHtml(namespace) + '</span>';
+      html += '</label>';
+    }
+
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
+  }
+
+  html += '</div>';
+  preflightContainer.innerHTML = html;
 }
 
 /**
@@ -448,7 +567,8 @@ function clearResourceFilters() {
  */
 function applyInspectionItemToState(reportObject, manifest, preserveBatchReports = false) {
   lastResults = reportObject.results || [];
-  lastFailuresIndex = buildFailuresIndex(lastResults);
+  lastInspectionScope = reportObject.inspectionScope || null;
+  lastFailuresIndex = buildFailuresIndex(lastResults, lastInspectionScope);
   lastPerResourceFull = reportObject.perResource || [];
   lastPerResource = reportObject.perResource || [];
   lastOntologyMetadata = reportObject.ontologyMetadata || null;
@@ -571,11 +691,75 @@ function getExportState() {
     standardFilter: standardFilterSelect ? standardFilterSelect.value : '',
     selectedCriterionId: lastSelectedCriterionId,
     manifest: lastManifest,
+    inspectionScope: lastInspectionScope,
     ontologyMetadata: lastOntologyMetadata,
     ontologyReport: lastOntologyReport,
     perResourceRows: Array.isArray(lastPerResource) ? lastPerResource : [],
     results: Array.isArray(lastResults) ? lastResults : []
   };
+}
+
+/**
+ * Returns true when current selected files match the prepared preflight state.
+ *
+ * @returns {boolean}
+ */
+function hasPreparedFilesForCurrentSelection() {
+  if (!filesInput) {
+    return false;
+  }
+
+  const files = Array.from(filesInput.files || []);
+  if (!files.length || files.length !== preparedOntologyFiles.length) {
+    return false;
+  }
+
+  return files.every((file, index) => preparedOntologyFiles[index]?.file?.name === file.name);
+}
+
+/**
+ * Analyzes selected files and populates preflight state.
+ *
+ * @returns {Promise<void>}
+ */
+async function analyzeSelectedFiles() {
+  if (!filesInput) {
+    window.alert('File input #ontologyFiles not found.');
+    return;
+  }
+
+  const files = Array.from(filesInput.files || []);
+  if (!files.length) {
+    window.alert('Please select one or more ontology files.');
+    return;
+  }
+
+  setStatus('Analyzing selected ontology files...');
+
+  try {
+    const nextPreparedFiles = [];
+
+    for (const file of files) {
+      const text = await file.text();
+      const summary = await buildPreflightSummary(text, file.name);
+      nextPreparedFiles.push({
+        file,
+        summary,
+        inspectionScope: {
+          includedNamespaces: deriveDefaultIncludedNamespaces(summary)
+        }
+      });
+    }
+
+    preparedOntologyFiles = nextPreparedFiles;
+    renderPreflightUi();
+    updateRunButtonState();
+    setStatus(`Analyzed ${preparedOntologyFiles.length} ontology file(s). Review namespaces, then run batch checks.`);
+  } catch (error) {
+    console.error('Error analyzing files:', error);
+    clearPreflightState();
+    setStatus(error instanceof Error ? `Error: ${error.message}` : 'Error analyzing files.');
+  }
 }
 
 /** @type {Record<string, OcqDownloadAction>} */
@@ -787,21 +971,32 @@ async function runInspectionFromSelectedFiles() {
     return;
   }
 
+  if (!hasPreparedFilesForCurrentSelection()) {
+    window.alert('Analyze the selected files before running checks so you can confirm the inspection scope.');
+    return;
+  }
+
   setStatus('Running inspection...');
   resetInspectionView();
 
   try {
     const manifest = await ensureManifestLoaded();
-    const reports = await inspectFiles(files, manifest);
+    const inspectionScopesByFileName = new Map(
+      preparedOntologyFiles.map((prepared) => [
+        prepared.file.name,
+        prepared.inspectionScope
+      ])
+    );
+    const reportsWithScope = await inspectFiles(files, manifest, inspectionScopesByFileName);
     lastManifest = manifest;
-    appendBatchReports(reports);
+    appendBatchReports(reportsWithScope);
     clearInspectionDataState();
     clearStandardSelection();
     renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
 
-    if (reports.length) {
-      selectedBatchKey = getBatchKey(reports[reports.length - 1]);
-      loadBatchSelection(reports[reports.length - 1]);
+    if (reportsWithScope.length) {
+      selectedBatchKey = getBatchKey(reportsWithScope[reportsWithScope.length - 1]);
+      loadBatchSelection(reportsWithScope[reportsWithScope.length - 1]);
       renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
     } else {
       renderActiveInspectionViews();
@@ -814,8 +1009,8 @@ async function runInspectionFromSelectedFiles() {
       try {
         await saveRun({
           kind: 'batch',
-          label: `${reports.length} ontology file(s)`,
-          payload: reports,
+          label: `${reportsWithScope.length} ontology file(s)`,
+          payload: reportsWithScope,
           uiState: getUiStateSnapshot()
         });
 
@@ -838,6 +1033,8 @@ async function runInspectionFromSelectedFiles() {
  */
 async function initializeApp() {
   initTheme();
+  renderPreflightUi();
+  updateRunButtonState();
 
   if (curationTableContainer) {
     curationTableContainer.addEventListener('click', (event) => {
@@ -983,6 +1180,42 @@ async function initializeApp() {
     clearFiltersButton.addEventListener('click', clearResourceFilters);
   }
 
+  if (filesInput) {
+    filesInput.addEventListener('change', () => {
+      clearPreflightState();
+      setStatus('Selected files changed. Analyze files to review scope before running checks.');
+    });
+  }
+
+  if (preflightContainer) {
+    preflightContainer.addEventListener('change', (event) => {
+      if (!(event.target instanceof HTMLInputElement)) {
+        return;
+      }
+
+      const fileName = event.target.getAttribute('data-scope-file');
+      const namespace = event.target.getAttribute('data-scope-namespace');
+      if (!fileName || !namespace) {
+        return;
+      }
+
+      const prepared = preparedOntologyFiles.find((item) => item.summary.fileName === fileName);
+      if (!prepared) {
+        return;
+      }
+
+      const current = new Set(prepared.inspectionScope.includedNamespaces || []);
+      if (event.target.checked) {
+        current.add(namespace);
+      } else {
+        current.delete(namespace);
+      }
+
+      prepared.inspectionScope.includedNamespaces = Array.from(current).sort();
+      renderPreflightUi();
+    });
+  }
+
   if (themeToggleButton) {
     themeToggleButton.addEventListener('click', toggleTheme);
   }
@@ -995,14 +1228,16 @@ async function initializeApp() {
     downloadSelectedButton.addEventListener('click', handleDownloadSelected);
   }
 
-  if (runChecksButton) {
-    runChecksButton.disabled = true;
-    runChecksButton.title = 'Deprecated. Use Run batch checks.';
-  }
-
   if (runBatchChecksButton) {
+    runBatchChecksButton.disabled = true;
     runBatchChecksButton.addEventListener('click', () => {
       void runInspectionFromSelectedFiles();
+    });
+  }
+
+  if (analyzeFilesButton) {
+    analyzeFilesButton.addEventListener('click', () => {
+      void analyzeSelectedFiles();
     });
   }
 
@@ -1046,10 +1281,12 @@ async function initializeApp() {
       await hydrateRun(run);
     }
   } else {
+    renderPreflightUi();
     renderActiveInspectionViews();
     renderDashboard([], null, dashboardContainer);
   }
 
+  updateRunButtonState();
   refreshDownloadOptions();
 }
 

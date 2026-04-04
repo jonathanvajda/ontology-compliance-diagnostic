@@ -5,6 +5,7 @@ import { getCriterionDefinition } from './criteria.js';
 import { escapeHtml, getReportStandards } from './shared.js';
 
 /** @typedef {import('./types.js').OcqManifest} OcqManifest */
+/** @typedef {import('./types.js').OcqInspectionScope} OcqInspectionScope */
 /** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
 /** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
 /** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
@@ -16,11 +17,17 @@ const ontologyReportContainer = document.getElementById('ontologyReportContainer
  * Renders the ontology report card.
  *
  * @param {OcqOntologyReport | null | undefined} report
+ * @param {OcqInspectionScope | null | undefined} [inspectionScope=null]
  * @param {OcqManifest | null | undefined} [manifest=null]
  * @param {HTMLElement | null | undefined} [container=ontologyReportContainer]
  * @returns {void}
  */
-export function renderOntologyReport(report, manifest = null, container = ontologyReportContainer) {
+export function renderOntologyReport(
+  report,
+  inspectionScope = null,
+  manifest = null,
+  container = ontologyReportContainer
+) {
   if (!container) {
     return;
   }
@@ -55,6 +62,24 @@ export function renderOntologyReport(report, manifest = null, container = ontolo
     tripleCount: 0,
     labeledResourceCount: 0
   });
+  html += '</div>';
+
+  const includedNamespaces = Array.isArray(inspectionScope?.includedNamespaces)
+    ? inspectionScope.includedNamespaces
+    : [];
+
+  html += '<div class="ocq-detail" style="margin-top:1rem;">';
+  html += '<h3 class="ocq-detail-title">Inspection scope</h3>';
+  if (includedNamespaces.length) {
+    html += '<p class="ocq-muted">Only resource and content checks for these namespaces are counted.</p>';
+    html += '<div class="ocq-chip-list">';
+    for (const namespace of includedNamespaces) {
+      html += '<span class="ocq-chip ocq-mono">' + escapeHtml(namespace) + '</span>';
+    }
+    html += '</div>';
+  } else {
+    html += '<p class="ocq-muted">All namespaces are currently included for resource-level inspection.</p>';
+  }
   html += '</div>';
 
   html += '<div class="ocq-detail" style="margin-top:1rem;">';

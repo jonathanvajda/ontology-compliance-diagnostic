@@ -236,6 +236,7 @@ export function buildHtmlReport(state) {
   const createdAt = new Date().toISOString();
   const metadata = state.ontologyMetadata || null;
   const manifest = state.manifest || null;
+  const inspectionScope = state.inspectionScope || null;
   const report = state.ontologyReport || null;
   const perResourceRows = Array.isArray(state.perResourceRows) ? state.perResourceRows : [];
   const results = Array.isArray(state.results) ? state.results : [];
@@ -272,6 +273,7 @@ export function buildHtmlReport(state) {
   html += `<div class="meta">Curation status filter: <span class="mono">${escapeHtml(state.statusFilter || 'All')}</span></div>`;
   html += `<div class="meta">Fails standard filter: <span class="mono">${escapeHtml(state.standardFilter || 'Any')}</span></div>`;
   html += `<div class="meta">Selected standard: <span class="mono">${escapeHtml(selectedCriterionId || '(none)')}</span></div>`;
+  html += `<div class="meta">Included namespaces: <span class="mono">${escapeHtml((inspectionScope?.includedNamespaces || []).join(', ') || 'All')}</span></div>`;
   html += '</div>';
 
   html += '<div class="card"><h2>Ontology metadata</h2>';

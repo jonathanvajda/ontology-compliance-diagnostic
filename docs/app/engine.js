@@ -13,6 +13,7 @@
 
 /** @typedef {import('./types.js').OcqManifest} OcqManifest */
 /** @typedef {import('./types.js').OcqManifestQuery} OcqManifestQuery */
+/** @typedef {import('./types.js').OcqPreflightSummary} OcqPreflightSummary */
 /** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
 /** @typedef {import('./types.js').OcqQueryResultStatus} OcqQueryResultStatus */
@@ -546,6 +547,98 @@ export function extractOntologyMetadata(store, fileName) {
     imports: getObjectValues(store, ontologyIri, OWL_IMPORTS_IRI).sort(),
     tripleCount: quads.length,
     labeledResourceCount: labeledResources.length
+  };
+}
+
+/**
+ * Derives a namespace stem from an IRI.
+ *
+ * @param {string} iri
+ * @returns {string | null}
+ */
+export function getNamespaceFromIri(iri) {
+  if (typeof iri !== 'string' || !/^https?:|^urn:/.test(iri)) {
+    return null;
+  }
+
+  const hashIndex = iri.lastIndexOf('#');
+  if (hashIndex >= 0) {
+    return iri.slice(0, hashIndex + 1);
+  }
+
+  const slashIndex = iri.lastIndexOf('/');
+  if (slashIndex >= 0) {
+    return iri.slice(0, slashIndex + 1);
+  }
+
+  return null;
+}
+
+/**
+ * Extracts namespace candidates from RDF terms present in the store.
+ *
+ * @param {any} store
+ * @returns {string[]}
+ */
+export function extractNamespacesFromStore(store) {
+  const namespaces = new Set();
+  const quads = store?.getQuads ? store.getQuads(null, null, null, null) : [];
+
+  for (const quad of quads) {
+    const values = [
+      quad?.subject?.termType === 'NamedNode' ? quad.subject.value : null,
+      quad?.predicate?.termType === 'NamedNode' ? quad.predicate.value : null,
+      quad?.object?.termType === 'NamedNode' ? quad.object.value : null
+    ];
+
+    for (const value of values) {
+      const namespace = getNamespaceFromIri(value || '');
+      if (namespace) {
+        namespaces.add(namespace);
+      }
+    }
+  }
+
+  return Array.from(namespaces).sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Derives default included namespaces for one ontology summary.
+ *
+ * @param {OcqPreflightSummary} summary
+ * @returns {string[]}
+ */
+export function deriveDefaultIncludedNamespaces(summary) {
+  const ontologyNamespace = getNamespaceFromIri(summary?.ontologyIri || '');
+
+  if (ontologyNamespace) {
+    return [ontologyNamespace];
+  }
+
+  return Array.isArray(summary?.discoveredNamespaces)
+    ? summary.discoveredNamespaces.slice(0, 3)
+    : [];
+}
+
+/**
+ * Builds a lightweight preflight summary from ontology text.
+ *
+ * @param {string} ontologyText
+ * @param {string} [fileName='ontology.ttl']
+ * @returns {Promise<OcqPreflightSummary>}
+ */
+export async function buildPreflightSummary(ontologyText, fileName = 'ontology.ttl') {
+  const store = await loadOntologyIntoStore(ontologyText, fileName);
+  const metadata = extractOntologyMetadata(store, fileName);
+  const discoveredNamespaces = extractNamespacesFromStore(store);
+
+  return {
+    fileName: fileName || 'ontology.ttl',
+    ontologyIri: metadata.ontologyIri,
+    metadata,
+    imports: Array.isArray(metadata.imports) ? metadata.imports : [],
+    discoveredNamespaces,
+    resourceCountEstimate: metadata.labeledResourceCount || 0
   };
 }
 

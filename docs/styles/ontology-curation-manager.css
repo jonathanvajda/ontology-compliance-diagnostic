@@ -533,3 +533,70 @@
   outline-offset: -2px;
   background: var(--ocq-accent-bg);
 }
+
+.ocq-app .ocq-preflight-list {
+  display: grid;
+  gap: var(--ocq-space-3);
+}
+
+.ocq-app .ocq-preflight-card {
+  border: 1px solid var(--ont-border);
+  border-radius: var(--ocq-radius-sm);
+  background: var(--ocq-surface-2);
+  padding: var(--ocq-space-3);
+}
+
+.ocq-app .ocq-preflight-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ocq-space-3);
+  flex-wrap: wrap;
+}
+
+.ocq-app .ocq-preflight-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ocq-app .ocq-preflight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--ocq-space-3);
+  margin-top: var(--ocq-space-3);
+}
+
+.ocq-app .ocq-preflight-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ocq-app .ocq-checkbox-list {
+  display: grid;
+  gap: 6px;
+}
+
+.ocq-app .ocq-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.ocq-app .ocq-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ocq-app .ocq-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--ont-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  background: var(--ocq-surface);
+}
