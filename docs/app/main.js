@@ -294,7 +294,23 @@ function clearStandardSelection() {
 
   if (standardDetailContainer) {
     standardDetailContainer.innerHTML = '';
+    standardDetailContainer.classList.remove('ocq-modal-open');
+    standardDetailContainer.setAttribute('aria-hidden', 'true');
   }
+}
+
+/**
+ * Opens the standard detail modal.
+ *
+ * @returns {void}
+ */
+function openStandardDetailModal() {
+  if (!standardDetailContainer) {
+    return;
+  }
+
+  standardDetailContainer.classList.add('ocq-modal-open');
+  standardDetailContainer.setAttribute('aria-hidden', 'false');
 }
 
 /**
@@ -475,6 +491,7 @@ function restoreSelectedCriterion(criterionId) {
     lastResults,
     standardDetailContainer
   );
+  openStandardDetailModal();
 
   const row = ontologyReportContainer?.querySelector(
     `tr[data-standard-id="${cssEscapeAttr(selectedCriterionId)}"]`
@@ -873,6 +890,7 @@ async function initializeApp() {
         lastResults,
         standardDetailContainer
       );
+      openStandardDetailModal();
       refreshDownloadOptions();
     });
   }
@@ -880,6 +898,12 @@ async function initializeApp() {
   if (standardDetailContainer) {
     standardDetailContainer.addEventListener('click', (event) => {
       if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      if (event.target === standardDetailContainer) {
+        clearStandardSelection();
+        refreshDownloadOptions();
         return;
       }
 

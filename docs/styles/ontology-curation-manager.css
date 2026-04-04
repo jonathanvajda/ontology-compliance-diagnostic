@@ -432,6 +432,52 @@
   font-size: 13px;
 }
 
+.ocq-app .ocq-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: color-mix(in srgb, #000 45%, transparent);
+  padding: 5vh 4vw;
+  align-items: center;
+  justify-content: center;
+}
+
+.ocq-app .ocq-modal.ocq-modal-open {
+  display: flex;
+}
+
+.ocq-app .ocq-modal-dialog {
+  width: min(1100px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  margin: 0;
+  position: relative;
+}
+
+.ocq-app .ocq-modal-close {
+  appearance: none;
+  border: 1px solid var(--ont-border);
+  background: var(--ocq-surface);
+  color: var(--ont-text);
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.ocq-app .ocq-modal-close:hover {
+  background: var(--ocq-surface-2);
+}
+
+.ocq-app .ocq-modal-close:focus-visible {
+  outline: none;
+  box-shadow: var(--ocq-focus-ring);
+}
+
 .ocq-app .ocq-mono {
   font-family: var(--ont-font-mono);
   font-size: 12.5px;

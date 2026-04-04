@@ -119,10 +119,10 @@ export function renderStandardDetail(
   const entries = getStandardDetailEntries(criterionId, results);
 
   let html = '';
-  html += '<div class="ocq-detail">';
+  html += '<div class="ocq-modal-dialog ocq-detail" role="dialog" aria-modal="true" aria-labelledby="ocqStandardDetailTitle">';
   html += '  <div class="ocq-detail-header">';
-  html += `    <h3 class="ocq-detail-title">Standard: ${escapeHtml(selectedStandard.id)}</h3>`;
-  html += '    <button class="ocq-btn" type="button" data-standard-close>Close</button>';
+  html += `    <h3 id="ocqStandardDetailTitle" class="ocq-detail-title">Standard: ${escapeHtml(selectedStandard.id)}</h3>`;
+  html += '    <button class="ocq-modal-close" type="button" data-standard-close aria-label="Close standard detail">×</button>';
   html += '  </div>';
 
   html +=
