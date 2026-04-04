@@ -1,41 +1,12 @@
 // app/render-dashboard.js
 // @ts-check
 
+import { escapeHtml, getReportStandards } from './shared.js';
+
 /** @typedef {import('./types.js').OcqEvaluatedReport} OcqEvaluatedReport */
-/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
-/** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
 
 /** @type {HTMLElement | null} */
 const dashboardContainer = document.getElementById('dashboardContainer');
-
-/**
- * Escapes text for safe HTML insertion.
- *
- * @param {unknown} value
- * @returns {string}
- */
-function escapeHtml(value) {
-  if (value == null) {
-    return '';
-  }
-
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/**
- * Returns the standards array from an ontology report.
- *
- * @param {OcqOntologyReport | null | undefined} report
- * @returns {OcqOntologyReportStandardRow[]}
- */
-function getReportStandards(report) {
-  return Array.isArray(report?.standards) ? report.standards : [];
-}
 
 /**
  * Returns the stable key for a batch row.
@@ -54,15 +25,20 @@ export function getBatchKey(item) {
  *
  * @param {OcqEvaluatedReport[] | null | undefined} batchReports
  * @param {string | null} [selectedBatchKey=null]
+ * @param {HTMLElement | null | undefined} [container=dashboardContainer]
  * @returns {void}
  */
-export function renderDashboard(batchReports, selectedBatchKey = null) {
-  if (!dashboardContainer) {
+export function renderDashboard(
+  batchReports,
+  selectedBatchKey = null,
+  container = dashboardContainer
+) {
+  if (!container) {
     return;
   }
 
   if (!Array.isArray(batchReports) || batchReports.length === 0) {
-    dashboardContainer.innerHTML = '<p>No ontologies evaluated.</p>';
+    container.innerHTML = '<p>No ontologies evaluated.</p>';
     return;
   }
 
@@ -106,5 +82,5 @@ export function renderDashboard(batchReports, selectedBatchKey = null) {
   }
 
   html += '</tbody></table>';
-  dashboardContainer.innerHTML = html;
+  container.innerHTML = html;
 }

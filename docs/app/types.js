@@ -199,4 +199,16 @@
  * @typedef {Map<string, Map<string, Set<string>>>} OcqFailureIndex
  */
 
+/**
+ * Current UI data passed into report/export builders.
+ *
+ * @typedef {Object} OcqExportState
+ * @property {string} [statusFilter]
+ * @property {string} [standardFilter]
+ * @property {string | null} [selectedCriterionId]
+ * @property {OcqOntologyReport | null} [ontologyReport]
+ * @property {OcqPerResourceCurationRow[]} [perResourceRows]
+ * @property {OcqQueryResultRow[]} [results]
+ */
+
 export {};

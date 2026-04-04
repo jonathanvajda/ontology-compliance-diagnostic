@@ -1,10 +1,10 @@
 // app/criteria.js
 // @ts-check
 
+import { getReportStandards } from './shared.js';
+
 /** @typedef {import('./types.js').OcqManifest} OcqManifest */
 /** @typedef {import('./types.js').OcqManifestStandard} OcqManifestStandard */
-/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
-/** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
 
 /**
  * Populates the standard filter select.
@@ -42,12 +42,4 @@ export function populateStandardFilter(manifest, selectElement) {
   }
 }
 
-/**
- * Returns the standards array from an ontology report.
- *
- * @param {OcqOntologyReport | null | undefined} report
- * @returns {OcqOntologyReportStandardRow[]}
- */
-export function getReportStandards(report) {
-  return Array.isArray(report?.standards) ? report.standards : [];
-}
+export { getReportStandards };

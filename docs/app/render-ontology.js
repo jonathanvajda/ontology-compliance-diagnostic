@@ -1,7 +1,7 @@
 // app/render-ontology.js
 // @ts-check
 
-import { getReportStandards } from './criteria.js';
+import { escapeHtml, getReportStandards } from './shared.js';
 
 /** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
 
@@ -9,37 +9,19 @@ import { getReportStandards } from './criteria.js';
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
 
 /**
- * Escapes text for safe HTML insertion.
- *
- * @param {unknown} value
- * @returns {string}
- */
-function escapeHtml(value) {
-  if (value == null) {
-    return '';
-  }
-
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/**
  * Renders the ontology report card.
  *
  * @param {OcqOntologyReport | null | undefined} report
+ * @param {HTMLElement | null | undefined} [container=ontologyReportContainer]
  * @returns {void}
  */
-export function renderOntologyReport(report) {
-  if (!ontologyReportContainer) {
+export function renderOntologyReport(report, container = ontologyReportContainer) {
+  if (!container) {
     return;
   }
 
   if (!report) {
-    ontologyReportContainer.innerHTML = '';
+    container.innerHTML = '';
     return;
   }
 
@@ -51,7 +33,7 @@ export function renderOntologyReport(report) {
 
   if (!standards.length) {
     html += '<p>No standards found.</p>';
-    ontologyReportContainer.innerHTML = html;
+    container.innerHTML = html;
     return;
   }
 
@@ -83,5 +65,5 @@ export function renderOntologyReport(report) {
   }
 
   html += '</tbody></table>';
-  ontologyReportContainer.innerHTML = html;
+  container.innerHTML = html;
 }

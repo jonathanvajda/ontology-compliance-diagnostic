@@ -5,40 +5,42 @@ import {
   loadManifest,
   DEFAULT_MANIFEST_URL
 } from './engine.js';
-
-import {
-  buildFailuresIndex,
-  getResultCriterionId
-} from './grader.js';
-
-import {
-  inspectFile,
-  inspectFiles
-} from './report-model.js';
-
+import { buildFailuresIndex } from './grader.js';
+import { inspectFile, inspectFiles } from './report-model.js';
 import { saveRun, listRuns, getRun, deleteRun, getLastRunId } from './storage.js';
-
+import { populateStandardFilter } from './criteria.js';
+import {
+  cssEscapeAttr,
+  getTimestampForFileName,
+  safeFilePart
+} from './shared.js';
 import { renderOntologyReport } from './render-ontology.js';
-
 import { renderDashboard, getBatchKey } from './render-dashboard.js';
+import {
+  renderCurationTable,
+  toggleResourceDetail
+} from './render-resources.js';
+import { renderStandardDetail } from './render-standards.js';
+import {
+  buildBatchSummaryCsv,
+  buildFilteredResourcesCsv,
+  buildHtmlReport,
+  buildOntologyReportYaml,
+  buildResultsCsv,
+  buildStandardDetailCsv,
+  downloadTextFile
+} from './report-export.js';
 
-import { renderCurationTable, renderResourceFailureDetailHtml } from './render-resources.js';
-
-import { renderStandardDetail, getStandardDetailEntries } from './render-standards.js';
-
-import { populateStandardFilter, getReportStandards } from './criteria.js';
-
-/** @typedef {import('./types.js').OcqManifest} OcqManifest */
-/** @typedef {import('./types.js').OcqSavedRun} OcqSavedRun */
-/** @typedef {import('./types.js').OcqUiStateSnapshot} OcqUiStateSnapshot */
-/** @typedef {import('./types.js').OcqEvaluatedReport} OcqEvaluatedReport */
-/** @typedef {import('./types.js').OcqSingleRunPayload} OcqSingleRunPayload */
 /** @typedef {import('./types.js').OcqBatchRunPayload} OcqBatchRunPayload */
-/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
-/** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
-/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
-/** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
+/** @typedef {import('./types.js').OcqEvaluatedReport} OcqEvaluatedReport */
 /** @typedef {import('./types.js').OcqFailureIndex} OcqFailureIndex */
+/** @typedef {import('./types.js').OcqManifest} OcqManifest */
+/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
+/** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
+/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
+/** @typedef {import('./types.js').OcqSavedRun} OcqSavedRun */
+/** @typedef {import('./types.js').OcqSingleRunPayload} OcqSingleRunPayload */
+/** @typedef {import('./types.js').OcqUiStateSnapshot} OcqUiStateSnapshot */
 
 /**
  * @typedef {Object} OcqDownloadAction
@@ -49,134 +51,95 @@ import { populateStandardFilter, getReportStandards } from './criteria.js';
  * @property {string} mimeType
  */
 
-/**
- * @typedef {Object} StandardDetailEntry
- * @property {string} resource
- * @property {string[]} queryIds
- */
-
 /** @type {HTMLInputElement | null} */
 const filesInput = /** @type {HTMLInputElement | null} */ (
   document.getElementById('ontologyFiles')
 );
-
 /** @type {HTMLButtonElement | null} */
 const runChecksButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('runChecksBtn')
 );
-
 /** @type {HTMLButtonElement | null} */
 const runBatchChecksButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('runBatchBtn')
 );
-
 /** @type {HTMLSelectElement | null} */
 const downloadActionSelect = /** @type {HTMLSelectElement | null} */ (
   document.getElementById('downloadActionSelect')
 );
-
 /** @type {HTMLButtonElement | null} */
 const downloadSelectedButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('downloadSelectedBtn')
 );
-
 /** @type {HTMLElement | null} */
 const statusElement = document.getElementById('status');
-
 /** @type {HTMLInputElement | null} */
 const resourceSearchInput = /** @type {HTMLInputElement | null} */ (
   document.getElementById('resourceSearch')
 );
-
 /** @type {HTMLElement | null} */
 const curationTableContainer = document.getElementById('curationTableContainer');
-
 /** @type {HTMLElement | null} */
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
-
 /** @type {HTMLElement | null} */
 const standardDetailContainer = document.getElementById('standardDetailContainer');
-
 /** @type {HTMLElement | null} */
 const dashboardContainer = document.getElementById('dashboardContainer');
-
 /** @type {HTMLSelectElement | null} */
 const savedRunsSelect = /** @type {HTMLSelectElement | null} */ (
   document.getElementById('savedRunsSelect')
 );
-
 /** @type {HTMLButtonElement | null} */
 const loadSavedRunButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('loadSavedRunBtn')
 );
-
 /** @type {HTMLButtonElement | null} */
 const deleteSavedRunButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('deleteSavedRunBtn')
 );
-
 /** @type {HTMLElement | null} */
 const appRoot = document.getElementById('appRoot');
-
 /** @type {HTMLButtonElement | null} */
 const themeToggleButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('ocqThemeToggleBtn')
 );
-
 /** @type {HTMLSelectElement | null} */
 const statusFilterSelect = /** @type {HTMLSelectElement | null} */ (
   document.getElementById('statusFilter')
 );
-
 /** @type {HTMLSelectElement | null} */
 const standardFilterSelect = /** @type {HTMLSelectElement | null} */ (
   document.getElementById('standardFilter')
 );
-
 /** @type {HTMLButtonElement | null} */
 const clearFiltersButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('clearFiltersBtn')
 );
-
 /** @type {HTMLElement | null} */
 const curationFiltersSummaryElement = document.getElementById('curationFiltersSummary');
 
 /** @type {OcqManifest | null} */
 let lastManifest = null;
-
 /** @type {OcqQueryResultRow[] | null} */
 let lastResults = null;
-
 /** @type {OcqPerResourceCurationRow[] | null} */
 let lastPerResource = null;
-
 /** @type {OcqPerResourceCurationRow[] | null} */
 let lastPerResourceFull = null;
-
 /** @type {OcqFailureIndex | null} */
 let lastFailuresIndex = null;
-
 /** @type {OcqOntologyReport | null} */
 let lastOntologyReport = null;
-
 /** @type {OcqEvaluatedReport[] | null} */
 let lastBatchReports = null;
-
 /** @type {string | null} */
 let selectedBatchKey = null;
-
 /** @type {number | null} */
 let resourceSearchTimer = null;
-
 /** @type {string | null} */
 let lastSelectedCriterionId = null;
-
 /** @type {HTMLTableRowElement | null} */
 let lastSelectedStandardRow = null;
-
-let ontologyReportEventsWired = false;
-let batchDashboardEventsWired = false;
-let standardDetailEventsWired = false;
 
 /**
  * Sets the status text.
@@ -184,186 +147,10 @@ let standardDetailEventsWired = false;
  * @param {string} message
  * @returns {void}
  */
-export function setStatus(message) {
+function setStatus(message) {
   if (statusElement) {
     statusElement.textContent = message;
   }
-}
-
-/**
- * Escapes text for safe HTML insertion.
- *
- * @param {unknown} value
- * @returns {string}
- */
-export function escapeHtml(value) {
-  if (value == null) {
-    return '';
-  }
-
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/**
- * Escapes a value for use in a CSS attribute selector.
- *
- * @param {unknown} value
- * @returns {string}
- */
-export function cssEscapeAttr(value) {
-  return String(value == null ? '' : value).replace(/"/g, '\\"');
-}
-
-/**
- * Returns a safe file-name fragment.
- *
- * @param {unknown} value
- * @returns {string}
- */
-export function safeFilePart(value) {
-  return String(value == null ? '' : value)
-    .trim()
-    .replace(/[^\w.-]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-}
-
-/**
- * Returns a timestamp suitable for file names.
- *
- * @returns {string}
- */
-export function getTimestampForFileName() {
-  const date = new Date();
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  const hh = String(date.getHours()).padStart(2, '0');
-  const mi = String(date.getMinutes()).padStart(2, '0');
-  const ss = String(date.getSeconds()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}_${hh}-${mi}-${ss}`;
-}
-
-/**
- * Returns an ISO-derived file stamp.
- *
- * @returns {string}
- */
-export function isoFileStamp() {
-  return new Date().toISOString().replace(/[:.]/g, '-');
-}
-
-/**
- * Escapes one CSV field.
- *
- * @param {unknown} value
- * @returns {string}
- */
-export function csvEscape(value) {
-  const text = value == null ? '' : String(value);
-  const needsWrap = /[",\n\r]/.test(text);
-  const escaped = text.replace(/"/g, '""');
-  return needsWrap ? `"${escaped}"` : escaped;
-}
-
-/**
- * Converts rows to CSV text.
- *
- * @param {Array<Array<unknown>>} rows
- * @returns {string}
- */
-export function rowsToCsv(rows) {
-  return rows.map((row) => row.map(csvEscape).join(',')).join('\n') + '\n';
-}
-
-/**
- * Downloads a text file.
- *
- * @param {string} text
- * @param {string} fileName
- * @param {string} mimeType
- * @returns {void}
- */
-export function downloadTextFile(text, fileName, mimeType) {
-  const blob = new Blob([text], { type: mimeType || 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-
-  anchor.href = url;
-  anchor.download = fileName;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-
-  URL.revokeObjectURL(url);
-}
-
-/**
- * Serializes result rows as CSV.
- *
- * @param {OcqQueryResultRow[]} results
- * @param {string} ontologyIri
- * @returns {string}
- */
-export function toCsv(results, ontologyIri) {
-  /** @type {Array<Array<unknown>>} */
-  const rows = [[
-    'ontologyIri',
-    'resource',
-    'queryId',
-    'criterionId',
-    'status',
-    'severity',
-    'scope'
-  ]];
-
-  if (!Array.isArray(results) || results.length === 0) {
-    return rowsToCsv(rows);
-  }
-
-  for (const row of results) {
-    rows.push([
-      ontologyIri || '',
-      row.resource || '',
-      row.queryId || '',
-      row.criterionId || '',
-      row.status || '',
-      row.severity || '',
-      row.scope || ''
-    ]);
-  }
-
-  return rowsToCsv(rows);
-}
-
-/**
- * Serializes an ontology report as YAML-like text.
- *
- * @param {OcqOntologyReport | null} report
- * @returns {string}
- */
-export function ontologyReportToYaml(report) {
-  if (!report) {
-    return '# No ontology report\n';
-  }
-
-  const lines = [];
-  lines.push(`ontologyIri: "${String(report.ontologyIri).replace(/"/g, '\\"')}"`);
-  lines.push(`status: "${String(report.statusLabel).replace(/"/g, '\\"')}"`);
-  lines.push('standards:');
-
-  for (const standard of report.standards || []) {
-    lines.push(`  - id: "${String(standard.id).replace(/"/g, '\\"')}"`);
-    lines.push(`    type: "${String(standard.type).replace(/"/g, '\\"')}"`);
-    lines.push(`    status: "${String(standard.status).replace(/"/g, '\\"')}"`);
-    lines.push(`    failedResourcesCount: ${standard.failedResourcesCount || 0}`);
-  }
-
-  return lines.join('\n') + '\n';
 }
 
 /**
@@ -371,12 +158,12 @@ export function ontologyReportToYaml(report) {
  *
  * @returns {OcqUiStateSnapshot}
  */
-export function getUiStateSnapshot() {
+function getUiStateSnapshot() {
   return {
     statusFilter: statusFilterSelect ? statusFilterSelect.value : '',
     standardFilter: standardFilterSelect ? standardFilterSelect.value : '',
-    selectedBatchKey: selectedBatchKey || null,
-    selectedCriterionId: lastSelectedCriterionId || null
+    selectedBatchKey,
+    selectedCriterionId: lastSelectedCriterionId
   };
 }
 
@@ -386,7 +173,7 @@ export function getUiStateSnapshot() {
  * @param {OcqUiStateSnapshot | null | undefined} state
  * @returns {void}
  */
-export function applyUiStateSnapshot(state) {
+function applyUiStateSnapshot(state) {
   if (!state) {
     return;
   }
@@ -401,15 +188,15 @@ export function applyUiStateSnapshot(state) {
 }
 
 /**
- * Formats a saved run as an option label.
+ * Formats a saved run label.
  *
  * @param {OcqSavedRun} run
  * @returns {string}
  */
-export function formatRunOption(run) {
+function formatRunOption(run) {
   const kind = run.kind === 'batch' ? 'Batch' : 'Single';
-  const labelSuffix = run.label ? ` — ${run.label}` : '';
-  return `${kind} — ${run.createdAt}${labelSuffix}`;
+  const labelSuffix = run.label ? ` - ${run.label}` : '';
+  return `${kind} - ${run.createdAt}${labelSuffix}`;
 }
 
 /**
@@ -417,13 +204,13 @@ export function formatRunOption(run) {
  *
  * @returns {Promise<void>}
  */
-export async function refreshSavedRunsUi() {
+async function refreshSavedRunsUi() {
   if (!savedRunsSelect) {
     return;
   }
 
   const runs = await listRuns(50);
-  savedRunsSelect.innerHTML = '<option value="">Saved runs…</option>';
+  savedRunsSelect.innerHTML = '<option value="">Saved runs...</option>';
 
   for (const run of runs) {
     const option = document.createElement('option');
@@ -439,7 +226,7 @@ export async function refreshSavedRunsUi() {
  * @param {'ocq-theme-light' | 'ocq-theme-dark'} themeClass
  * @returns {void}
  */
-export function setTheme(themeClass) {
+function setTheme(themeClass) {
   if (!appRoot) {
     return;
   }
@@ -450,11 +237,11 @@ export function setTheme(themeClass) {
 }
 
 /**
- * Toggles the current app theme.
+ * Toggles the app theme.
  *
  * @returns {void}
  */
-export function toggleTheme() {
+function toggleTheme() {
   if (!appRoot) {
     return;
   }
@@ -464,11 +251,11 @@ export function toggleTheme() {
 }
 
 /**
- * Initializes theme from localStorage.
+ * Restores the theme from local storage.
  *
  * @returns {void}
  */
-export function initTheme() {
+function initTheme() {
   const savedTheme = localStorage.getItem('ocq-theme');
   if (savedTheme === 'ocq-theme-dark' || savedTheme === 'ocq-theme-light') {
     setTheme(savedTheme);
@@ -476,47 +263,44 @@ export function initTheme() {
 }
 
 /**
- * Clears main rendered panels.
+ * Clears the rendered view containers.
  *
  * @returns {void}
  */
-export function clearRenderedViews() {
-  if (dashboardContainer) {
-    dashboardContainer.innerHTML = '';
-  }
-  if (ontologyReportContainer) {
-    ontologyReportContainer.innerHTML = '';
-  }
-  if (curationTableContainer) {
-    curationTableContainer.innerHTML = '';
-  }
+function clearRenderedViews() {
+  renderDashboard([], null, dashboardContainer);
+  renderOntologyReport(null, ontologyReportContainer);
+  renderCurationTable([], curationTableContainer);
+
   if (standardDetailContainer) {
     standardDetailContainer.innerHTML = '';
   }
 }
 
 /**
- * Clears transient selection state.
+ * Clears the current standard selection.
  *
  * @returns {void}
  */
-export function clearRunSelectionState() {
-  selectedBatchKey = null;
-  lastBatchReports = null;
-  lastSelectedCriterionId = null;
-
+function clearStandardSelection() {
   if (lastSelectedStandardRow) {
     lastSelectedStandardRow.classList.remove('ocq-row-selected');
   }
+
   lastSelectedStandardRow = null;
+  lastSelectedCriterionId = null;
+
+  if (standardDetailContainer) {
+    standardDetailContainer.innerHTML = '';
+  }
 }
 
 /**
- * Clears in-memory inspection result state.
+ * Clears active inspection data.
  *
  * @returns {void}
  */
-export function clearInspectionDataState() {
+function clearInspectionDataState() {
   lastResults = null;
   lastPerResource = null;
   lastPerResourceFull = null;
@@ -525,55 +309,53 @@ export function clearInspectionDataState() {
 }
 
 /**
- * Resets rendered views and transient selection state before a new inspection.
+ * Resets the current inspection state and view.
  *
  * @returns {void}
  */
-export function resetInspectionView() {
-  clearRenderedViews();
-  clearRunSelectionState();
+function resetInspectionView() {
+  clearStandardSelection();
+  selectedBatchKey = null;
+  lastBatchReports = null;
   clearInspectionDataState();
+  clearRenderedViews();
 }
 
 /**
- * Applies one inspected ontology report bundle to the resource/ontology panels.
+ * Updates the resource filter summary.
  *
- * @param {OcqEvaluatedReport} reportObject
- * @param {OcqManifest | null | undefined} manifest
  * @returns {void}
  */
-export function applyInspectionItemToUi(reportObject, manifest) {
-  lastResults = reportObject.results || [];
-  lastFailuresIndex = buildFailuresIndex(lastResults);
-  lastPerResourceFull = reportObject.perResource || [];
-  lastPerResource = reportObject.perResource || [];
-  lastOntologyReport = reportObject.ontologyReport || null;
-  lastManifest = manifest || lastManifest;
-  lastBatchReports = null;
-  selectedBatchKey = null;
-
-  if (lastManifest) {
-    populateStandardFilter(lastManifest, standardFilterSelect);
+function renderResourceFilterSummary() {
+  if (!curationFiltersSummaryElement) {
+    return;
   }
 
-  renderOntologyReport(lastOntologyReport);
-  applyResourceFilters();
+  const filteredCount = Array.isArray(lastPerResource) ? lastPerResource.length : 0;
+  const totalCount = Array.isArray(lastPerResourceFull) ? lastPerResourceFull.length : 0;
+  curationFiltersSummaryElement.textContent = `Showing ${filteredCount} of ${totalCount} resources.`;
 }
 
 /**
- * Applies current resource filters and rerenders the curation table.
+ * Renders the currently selected ontology/resource views.
  *
  * @returns {void}
  */
-export function applyResourceFilters() {
+function renderActiveInspectionViews() {
+  renderOntologyReport(lastOntologyReport, ontologyReportContainer);
+  renderCurationTable(lastPerResource, curationTableContainer);
+  renderResourceFilterSummary();
+}
+
+/**
+ * Applies resource filters and rerenders the resource section.
+ *
+ * @returns {void}
+ */
+function applyResourceFilters() {
   if (!Array.isArray(lastPerResourceFull)) {
     lastPerResource = [];
-    renderCurationTable([]);
-
-    if (curationFiltersSummaryElement) {
-      curationFiltersSummaryElement.textContent = 'Showing 0 of 0 resources.';
-    }
-
+    renderActiveInspectionViews();
     refreshDownloadOptions();
     return;
   }
@@ -613,22 +395,16 @@ export function applyResourceFilters() {
   }
 
   lastPerResource = filtered;
-
-  if (curationFiltersSummaryElement) {
-    curationFiltersSummaryElement.textContent =
-      `Showing ${filtered.length} of ${lastPerResourceFull.length} resources.`;
-  }
-
-  renderCurationTable(filtered);
+  renderActiveInspectionViews();
   refreshDownloadOptions();
 }
 
 /**
- * Clears resource filters and reapplies them.
+ * Clears the resource filters and rerenders the table.
  *
  * @returns {void}
  */
-export function clearResourceFilters() {
+function clearResourceFilters() {
   if (statusFilterSelect) {
     statusFilterSelect.value = '';
   }
@@ -641,172 +417,102 @@ export function clearResourceFilters() {
     resourceSearchInput.value = '';
   }
 
-  lastPerResource = Array.isArray(lastPerResourceFull)
-    ? lastPerResourceFull.slice()
-    : [];
-
   applyResourceFilters();
 }
 
 /**
- * Clears the standard-detail panel and selected row highlight.
- *
- * @returns {void}
- */
-export function clearStandardDetailPanel() {
-  if (lastSelectedStandardRow) {
-    lastSelectedStandardRow.classList.remove('ocq-row-selected');
-  }
-
-  lastSelectedStandardRow = null;
-  lastSelectedCriterionId = null;
-
-  if (standardDetailContainer) {
-    standardDetailContainer.innerHTML = '';
-  }
-
-  refreshDownloadOptions();
-}
-
-/**
- * Wires the standard-detail close handler once.
- *
- * @returns {void}
- */
-export function wireStandardDetailCloseOnce() {
-  if (!standardDetailContainer || standardDetailEventsWired) {
-    return;
-  }
-
-  standardDetailContainer.addEventListener('click', (event) => {
-    if (!(event.target instanceof Element)) {
-      return;
-    }
-
-    const closeButton = event.target.closest('button[data-standard-close]');
-    if (!closeButton) {
-      return;
-    }
-
-    clearStandardDetailPanel();
-  });
-
-  standardDetailEventsWired = true;
-}
-
-/**
- * Toggles the detail row for one resource.
- *
- * @param {string} resourceIri
- * @returns {void}
- */
-export function toggleResourceDetail(resourceIri) {
-  if (!curationTableContainer) {
-    return;
-  }
-
-  const detailRow = curationTableContainer.querySelector(
-    `tr[data-resource-detail-row="${cssEscapeAttr(resourceIri)}"]`
-  );
-
-  if (!(detailRow instanceof HTMLTableRowElement)) {
-    return;
-  }
-
-  const isOpen = detailRow.style.display !== 'none';
-  if (isOpen) {
-    detailRow.style.display = 'none';
-    return;
-  }
-
-  detailRow.style.display = '';
-
-  const panel = detailRow.querySelector('.ocq-resource-detail');
-  if (!(panel instanceof HTMLElement)) {
-    return;
-  }
-
-  panel.innerHTML = renderResourceFailureDetailHtml(resourceIri);
-}
-
-/**
- * Handles clicks on ontology-report rows.
- *
- * @param {MouseEvent} event
- * @returns {void}
- */
-export function onOntologyReportRowClick(event) {
-  if (!(event.target instanceof Element)) {
-    return;
-  }
-
-  const row = event.target.closest('tr[data-standard-id]');
-  if (!(row instanceof HTMLTableRowElement)) {
-    return;
-  }
-
-  const criterionId = row.getAttribute('data-standard-id');
-  if (!criterionId) {
-    return;
-  }
-
-  if (lastSelectedCriterionId === criterionId) {
-    clearStandardDetailPanel();
-    return;
-  }
-
-  if (lastSelectedStandardRow) {
-    lastSelectedStandardRow.classList.remove('ocq-row-selected');
-  }
-
-  row.classList.add('ocq-row-selected');
-  lastSelectedStandardRow = row;
-  lastSelectedCriterionId = criterionId;
-
-  renderStandardDetail(lastSelectedCriterionId, lastOntologyReport, lastResults);
-  refreshDownloadOptions();
-}
-
-/**
- * Loads a selected batch item into the single-run panels.
+ * Applies one inspected report bundle into UI state.
  *
  * @param {OcqEvaluatedReport} reportObject
+ * @param {OcqManifest | null | undefined} manifest
  * @returns {void}
  */
-export function loadBatchSelection(reportObject) {
+function applyInspectionItemToState(reportObject, manifest) {
   lastResults = reportObject.results || [];
   lastFailuresIndex = buildFailuresIndex(lastResults);
   lastPerResourceFull = reportObject.perResource || [];
   lastPerResource = reportObject.perResource || [];
   lastOntologyReport = reportObject.ontologyReport || null;
+  lastManifest = manifest || lastManifest;
+  lastBatchReports = null;
+  selectedBatchKey = null;
 
   if (lastManifest) {
     populateStandardFilter(lastManifest, standardFilterSelect);
   }
+}
 
-  renderOntologyReport(lastOntologyReport);
+/**
+ * Restores one selected criterion in the ontology table and detail panel.
+ *
+ * @param {string | null | undefined} criterionId
+ * @returns {void}
+ */
+function restoreSelectedCriterion(criterionId) {
+  const selectedCriterionId = criterionId || '';
+  clearStandardSelection();
+
+  if (
+    !selectedCriterionId ||
+    !lastOntologyReport ||
+    !Array.isArray(lastResults) ||
+    !lastOntologyReport.standards.some((standard) => standard.id === selectedCriterionId)
+  ) {
+    refreshDownloadOptions();
+    return;
+  }
+
+  lastSelectedCriterionId = selectedCriterionId;
+  renderStandardDetail(
+    selectedCriterionId,
+    lastOntologyReport,
+    lastResults,
+    standardDetailContainer
+  );
+
+  const row = ontologyReportContainer?.querySelector(
+    `tr[data-standard-id="${cssEscapeAttr(selectedCriterionId)}"]`
+  );
+
+  if (row instanceof HTMLTableRowElement) {
+    row.classList.add('ocq-row-selected');
+    lastSelectedStandardRow = row;
+  }
+
+  refreshDownloadOptions();
+}
+
+/**
+ * Loads the selected batch item into the active detail panes.
+ *
+ * @param {OcqEvaluatedReport} reportObject
+ * @returns {void}
+ */
+function loadBatchSelection(reportObject) {
+  applyInspectionItemToState(reportObject, lastManifest);
   applyResourceFilters();
 }
 
 /**
- * Handles selection of one batch row.
+ * Handles selecting one batch dashboard row.
  *
  * @param {string} batchKey
  * @returns {void}
  */
-export function onBatchRowSelected(batchKey) {
+function onBatchRowSelected(batchKey) {
   if (!Array.isArray(lastBatchReports) || !lastBatchReports.length) {
     return;
   }
 
   if (selectedBatchKey === batchKey) {
     selectedBatchKey = null;
-    renderDashboard(lastBatchReports, selectedBatchKey);
+    clearInspectionDataState();
+    clearStandardSelection();
+    renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
+    renderActiveInspectionViews();
     refreshDownloadOptions();
     return;
   }
-
-  selectedBatchKey = batchKey;
 
   const selectedReport = lastBatchReports.find(
     (report) => getBatchKey(report) === batchKey
@@ -816,320 +522,27 @@ export function onBatchRowSelected(batchKey) {
     return;
   }
 
+  selectedBatchKey = batchKey;
   loadBatchSelection(selectedReport);
-  renderDashboard(lastBatchReports, selectedBatchKey);
-
+  renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
   setStatus(`Selected: ${selectedReport.fileName}`);
   refreshDownloadOptions();
 }
 
 /**
- * Wires batch dashboard selection once.
+ * Builds the current export state.
  *
- * @returns {void}
+ * @returns {import('./types.js').OcqExportState}
  */
-export function wireBatchDashboardSelectionOnce() {
-  if (!dashboardContainer || batchDashboardEventsWired) {
-    return;
-  }
-
-  dashboardContainer.addEventListener('click', (event) => {
-    if (!(event.target instanceof Element)) {
-      return;
-    }
-
-    const row = event.target.closest('tr[data-batch-key]');
-    if (!(row instanceof HTMLTableRowElement)) {
-      return;
-    }
-
-    const batchKey = row.getAttribute('data-batch-key');
-    if (!batchKey) {
-      return;
-    }
-
-    onBatchRowSelected(batchKey);
-  });
-
-  dashboardContainer.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' && event.key !== ' ') {
-      return;
-    }
-
-    if (!(event.target instanceof Element)) {
-      return;
-    }
-
-    const row = event.target.closest('tr[data-batch-key]');
-    if (!(row instanceof HTMLTableRowElement)) {
-      return;
-    }
-
-    event.preventDefault();
-
-    const batchKey = row.getAttribute('data-batch-key');
-    if (!batchKey) {
-      return;
-    }
-
-    onBatchRowSelected(batchKey);
-  });
-
-  batchDashboardEventsWired = true;
-}
-
-/**
- * Builds CSV for the filtered per-resource rows.
- *
- * @returns {string}
- */
-export function buildFilteredResourcesCsv() {
-  const data = Array.isArray(lastPerResource) ? lastPerResource : [];
-
-  /** @type {Array<Array<unknown>>} */
-  const rows = [[
-    'resource',
-    'statusIri',
-    'statusLabel',
-    'failedRequirementsCount',
-    'failedRecommendationsCount',
-    'failedRequirements',
-    'failedRecommendations'
-  ]];
-
-  for (const row of data) {
-    const failedRequirements = Array.isArray(row.failedRequirements) ? row.failedRequirements : [];
-    const failedRecommendations = Array.isArray(row.failedRecommendations)
-      ? row.failedRecommendations
-      : [];
-
-    rows.push([
-      row.resource || '',
-      row.statusIri || '',
-      row.statusLabel || '',
-      String(failedRequirements.length),
-      String(failedRecommendations.length),
-      failedRequirements.join(' | '),
-      failedRecommendations.join(' | ')
-    ]);
-  }
-
-  return rowsToCsv(rows);
-}
-
-/**
- * Builds CSV for the selected standard detail.
- *
- * @param {string | null | undefined} criterionId
- * @returns {string}
- */
-export function buildStandardDetailCsv(criterionId) {
-  const selectedCriterionId = criterionId || lastSelectedCriterionId || '';
-
-  if (!selectedCriterionId) {
-    throw new Error('No standard selected.');
-  }
-
-  const entries = getStandardDetailEntries(selectedCriterionId, lastResults);
-
-  /** @type {Array<Array<unknown>>} */
-  const rows = [['criterionId', 'resource', 'queryIds']];
-
-  for (const entry of entries) {
-    rows.push([
-      selectedCriterionId,
-      entry.resource,
-      entry.queryIds.join(' | ')
-    ]);
-  }
-
-  return rowsToCsv(rows);
-}
-
-/**
- * Builds CSV summary for batch results.
- *
- * @param {OcqEvaluatedReport[] | null | undefined} batchReports
- * @returns {string}
- */
-export function buildBatchSummaryCsv(batchReports) {
-  const batch = Array.isArray(batchReports)
-    ? batchReports
-    : Array.isArray(lastBatchReports)
-      ? lastBatchReports
-      : [];
-
-  if (!batch.length) {
-    throw new Error('No batch results available.');
-  }
-
-  /** @type {Array<Array<unknown>>} */
-  const rows = [[
-    'fileName',
-    'ontologyIri',
-    'statusIri',
-    'statusLabel',
-    'failedRequirements',
-    'failedRecommendations',
-    'totalRequirements',
-    'totalRecommendations'
-  ]];
-
-  for (const item of batch) {
-    const report = item.ontologyReport;
-    const standards = getReportStandards(report);
-
-    const failedRequirements = standards.filter(
-      (standard) => standard.type === 'requirement' && standard.status === 'fail'
-    ).length;
-
-    const failedRecommendations = standards.filter(
-      (standard) => standard.type === 'recommendation' && standard.status === 'fail'
-    ).length;
-
-    const totalRequirements = standards.filter(
-      (standard) => standard.type === 'requirement'
-    ).length;
-
-    const totalRecommendations = standards.filter(
-      (standard) => standard.type === 'recommendation'
-    ).length;
-
-    rows.push([
-      item.fileName || '',
-      report?.ontologyIri || '',
-      report?.statusIri || '',
-      report?.statusLabel || '',
-      String(failedRequirements),
-      String(failedRecommendations),
-      String(totalRequirements),
-      String(totalRecommendations)
-    ]);
-  }
-
-  return rowsToCsv(rows);
-}
-
-/**
- * Builds an HTML report for the current view.
- *
- * @returns {string}
- */
-export function buildHtmlReport() {
-  const createdAt = new Date().toISOString();
-  const currentStatusFilter = statusFilterSelect ? statusFilterSelect.value : '';
-  const currentStandardFilter = standardFilterSelect ? standardFilterSelect.value : '';
-  const selectedCriterionId = lastSelectedCriterionId || '';
-
-  const report = lastOntologyReport || null;
-  const perResourceRows = Array.isArray(lastPerResource) ? lastPerResource : [];
-  const resultsCount = Array.isArray(lastResults) ? lastResults.length : 0;
-  const standardDetailEntries = getStandardDetailEntries(selectedCriterionId, lastResults);
-
-  const css = `
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; }
-    h1,h2,h3 { margin: 0.2rem 0 0.6rem; }
-    .meta { color: #333; margin: 0.25rem 0; }
-    .card { border: 1px solid #ddd; border-radius: 12px; padding: 14px; margin: 14px 0; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; vertical-align: top; }
-    th { background: #fafafa; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
-    .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; border: 1px solid #ddd; font-size: 0.9em; }
-    @media print { body { margin: 12mm; } .card { break-inside: avoid; } }
-  `;
-
-  let html = '';
-  html += '<!doctype html><html><head><meta charset="utf-8" />';
-  html += '<meta name="viewport" content="width=device-width, initial-scale=1" />';
-  html += '<title>Ontology Checks Report</title>';
-  html += `<style>${css}</style>`;
-  html += '</head><body>';
-
-  html += '<h1>Ontology Checks Report</h1>';
-  html += `<div class="meta">Created: <span class="mono">${escapeHtml(createdAt)}</span></div>`;
-  html += `<div class="meta">Results rows: <span class="mono">${escapeHtml(resultsCount)}</span></div>`;
-
-  html += '<div class="card">';
-  html += '<h2>View state</h2>';
-  html += `<div class="meta">Curation status filter: <span class="mono">${escapeHtml(currentStatusFilter || 'All')}</span></div>`;
-  html += `<div class="meta">Fails standard filter: <span class="mono">${escapeHtml(currentStandardFilter || 'Any')}</span></div>`;
-  html += `<div class="meta">Selected standard: <span class="mono">${escapeHtml(selectedCriterionId || '(none)')}</span></div>`;
-  html += '</div>';
-
-  html += '<div class="card"><h2>Ontology report</h2>';
-  if (!report) {
-    html += '<p>No ontology report loaded.</p>';
-  } else {
-    html += `<div class="meta">Ontology IRI: <span class="mono">${escapeHtml(report.ontologyIri || '')}</span></div>`;
-    html += `<div class="meta">Overall status: <span class="pill">${escapeHtml(report.statusLabel || '')}</span></div>`;
-
-    const standards = getReportStandards(report);
-    html += '<table><thead><tr><th>id</th><th>type</th><th>status</th><th>failedResourcesCount</th></tr></thead><tbody>';
-
-    for (const standard of standards) {
-      html += '<tr>';
-      html += `<td class="mono">${escapeHtml(standard.id)}</td>`;
-      html += `<td>${escapeHtml(standard.type)}</td>`;
-      html += `<td>${escapeHtml(standard.status)}</td>`;
-      html += `<td class="mono">${escapeHtml(standard.failedResourcesCount ?? '')}</td>`;
-      html += '</tr>';
-    }
-
-    html += '</tbody></table>';
-  }
-  html += '</div>';
-
-  if (selectedCriterionId) {
-    html += '<div class="card"><h2>Standard detail</h2>';
-
-    if (!standardDetailEntries.length) {
-      html += '<p>No failing resources found for selected standard.</p>';
-    } else {
-      html += '<table><thead><tr><th>Resource IRI</th><th>Failing query IDs</th></tr></thead><tbody>';
-
-      for (const entry of standardDetailEntries) {
-        html += '<tr>';
-        html += `<td class="mono">${escapeHtml(entry.resource)}</td>`;
-        html += `<td class="mono">${escapeHtml(entry.queryIds.join(', '))}</td>`;
-        html += '</tr>';
-      }
-
-      html += '</tbody></table>';
-    }
-
-    html += '</div>';
-  }
-
-  html += '<div class="card"><h2>Per-resource curation (filtered)</h2>';
-  html += `<div class="meta">Rows: <span class="mono">${escapeHtml(perResourceRows.length)}</span></div>`;
-
-  if (!perResourceRows.length) {
-    html += '<p>No resources in current view.</p>';
-  } else {
-    html += '<table><thead><tr><th>resource</th><th>statusLabel</th><th>failedRequirements</th><th>failedRecommendations</th></tr></thead><tbody>';
-
-    for (const row of perResourceRows) {
-      const failedRequirements = Array.isArray(row.failedRequirements) ? row.failedRequirements : [];
-      const failedRecommendations = Array.isArray(row.failedRecommendations)
-        ? row.failedRecommendations
-        : [];
-
-      html += '<tr>';
-      html += `<td class="mono">${escapeHtml(row.resource || '')}</td>`;
-      html += `<td>${escapeHtml(row.statusLabel || '')}</td>`;
-      html += `<td class="mono">${escapeHtml(failedRequirements.join(', '))}</td>`;
-      html += `<td class="mono">${escapeHtml(failedRecommendations.join(', '))}</td>`;
-      html += '</tr>';
-    }
-
-    html += '</tbody></table>';
-  }
-
-  html += '</div>';
-  html += '</body></html>';
-
-  return html;
+function getExportState() {
+  return {
+    statusFilter: statusFilterSelect ? statusFilterSelect.value : '',
+    standardFilter: standardFilterSelect ? standardFilterSelect.value : '',
+    selectedCriterionId: lastSelectedCriterionId,
+    ontologyReport: lastOntologyReport,
+    perResourceRows: Array.isArray(lastPerResource) ? lastPerResource : [],
+    results: Array.isArray(lastResults) ? lastResults : []
+  };
 }
 
 /** @type {Record<string, OcqDownloadAction>} */
@@ -1137,48 +550,43 @@ const downloadActions = {
   resultsCsv: {
     label: 'Results CSV',
     isAvailable: () => Array.isArray(lastResults) && lastResults.length > 0,
-    build: () => toCsv(lastResults || [], lastOntologyReport?.ontologyIri || ''),
+    build: () => buildResultsCsv(lastResults, lastOntologyReport?.ontologyIri || ''),
     getFileName: () => `ocq-results_${getTimestampForFileName()}.csv`,
     mimeType: 'text/csv;charset=utf-8'
   },
-
   ontologyYaml: {
     label: 'Ontology Report YAML',
     isAvailable: () => !!lastOntologyReport,
-    build: () => ontologyReportToYaml(lastOntologyReport),
+    build: () => buildOntologyReportYaml(lastOntologyReport),
     getFileName: () => `ocq-ontology-report_${getTimestampForFileName()}.yaml`,
     mimeType: 'text/yaml;charset=utf-8'
   },
-
   htmlReport: {
     label: 'HTML Report',
     isAvailable: () =>
       !!lastOntologyReport || (Array.isArray(lastResults) && lastResults.length > 0),
-    build: () => buildHtmlReport(),
+    build: () => buildHtmlReport(getExportState()),
     getFileName: () => `ocq-report_${getTimestampForFileName()}.html`,
     mimeType: 'text/html;charset=utf-8'
   },
-
   filteredResourcesCsv: {
     label: 'Filtered Resources CSV',
     isAvailable: () => Array.isArray(lastPerResource) && lastPerResource.length > 0,
-    build: () => buildFilteredResourcesCsv(),
+    build: () => buildFilteredResourcesCsv(lastPerResource),
     getFileName: () => `ocq-filtered-resources_${getTimestampForFileName()}.csv`,
     mimeType: 'text/csv;charset=utf-8'
   },
-
   standardDetailCsv: {
     label: 'Standard Detail CSV',
     isAvailable: () =>
       !!lastSelectedCriterionId &&
       Array.isArray(lastResults) &&
       lastResults.length > 0,
-    build: () => buildStandardDetailCsv(lastSelectedCriterionId),
+    build: () => buildStandardDetailCsv(lastSelectedCriterionId, lastResults),
     getFileName: () =>
       `ocq-standard-detail_${safeFilePart(lastSelectedCriterionId || 'standard')}_${getTimestampForFileName()}.csv`,
     mimeType: 'text/csv;charset=utf-8'
   },
-
   batchSummaryCsv: {
     label: 'Batch Summary CSV',
     isAvailable: () => Array.isArray(lastBatchReports) && lastBatchReports.length > 0,
@@ -1193,7 +601,7 @@ const downloadActions = {
  *
  * @returns {void}
  */
-export function refreshDownloadOptions() {
+function refreshDownloadOptions() {
   if (!downloadActionSelect || !downloadSelectedButton) {
     return;
   }
@@ -1220,18 +628,16 @@ export function refreshDownloadOptions() {
 }
 
 /**
- * Handles the currently selected download action.
+ * Handles the selected download action.
  *
  * @returns {void}
  */
-export function handleDownloadSelected() {
+function handleDownloadSelected() {
   if (!downloadActionSelect) {
     return;
   }
 
-  const actionKey = downloadActionSelect.value;
-  const action = downloadActions[actionKey];
-
+  const action = downloadActions[downloadActionSelect.value];
   if (!action) {
     setStatus('Choose a download type first.');
     return;
@@ -1244,10 +650,7 @@ export function handleDownloadSelected() {
   }
 
   try {
-    const content = action.build();
-    const fileName = action.getFileName();
-
-    downloadTextFile(content, fileName, action.mimeType);
+    downloadTextFile(action.build(), action.getFileName(), action.mimeType);
     setStatus(`Downloaded ${action.label}.`);
   } catch (error) {
     console.error(error);
@@ -1256,11 +659,11 @@ export function handleDownloadSelected() {
 }
 
 /**
- * Loads the manifest and populates the standard filter.
+ * Loads and caches the manifest.
  *
  * @returns {Promise<OcqManifest>}
  */
-export async function ensureManifestLoaded() {
+async function ensureManifestLoaded() {
   if (lastManifest) {
     return lastManifest;
   }
@@ -1276,34 +679,27 @@ export async function ensureManifestLoaded() {
  * @param {OcqSavedRun | null} run
  * @returns {Promise<void>}
  */
-export async function hydrateRun(run) {
+async function hydrateRun(run) {
   if (!run) {
     return;
   }
 
   await ensureManifestLoaded();
   applyUiStateSnapshot(run.uiState);
-  clearStandardDetailPanel();
+  clearStandardSelection();
 
   /** @type {unknown} */
   const payload = run.payload;
 
   if (run.kind === 'batch') {
-    /** @type {OcqBatchRunPayload} */
     const batchPayload = Array.isArray(payload)
       ? /** @type {OcqBatchRunPayload} */ (payload)
       : [];
 
     lastBatchReports = batchPayload;
     selectedBatchKey = run.uiState?.selectedBatchKey || null;
-
-    lastResults = null;
-    lastFailuresIndex = null;
-    lastOntologyReport = null;
-    lastPerResourceFull = null;
-    lastPerResource = null;
-
-    renderDashboard(lastBatchReports, selectedBatchKey);
+    clearInspectionDataState();
+    renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
 
     if (selectedBatchKey) {
       const selectedReport = lastBatchReports.find(
@@ -1312,45 +708,18 @@ export async function hydrateRun(run) {
 
       if (selectedReport) {
         loadBatchSelection(selectedReport);
-        renderDashboard(lastBatchReports, selectedBatchKey);
+        renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
       }
+    } else {
+      renderActiveInspectionViews();
     }
 
-    applyResourceFilters();
-
-    const selectedCriterionId = run.uiState?.selectedCriterionId || null;
-    /** @type {OcqOntologyReport | null} */
-    const activeOntologyReport = selectedBatchKey
-      ? (lastBatchReports.find((report) => getBatchKey(report) === selectedBatchKey)?.ontologyReport || null)
-      : null;
-
-    if (
-      selectedCriterionId &&
-      activeOntologyReport &&
-      activeOntologyReport.standards.some(
-        /** @param {OcqOntologyReportStandardRow} standard */
-        (standard) => standard.id === selectedCriterionId
-      )
-    ) {
-      lastSelectedCriterionId = selectedCriterionId;
-      renderStandardDetail(selectedCriterionId, lastOntologyReport, lastResults);
-
-      const row = ontologyReportContainer?.querySelector(
-        `tr[data-standard-id="${cssEscapeAttr(selectedCriterionId)}"]`
-      );
-
-      if (row instanceof HTMLTableRowElement) {
-        row.classList.add('ocq-row-selected');
-        lastSelectedStandardRow = row;
-      }
-    }
-
+    restoreSelectedCriterion(run.uiState?.selectedCriterionId);
     setStatus(`Loaded saved batch run (${run.createdAt}).`);
     refreshDownloadOptions();
     return;
   }
 
-  /** @type {OcqSingleRunPayload | null} */
   const reportObject = !Array.isArray(payload) && payload
     ? /** @type {OcqSingleRunPayload} */ (payload)
     : null;
@@ -1361,47 +730,19 @@ export async function hydrateRun(run) {
     return;
   }
 
-  lastResults = reportObject.results || [];
-  lastFailuresIndex = buildFailuresIndex(lastResults);
-  lastOntologyReport = reportObject.ontologyReport || null;
-  lastPerResourceFull = reportObject.perResource || [];
-  lastPerResource = reportObject.perResource || [];
-  lastBatchReports = null;
-  selectedBatchKey = null;
-
-  renderOntologyReport(lastOntologyReport);
+  applyInspectionItemToState(reportObject, lastManifest);
   applyResourceFilters();
-
-  const selectedCriterionId = run.uiState?.selectedCriterionId || null;
-  if (
-    selectedCriterionId &&
-    lastOntologyReport?.standards?.some((standard) => standard.id === selectedCriterionId)
-  ) {
-    lastSelectedCriterionId = selectedCriterionId;
-    renderStandardDetail(selectedCriterionId, lastOntologyReport, lastResults);
-
-    const row = ontologyReportContainer?.querySelector(
-      `tr[data-standard-id="${cssEscapeAttr(selectedCriterionId)}"]`
-    );
-
-    if (row instanceof HTMLTableRowElement) {
-      row.classList.add('ocq-row-selected');
-      lastSelectedStandardRow = row;
-    }
-  }
-
+  restoreSelectedCriterion(run.uiState?.selectedCriterionId);
   setStatus(`Loaded saved single run (${run.createdAt}).`);
   refreshDownloadOptions();
 }
 
 /**
- * Runs one inspection over the currently selected files.
- *
- * One inspection may contain 1..n inspected ontology files.
+ * Runs inspection over the selected files.
  *
  * @returns {Promise<void>}
  */
-export async function runInspectionFromSelectedFiles() {
+async function runInspectionFromSelectedFiles() {
   if (!filesInput) {
     window.alert('File input #ontologyFiles not found.');
     return;
@@ -1413,7 +754,7 @@ export async function runInspectionFromSelectedFiles() {
     return;
   }
 
-  setStatus(files.length === 1 ? 'Running inspection…' : 'Running inspection…');
+  setStatus('Running inspection...');
   resetInspectionView();
 
   try {
@@ -1421,8 +762,8 @@ export async function runInspectionFromSelectedFiles() {
 
     if (files.length === 1) {
       const reportObject = await inspectFile(files[0], manifest);
-
-      applyInspectionItemToUi(reportObject, manifest);
+      applyInspectionItemToState(reportObject, manifest);
+      applyResourceFilters();
 
       await saveRun({
         kind: 'single',
@@ -1440,13 +781,13 @@ export async function runInspectionFromSelectedFiles() {
     }
 
     const reports = await inspectFiles(files, manifest);
-
     lastManifest = manifest;
     lastBatchReports = reports;
     selectedBatchKey = null;
-
     clearInspectionDataState();
-    renderDashboard(lastBatchReports, selectedBatchKey);
+    clearStandardSelection();
+    renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
+    renderActiveInspectionViews();
 
     await saveRun({
       kind: 'batch',
@@ -1466,14 +807,12 @@ export async function runInspectionFromSelectedFiles() {
 }
 
 /**
- * Initializes all event handlers and restores saved state.
+ * Initializes the application.
  *
  * @returns {Promise<void>}
  */
-export async function initializeApp() {
+async function initializeApp() {
   initTheme();
-  wireStandardDetailCloseOnce();
-  wireBatchDashboardSelectionOnce();
 
   if (curationTableContainer) {
     curationTableContainer.addEventListener('click', (event) => {
@@ -1491,7 +830,99 @@ export async function initializeApp() {
         return;
       }
 
-      toggleResourceDetail(resourceIri);
+      toggleResourceDetail(resourceIri, lastFailuresIndex, curationTableContainer);
+    });
+  }
+
+  if (ontologyReportContainer) {
+    ontologyReportContainer.addEventListener('click', (event) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      const row = event.target.closest('tr[data-standard-id]');
+      if (!(row instanceof HTMLTableRowElement)) {
+        return;
+      }
+
+      const criterionId = row.getAttribute('data-standard-id');
+      if (!criterionId) {
+        return;
+      }
+
+      if (lastSelectedCriterionId === criterionId) {
+        clearStandardSelection();
+        refreshDownloadOptions();
+        return;
+      }
+
+      clearStandardSelection();
+      row.classList.add('ocq-row-selected');
+      lastSelectedStandardRow = row;
+      lastSelectedCriterionId = criterionId;
+
+      renderStandardDetail(
+        criterionId,
+        lastOntologyReport,
+        lastResults,
+        standardDetailContainer
+      );
+      refreshDownloadOptions();
+    });
+  }
+
+  if (standardDetailContainer) {
+    standardDetailContainer.addEventListener('click', (event) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      const closeButton = event.target.closest('button[data-standard-close]');
+      if (!closeButton) {
+        return;
+      }
+
+      clearStandardSelection();
+      refreshDownloadOptions();
+    });
+  }
+
+  if (dashboardContainer) {
+    dashboardContainer.addEventListener('click', (event) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      const row = event.target.closest('tr[data-batch-key]');
+      if (!(row instanceof HTMLTableRowElement)) {
+        return;
+      }
+
+      const batchKey = row.getAttribute('data-batch-key');
+      if (batchKey) {
+        onBatchRowSelected(batchKey);
+      }
+    });
+
+    dashboardContainer.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      const row = event.target.closest('tr[data-batch-key]');
+      if (!(row instanceof HTMLTableRowElement)) {
+        return;
+      }
+
+      event.preventDefault();
+      const batchKey = row.getAttribute('data-batch-key');
+      if (batchKey) {
+        onBatchRowSelected(batchKey);
+      }
     });
   }
 
@@ -1523,16 +954,16 @@ export async function initializeApp() {
     themeToggleButton.addEventListener('click', toggleTheme);
   }
 
-  if (downloadActionSelect && downloadSelectedButton) {
-    downloadActionSelect.addEventListener('change', () => {
-      downloadSelectedButton.disabled = !downloadActionSelect.value;
-    });
+  if (downloadActionSelect) {
+    downloadActionSelect.addEventListener('change', refreshDownloadOptions);
+  }
 
+  if (downloadSelectedButton) {
     downloadSelectedButton.addEventListener('click', handleDownloadSelected);
   }
 
   if (runChecksButton) {
-  runChecksButton.addEventListener('click', () => {
+    runChecksButton.addEventListener('click', () => {
       void runInspectionFromSelectedFiles();
     });
   }
@@ -1582,6 +1013,9 @@ export async function initializeApp() {
     if (run) {
       await hydrateRun(run);
     }
+  } else {
+    renderActiveInspectionViews();
+    renderDashboard([], null, dashboardContainer);
   }
 
   refreshDownloadOptions();

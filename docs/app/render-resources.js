@@ -1,35 +1,30 @@
+// app/render-resources.js
+// @ts-check
+
+import { cssEscapeAttr, escapeHtml } from './shared.js';
+
+/** @typedef {import('./types.js').OcqFailureIndex} OcqFailureIndex */
+/** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
+
+/** @type {HTMLElement | null} */
+const curationTableContainer = document.getElementById('curationTableContainer');
+
 /**
  * Escapes text for safe HTML insertion.
  *
  * @param {unknown} value
  * @returns {string}
  */
-function escapeHtml(value) {
-  if (value == null) {
-    return '';
-  }
-
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/**
- * Renders the per-resource curation table.
- *
- * @param {OcqPerResourceCurationRow[] | null | undefined} perResourceRows
- * @returns {void}
- */
-export function renderCurationTable(perResourceRows) {
-  if (!curationTableContainer) {
+export function renderCurationTable(
+  perResourceRows,
+  container = curationTableContainer
+) {
+  if (!container) {
     return;
   }
 
   if (!Array.isArray(perResourceRows) || perResourceRows.length === 0) {
-    curationTableContainer.innerHTML = '<p>No curation results to display.</p>';
+    container.innerHTML = '<p>No curation results to display.</p>';
     return;
   }
 
@@ -84,21 +79,22 @@ export function renderCurationTable(perResourceRows) {
   }
 
   html += '</tbody></table>';
-  curationTableContainer.innerHTML = html;
+  container.innerHTML = html;
 }
 
 /**
  * Builds HTML for the resource-failure detail panel.
  *
  * @param {string} resourceIri
+ * @param {OcqFailureIndex | null | undefined} failuresIndex
  * @returns {string}
  */
-export function renderResourceFailureDetailHtml(resourceIri) {
-  if (!lastFailuresIndex) {
+export function renderResourceFailureDetailHtml(resourceIri, failuresIndex) {
+  if (!failuresIndex) {
     return '<div class="ocq-muted">No failure index available.</div>';
   }
 
-  const byCriterion = lastFailuresIndex.get(resourceIri);
+  const byCriterion = failuresIndex.get(resourceIri);
   if (!byCriterion || byCriterion.size === 0) {
     return '<div class="ocq-muted">No failing queries for this resource.</div>';
   }
@@ -119,4 +115,45 @@ export function renderResourceFailureDetailHtml(resourceIri) {
 
   html += '</tbody></table>';
   return html;
+}
+
+/**
+ * Toggles the detail row for one resource.
+ *
+ * @param {string} resourceIri
+ * @param {OcqFailureIndex | null | undefined} failuresIndex
+ * @param {HTMLElement | null | undefined} [container=curationTableContainer]
+ * @returns {void}
+ */
+export function toggleResourceDetail(
+  resourceIri,
+  failuresIndex,
+  container = curationTableContainer
+) {
+  if (!container) {
+    return;
+  }
+
+  const detailRow = container.querySelector(
+    `tr[data-resource-detail-row="${cssEscapeAttr(resourceIri)}"]`
+  );
+
+  if (!(detailRow instanceof HTMLTableRowElement)) {
+    return;
+  }
+
+  const isOpen = detailRow.style.display !== 'none';
+  if (isOpen) {
+    detailRow.style.display = 'none';
+    return;
+  }
+
+  detailRow.style.display = '';
+
+  const panel = detailRow.querySelector('.ocq-resource-detail');
+  if (!(panel instanceof HTMLElement)) {
+    return;
+  }
+
+  panel.innerHTML = renderResourceFailureDetailHtml(resourceIri, failuresIndex);
 }

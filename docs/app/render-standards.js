@@ -2,9 +2,9 @@
 // @ts-check
 
 import { getResultCriterionId } from './grader.js';
+import { escapeHtml, getReportStandards } from './shared.js';
 
 /** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
-/** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
 /** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
 
 /**
@@ -15,35 +15,6 @@ import { getResultCriterionId } from './grader.js';
 
 /** @type {HTMLElement | null} */
 const standardDetailContainer = document.getElementById('standardDetailContainer');
-
-/**
- * Escapes text for safe HTML insertion.
- *
- * @param {unknown} value
- * @returns {string}
- */
-function escapeHtml(value) {
-  if (value == null) {
-    return '';
-  }
-
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/**
- * Returns the standards array from an ontology report.
- *
- * @param {OcqOntologyReport | null | undefined} report
- * @returns {OcqOntologyReportStandardRow[]}
- */
-function getReportStandards(report) {
-  return Array.isArray(report?.standards) ? report.standards : [];
-}
 
 /**
  * Returns standard-detail rows for a selected criterion id.
@@ -98,15 +69,21 @@ export function getStandardDetailEntries(criterionId, results) {
  * @param {string} criterionId
  * @param {OcqOntologyReport | null | undefined} ontologyReport
  * @param {OcqQueryResultRow[] | null | undefined} results
+ * @param {HTMLElement | null | undefined} [container=standardDetailContainer]
  * @returns {void}
  */
-export function renderStandardDetail(criterionId, ontologyReport, results) {
-  if (!standardDetailContainer) {
+export function renderStandardDetail(
+  criterionId,
+  ontologyReport,
+  results,
+  container = standardDetailContainer
+) {
+  if (!container) {
     return;
   }
 
   if (!ontologyReport || !Array.isArray(results)) {
-    standardDetailContainer.innerHTML = '<p>No data available for standard details.</p>';
+    container.innerHTML = '<p>No data available for standard details.</p>';
     return;
   }
 
@@ -114,7 +91,7 @@ export function renderStandardDetail(criterionId, ontologyReport, results) {
   const selectedStandard = standards.find((standard) => standard.id === criterionId);
 
   if (!selectedStandard) {
-    standardDetailContainer.innerHTML =
+    container.innerHTML =
       `<p>No details found for ${escapeHtml(criterionId)}.</p>`;
     return;
   }
@@ -198,5 +175,5 @@ export function renderStandardDetail(criterionId, ontologyReport, results) {
 
   html += '</div>';
 
-  standardDetailContainer.innerHTML = html;
+  container.innerHTML = html;
 }
