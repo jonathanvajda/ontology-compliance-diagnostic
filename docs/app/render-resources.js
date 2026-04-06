@@ -3,9 +3,9 @@
 
 import { cssEscapeAttr, escapeHtml } from './shared.js';
 
-/** @typedef {import('./types.js').OcqFailureIndex} OcqFailureIndex */
-/** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
-/** @typedef {import('./types.js').OcqResourceDetail} OcqResourceDetail */
+/** @typedef {import('./types.js').FailureIndex} FailureIndex */
+/** @typedef {import('./types.js').PerResourceCurationRow} PerResourceCurationRow */
+/** @typedef {import('./types.js').ResourceDetail} ResourceDetail */
 
 /** @type {HTMLElement | null} */
 const curationTableContainer = document.getElementById('curationTableContainer');
@@ -91,8 +91,8 @@ export function renderCurationTable(
  * Builds HTML for the resource-failure detail panel.
  *
  * @param {string} resourceIri
- * @param {OcqFailureIndex | null | undefined} failuresIndex
- * @param {Record<string, OcqResourceDetail> | null | undefined} resourceDetailsByIri
+ * @param {FailureIndex | null | undefined} failuresIndex
+ * @param {Record<string, ResourceDetail> | null | undefined} resourceDetailsByIri
  * @returns {string}
  */
 export function renderResourceDetailHtml(resourceIri, failuresIndex, resourceDetailsByIri) {
@@ -156,8 +156,8 @@ export function renderResourceDetailHtml(resourceIri, failuresIndex, resourceDet
  * Toggles the detail row for one resource.
  *
  * @param {string} resourceIri
- * @param {OcqFailureIndex | null | undefined} failuresIndex
- * @param {Record<string, OcqResourceDetail> | null | undefined} resourceDetailsByIri
+ * @param {FailureIndex | null | undefined} failuresIndex
+ * @param {Record<string, ResourceDetail> | null | undefined} resourceDetailsByIri
  * @param {HTMLElement | null | undefined} [container=curationTableContainer]
  * @returns {void}
  */

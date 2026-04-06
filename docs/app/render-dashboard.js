@@ -3,7 +3,7 @@
 
 import { escapeHtml, getReportStandards } from './shared.js';
 
-/** @typedef {import('./types.js').OcqEvaluatedReport} OcqEvaluatedReport */
+/** @typedef {import('./types.js').EvaluatedReport} EvaluatedReport */
 
 /** @type {HTMLElement | null} */
 const dashboardContainer = document.getElementById('dashboardContainer');
@@ -11,7 +11,7 @@ const dashboardContainer = document.getElementById('dashboardContainer');
 /**
  * Returns the stable key for a batch row.
  *
- * @param {OcqEvaluatedReport} item
+ * @param {EvaluatedReport} item
  * @returns {string}
  */
 export function getBatchKey(item) {
@@ -24,7 +24,7 @@ export function getBatchKey(item) {
 /**
  * Renders the batch dashboard.
  *
- * @param {OcqEvaluatedReport[] | null | undefined} batchReports
+ * @param {EvaluatedReport[] | null | undefined} batchReports
  * @param {string | null} [selectedBatchKey=null]
  * @param {HTMLElement | null | undefined} [container=dashboardContainer]
  * @returns {void}

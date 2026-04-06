@@ -5,9 +5,9 @@ import { getCriterionDefinition } from './criteria.js';
 import { getResultCriterionId } from './grader.js';
 import { escapeHtml, getReportStandards } from './shared.js';
 
-/** @typedef {import('./types.js').OcqManifest} OcqManifest */
-/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
-/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
+/** @typedef {import('./types.js').Manifest} Manifest */
+/** @typedef {import('./types.js').OntologyReport} OntologyReport */
+/** @typedef {import('./types.js').QueryResultRow} QueryResultRow */
 
 /**
  * @typedef {Object} StandardDetailEntry
@@ -22,7 +22,7 @@ const standardDetailContainer = document.getElementById('standardDetailContainer
  * Returns standard-detail rows for a selected criterion id.
  *
  * @param {string | null | undefined} criterionId
- * @param {OcqQueryResultRow[] | null | undefined} results
+ * @param {QueryResultRow[] | null | undefined} results
  * @returns {StandardDetailEntry[]}
  */
 export function getStandardDetailEntries(criterionId, results) {
@@ -69,9 +69,9 @@ export function getStandardDetailEntries(criterionId, results) {
  * Renders the standard-detail panel.
  *
  * @param {string} criterionId
- * @param {OcqManifest | null | undefined} manifest
- * @param {OcqOntologyReport | null | undefined} ontologyReport
- * @param {OcqQueryResultRow[] | null | undefined} results
+ * @param {Manifest | null | undefined} manifest
+ * @param {OntologyReport | null | undefined} ontologyReport
+ * @param {QueryResultRow[] | null | undefined} results
  * @param {HTMLElement | null | undefined} [container=standardDetailContainer]
  * @returns {void}
  */

@@ -10,10 +10,10 @@
  * - The "last" pointer stores the most recently saved run id.
  */
 
-/** @typedef {import('./types.js').OcqRunKind} OcqRunKind */
-/** @typedef {import('./types.js').OcqSaveRunInput} OcqSaveRunInput */
-/** @typedef {import('./types.js').OcqSavedRun} OcqSavedRun */
-/** @typedef {import('./types.js').OcqLastRunPointer} OcqLastRunPointer */
+/** @typedef {import('./types.js').RunKind} RunKind */
+/** @typedef {import('./types.js').SaveRunInput} SaveRunInput */
+/** @typedef {import('./types.js').SavedRun} SavedRun */
+/** @typedef {import('./types.js').LastRunPointer} LastRunPointer */
 
 export const DB_NAME = 'ocq-db';
 export const DB_VERSION = 1;
@@ -35,7 +35,7 @@ function nowIso() {
 /**
  * Creates a reasonably unique id for a persisted run.
  *
- * @param {OcqRunKind} prefix
+ * @param {RunKind} prefix
  * @returns {string}
  */
 function makeRunId(prefix) {
@@ -47,7 +47,7 @@ function makeRunId(prefix) {
  * Validates the run kind.
  *
  * @param {unknown} value
- * @returns {asserts value is OcqRunKind}
+ * @returns {asserts value is RunKind}
  */
 function assertRunKind(value) {
   if (value !== 'single' && value !== 'batch') {
@@ -144,7 +144,7 @@ async function runInStore(storeName, mode, operation) {
 /**
  * Saves a run and updates the "last" pointer.
  *
- * @param {OcqSaveRunInput} input
+ * @param {SaveRunInput} input
  * @returns {Promise<string>}
  */
 export async function saveRun(input) {
@@ -159,7 +159,7 @@ export async function saveRun(input) {
     throw new TypeError('saveRun() requires a payload.');
   }
 
-  /** @type {OcqSavedRun} */
+  /** @type {SavedRun} */
   const run = {
     id: makeRunId(kind),
     kind,
@@ -173,7 +173,7 @@ export async function saveRun(input) {
     return requestToPromise(store.put(run));
   });
 
-  /** @type {OcqLastRunPointer} */
+  /** @type {LastRunPointer} */
   const lastPointer = {
     key: 'last',
     runId: run.id
@@ -190,7 +190,7 @@ export async function saveRun(input) {
  * Lists saved runs in descending createdAt order.
  *
  * @param {number} [limit=50]
- * @returns {Promise<OcqSavedRun[]>}
+ * @returns {Promise<SavedRun[]>}
  */
 export async function listRuns(limit = 50) {
   const normalizedLimit =
@@ -200,7 +200,7 @@ export async function listRuns(limit = 50) {
     const index = store.index('byCreatedAt');
 
     return new Promise((resolve, reject) => {
-      /** @type {OcqSavedRun[]} */
+      /** @type {SavedRun[]} */
       const runs = [];
 
       const cursorRequest = index.openCursor(null, 'prev');
@@ -212,7 +212,7 @@ export async function listRuns(limit = 50) {
           return;
         }
 
-        runs.push(/** @type {OcqSavedRun} */ (cursor.value));
+        runs.push(/** @type {SavedRun} */ (cursor.value));
 
         if (runs.length >= normalizedLimit) {
           resolve(runs);
@@ -231,7 +231,7 @@ export async function listRuns(limit = 50) {
  * Retrieves a saved run by id.
  *
  * @param {string} runId
- * @returns {Promise<OcqSavedRun | null>}
+ * @returns {Promise<SavedRun | null>}
  */
 export async function getRun(runId) {
   if (!runId) {
@@ -239,7 +239,7 @@ export async function getRun(runId) {
   }
 
   return runInStore(STORE_NAMES.runs, 'readonly', (store) => {
-    return requestToPromise(/** @type {IDBRequest<OcqSavedRun>} */ (store.get(runId)));
+    return requestToPromise(/** @type {IDBRequest<SavedRun>} */ (store.get(runId)));
   });
 }
 
@@ -256,7 +256,7 @@ export async function deleteRun(runId) {
   }
 
   const lastPointer = await runInStore(STORE_NAMES.appState, 'readonly', (store) => {
-    return requestToPromise(/** @type {IDBRequest<OcqLastRunPointer>} */ (store.get('last')));
+    return requestToPromise(/** @type {IDBRequest<LastRunPointer>} */ (store.get('last')));
   });
 
   if (lastPointer && lastPointer.runId === runId) {
@@ -279,7 +279,7 @@ export async function deleteRun(runId) {
  */
 export async function getLastRunId() {
   const lastPointer = await runInStore(STORE_NAMES.appState, 'readonly', (store) => {
-    return requestToPromise(/** @type {IDBRequest<OcqLastRunPointer>} */ (store.get('last')));
+    return requestToPromise(/** @type {IDBRequest<LastRunPointer>} */ (store.get('last')));
   });
 
   return lastPointer?.runId || null;

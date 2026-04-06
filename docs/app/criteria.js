@@ -3,23 +3,23 @@
 
 import { getReportStandards } from './shared.js';
 
-/** @typedef {import('./types.js').OcqManifest} OcqManifest */
-/** @typedef {import('./types.js').OcqManifestQuery} OcqManifestQuery */
-/** @typedef {import('./types.js').OcqManifestStandard} OcqManifestStandard */
+/** @typedef {import('./types.js').Manifest} Manifest */
+/** @typedef {import('./types.js').ManifestQuery} ManifestQuery */
+/** @typedef {import('./types.js').ManifestStandard} ManifestStandard */
 /**
- * @typedef {Object} OcqCriterionDefinition
+ * @typedef {Object} CriterionDefinition
  * @property {string} id
  * @property {string} label
  * @property {'requirement' | 'recommendation'} type
  * @property {string} guidance
  * @property {'usually low' | 'usually high' | 'case-by-case'} remediationEffort
- * @property {OcqManifestQuery[]} queries
+ * @property {ManifestQuery[]} queries
  */
 
 /**
  * Populates the standard filter select.
  *
- * @param {OcqManifest | null | undefined} manifest
+ * @param {Manifest | null | undefined} manifest
  * @param {HTMLSelectElement | null | undefined} selectElement
  * @returns {void}
  */
@@ -57,9 +57,9 @@ export function populateStandardFilter(manifest, selectElement) {
 /**
  * Returns manifest queries associated with a criterion id.
  *
- * @param {OcqManifest | null | undefined} manifest
+ * @param {Manifest | null | undefined} manifest
  * @param {string | null | undefined} criterionId
- * @returns {OcqManifestQuery[]}
+ * @returns {ManifestQuery[]}
  */
 export function getCriterionQueries(manifest, criterionId) {
   const selectedCriterionId = criterionId || '';
@@ -75,9 +75,9 @@ export function getCriterionQueries(manifest, criterionId) {
 /**
  * Returns one standard entry from the manifest.
  *
- * @param {OcqManifest | null | undefined} manifest
+ * @param {Manifest | null | undefined} manifest
  * @param {string | null | undefined} criterionId
- * @returns {OcqManifestStandard | null}
+ * @returns {ManifestStandard | null}
  */
 export function getManifestStandard(manifest, criterionId) {
   const selectedCriterionId = criterionId || '';
@@ -93,9 +93,9 @@ export function getManifestStandard(manifest, criterionId) {
 /**
  * Returns normalized criterion metadata for rendering and export.
  *
- * @param {OcqManifest | null | undefined} manifest
+ * @param {Manifest | null | undefined} manifest
  * @param {string | null | undefined} criterionId
- * @returns {OcqCriterionDefinition | null}
+ * @returns {CriterionDefinition | null}
  */
 export function getCriterionDefinition(manifest, criterionId) {
   const selectedCriterionId = criterionId || '';

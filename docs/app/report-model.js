@@ -7,10 +7,10 @@ import {
   computeOntologyReport
 } from './grader.js';
 
-/** @typedef {import('./types.js').OcqManifest} OcqManifest */
-/** @typedef {import('./types.js').OcqEvaluatedReport} OcqEvaluatedReport */
-/** @typedef {import('./types.js').OcqInspectionScope} OcqInspectionScope */
-/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
+/** @typedef {import('./types.js').Manifest} Manifest */
+/** @typedef {import('./types.js').EvaluatedReport} EvaluatedReport */
+/** @typedef {import('./types.js').InspectionScope} InspectionScope */
+/** @typedef {import('./types.js').QueryResultRow} QueryResultRow */
 
 /**
  * @typedef {Object} InspectProgress
@@ -32,12 +32,12 @@ import {
  * @property {string} fileName
  * @property {string} ontologyIri
  * @property {string | null | undefined} inspectedAt
- * @property {import('./types.js').OcqOntologyMetadata | null | undefined} ontologyMetadata
- * @property {OcqQueryResultRow[]} results
+ * @property {import('./types.js').OntologyMetadata | null | undefined} ontologyMetadata
+ * @property {QueryResultRow[]} results
  * @property {string[]} resources
- * @property {Record<string, import('./types.js').OcqResourceDetail>} [resourceDetails]
- * @property {OcqInspectionScope | null | undefined} inspectionScope
- * @property {OcqManifest | null | undefined} manifest
+ * @property {Record<string, import('./types.js').ResourceDetail>} [resourceDetails]
+ * @property {InspectionScope | null | undefined} inspectionScope
+ * @property {Manifest | null | undefined} manifest
  */
 
 /**
@@ -46,7 +46,7 @@ import {
  * This preserves the current saved-run payload shape.
  *
  * @param {BuildInspectionItemInput} input
- * @returns {OcqEvaluatedReport}
+ * @returns {EvaluatedReport}
  */
 export function buildInspectionItem(input) {
   const fileName = String(input?.fileName || '');
@@ -86,10 +86,10 @@ export function buildInspectionItem(input) {
  *
  * @param {string} ontologyText
  * @param {string} fileName
- * @param {OcqManifest | null | undefined} manifest
- * @param {OcqInspectionScope | null | undefined} [inspectionScope]
+ * @param {Manifest | null | undefined} manifest
+ * @param {InspectionScope | null | undefined} [inspectionScope]
  * @param {InspectFilesOptions} [options]
- * @returns {Promise<OcqEvaluatedReport>}
+ * @returns {Promise<EvaluatedReport>}
  */
 export async function inspectOntologyText(
   ontologyText,
@@ -127,10 +127,10 @@ export async function inspectOntologyText(
  * Inspects one browser File and returns one evaluated report bundle.
  *
  * @param {File} file
- * @param {OcqManifest | null | undefined} manifest
- * @param {OcqInspectionScope | null | undefined} [inspectionScope]
+ * @param {Manifest | null | undefined} manifest
+ * @param {InspectionScope | null | undefined} [inspectionScope]
  * @param {InspectFilesOptions} [options]
- * @returns {Promise<OcqEvaluatedReport>}
+ * @returns {Promise<EvaluatedReport>}
  */
 export async function inspectFile(file, manifest, inspectionScope, options = {}) {
   if (!(file instanceof File)) {
@@ -145,15 +145,15 @@ export async function inspectFile(file, manifest, inspectionScope, options = {})
  * Inspects many browser File objects and returns report bundles in input order.
  *
  * @param {File[]} files
- * @param {OcqManifest | null | undefined} manifest
- * @param {Map<string, OcqInspectionScope> | null | undefined} [inspectionScopesByFileName]
+ * @param {Manifest | null | undefined} manifest
+ * @param {Map<string, InspectionScope> | null | undefined} [inspectionScopesByFileName]
  * @param {InspectFilesOptions} [options]
- * @returns {Promise<OcqEvaluatedReport[]>}
+ * @returns {Promise<EvaluatedReport[]>}
  */
 export async function inspectFiles(files, manifest, inspectionScopesByFileName, options = {}) {
   const fileList = Array.isArray(files) ? files : [];
 
-  /** @type {OcqEvaluatedReport[]} */
+  /** @type {EvaluatedReport[]} */
   const reports = [];
 
   for (const file of fileList) {

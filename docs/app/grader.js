@@ -1,17 +1,17 @@
 // app/grader.js
 // @ts-check
 
-/** @typedef {import('./types.js').OcqManifest} OcqManifest */
-/** @typedef {import('./types.js').OcqManifestStandard} OcqManifestStandard */
-/** @typedef {import('./types.js').OcqInspectionScope} OcqInspectionScope */
-/** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
-/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
-/** @typedef {import('./types.js').OcqStandardType} OcqStandardType */
-/** @typedef {import('./types.js').OcqCurationFlags} OcqCurationFlags */
-/** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
-/** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
-/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
-/** @typedef {import('./types.js').OcqFailureIndex} OcqFailureIndex */
+/** @typedef {import('./types.js').Manifest} Manifest */
+/** @typedef {import('./types.js').ManifestStandard} ManifestStandard */
+/** @typedef {import('./types.js').InspectionScope} InspectionScope */
+/** @typedef {import('./types.js').OntologyMetadata} OntologyMetadata */
+/** @typedef {import('./types.js').QueryResultRow} QueryResultRow */
+/** @typedef {import('./types.js').StandardType} StandardType */
+/** @typedef {import('./types.js').CurationFlags} CurationFlags */
+/** @typedef {import('./types.js').PerResourceCurationRow} PerResourceCurationRow */
+/** @typedef {import('./types.js').OntologyReportStandardRow} OntologyReportStandardRow */
+/** @typedef {import('./types.js').OntologyReport} OntologyReport */
+/** @typedef {import('./types.js').FailureIndex} FailureIndex */
 
 /**
  * Internal accumulator shape for per-resource curation.
@@ -20,7 +20,7 @@
  * @property {string} resource
  * @property {Set<string>} failedRequirements
  * @property {Set<string>} failedRecommendations
- * @property {OcqCurationFlags} flags
+ * @property {CurationFlags} flags
  */
 
 /**
@@ -28,7 +28,7 @@
  *
  * @typedef {Object} OntologyStandardAccumulator
  * @property {string} id
- * @property {OcqStandardType} type
+ * @property {StandardType} type
  * @property {'ontology' | 'content'} scopeCategory
  * @property {number} weight
  * @property {boolean} hasFail
@@ -70,7 +70,7 @@ export const UNKNOWN_RESOURCE_IRI = 'urn:resource:unknown';
 /**
  * Returns a normalized criterion id from a result row.
  *
- * @param {Partial<OcqQueryResultRow> | null | undefined} row
+ * @param {Partial<QueryResultRow> | null | undefined} row
  * @returns {string | null}
  */
 export function getResultCriterionId(row) {
@@ -80,7 +80,7 @@ export function getResultCriterionId(row) {
 /**
  * Returns a fresh curation flags object.
  *
- * @returns {OcqCurationFlags}
+ * @returns {CurationFlags}
  */
 export function makeEmptyCurationFlags() {
   return {
@@ -93,8 +93,8 @@ export function makeEmptyCurationFlags() {
 /**
  * Resolves the standard type for a manifest standard entry.
  *
- * @param {Partial<OcqManifestStandard> | null | undefined} standard
- * @returns {OcqStandardType}
+ * @param {Partial<ManifestStandard> | null | undefined} standard
+ * @returns {StandardType}
  */
 export function getStandardType(standard) {
   return standard?.type === 'recommendation' ? 'recommendation' : 'requirement';
@@ -111,7 +111,7 @@ export function getStandardType(standard) {
  *
  * @param {boolean} hasRequirementFailure
  * @param {boolean} hasRecommendationFailure
- * @param {Partial<OcqCurationFlags>} [flags={}]
+ * @param {Partial<CurationFlags>} [flags={}]
  * @returns {string}
  */
 export function getCurationStatusIri(
@@ -156,11 +156,11 @@ export function getCurationStatusRank(statusIri) {
 /**
  * Builds a map from criterion id to standard type.
  *
- * @param {OcqManifest | null | undefined} manifest
- * @returns {Map<string, OcqStandardType>}
+ * @param {Manifest | null | undefined} manifest
+ * @returns {Map<string, StandardType>}
  */
 export function buildStandardTypeMap(manifest) {
-  /** @type {Map<string, OcqStandardType>} */
+  /** @type {Map<string, StandardType>} */
   const standardTypeMap = new Map();
 
   if (!manifest || !Array.isArray(manifest.standards)) {
@@ -180,7 +180,7 @@ export function buildStandardTypeMap(manifest) {
 /**
  * Builds a map from criterion id to high-level scope category.
  *
- * @param {OcqManifest | null | undefined} manifest
+ * @param {Manifest | null | undefined} manifest
  * @returns {Map<string, 'ontology' | 'content'>}
  */
 export function buildCriterionScopeCategoryMap(manifest) {
@@ -210,7 +210,7 @@ export function buildCriterionScopeCategoryMap(manifest) {
  *
  * Ontology-scoped failures are intentionally excluded from per-resource views.
  *
- * @param {Partial<OcqQueryResultRow> | null | undefined} row
+ * @param {Partial<QueryResultRow> | null | undefined} row
  * @returns {boolean}
  */
 export function isResourceScopedRow(row) {
@@ -222,7 +222,7 @@ export function isResourceScopedRow(row) {
  * Returns true when a resource IRI falls within the selected inspection scope.
  *
  * @param {string | null | undefined} resourceIri
- * @param {OcqInspectionScope | null | undefined} inspectionScope
+ * @param {InspectionScope | null | undefined} inspectionScope
  * @returns {boolean}
  */
 export function isInInspectionScope(resourceIri, inspectionScope) {
@@ -265,12 +265,12 @@ export function createPerResourceAccumulator(resource) {
  *
  * Only resource-scoped failures are indexed.
  *
- * @param {OcqQueryResultRow[] | null | undefined} results
- * @param {OcqInspectionScope | null | undefined} [inspectionScope]
- * @returns {OcqFailureIndex}
+ * @param {QueryResultRow[] | null | undefined} results
+ * @param {InspectionScope | null | undefined} [inspectionScope]
+ * @returns {FailureIndex}
  */
 export function buildFailuresIndex(results, inspectionScope) {
-  /** @type {OcqFailureIndex} */
+  /** @type {FailureIndex} */
   const byResource = new Map();
 
   if (!Array.isArray(results)) {
@@ -325,11 +325,11 @@ export function buildFailuresIndex(results, inspectionScope) {
  * - ontology-scoped rows are excluded from per-resource curation
  * - resources listed in allResources are included even if they have no failures
  *
- * @param {OcqQueryResultRow[] | null | undefined} results
- * @param {OcqManifest | null | undefined} manifest
+ * @param {QueryResultRow[] | null | undefined} results
+ * @param {Manifest | null | undefined} manifest
  * @param {string[] | null | undefined} allResources
- * @param {OcqInspectionScope | null | undefined} [inspectionScope]
- * @returns {OcqPerResourceCurationRow[]}
+ * @param {InspectionScope | null | undefined} [inspectionScope]
+ * @returns {PerResourceCurationRow[]}
  */
 export function computePerResourceCuration(results, manifest, allResources, inspectionScope) {
   const standardTypeMap = buildStandardTypeMap(manifest);
@@ -352,10 +352,10 @@ export function computePerResourceCuration(results, manifest, allResources, insp
     const status = row.status || 'fail';
     const queryId = row.queryId || null;
 
-    /** @type {OcqStandardType} */
+    /** @type {StandardType} */
     let standardType = 'requirement';
     if (criterionId && standardTypeMap.has(criterionId)) {
-      standardType = /** @type {OcqStandardType} */ (standardTypeMap.get(criterionId));
+      standardType = /** @type {StandardType} */ (standardTypeMap.get(criterionId));
     }
 
     let entry = perResource.get(resource);
@@ -391,7 +391,7 @@ export function computePerResourceCuration(results, manifest, allResources, insp
     }
   }
 
-  /** @type {OcqPerResourceCurationRow[]} */
+  /** @type {PerResourceCurationRow[]} */
   const output = [];
 
   for (const entry of perResource.values()) {
@@ -424,12 +424,12 @@ export function computePerResourceCuration(results, manifest, allResources, insp
  * A standard fails if any matching failing result row exists for that criterion id.
  * Resource counts only include resource/TBox-scoped failures.
  *
- * @param {OcqQueryResultRow[] | null | undefined} results
- * @param {OcqManifest | null | undefined} manifest
+ * @param {QueryResultRow[] | null | undefined} results
+ * @param {Manifest | null | undefined} manifest
  * @param {string | null | undefined} ontologyIri
- * @param {OcqOntologyMetadata | null | undefined} [ontologyMetadata]
- * @param {OcqInspectionScope | null | undefined} [inspectionScope]
- * @returns {OcqOntologyReport}
+ * @param {OntologyMetadata | null | undefined} [ontologyMetadata]
+ * @param {InspectionScope | null | undefined} [inspectionScope]
+ * @returns {OntologyReport}
  */
 export function computeOntologyReport(results, manifest, ontologyIri, ontologyMetadata, inspectionScope) {
   /** @type {Map<string, OntologyStandardAccumulator>} */
@@ -489,11 +489,11 @@ export function computeOntologyReport(results, manifest, ontologyIri, ontologyMe
   let hasRequirementFailure = false;
   let hasRecommendationFailure = false;
 
-  /** @type {OcqOntologyReportStandardRow[]} */
+  /** @type {OntologyReportStandardRow[]} */
   const standards = [];
-  /** @type {OcqOntologyReportStandardRow[]} */
+  /** @type {OntologyReportStandardRow[]} */
   const ontologyStandards = [];
-  /** @type {OcqOntologyReportStandardRow[]} */
+  /** @type {OntologyReportStandardRow[]} */
   const contentStandards = [];
 
   for (const entry of standardAccumulators.values()) {

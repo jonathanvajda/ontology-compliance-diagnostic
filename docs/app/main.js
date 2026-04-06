@@ -34,21 +34,21 @@ import {
   downloadTextFile
 } from './report-export.js';
 
-/** @typedef {import('./types.js').OcqBatchRunPayload} OcqBatchRunPayload */
-/** @typedef {import('./types.js').OcqEvaluatedReport} OcqEvaluatedReport */
-/** @typedef {import('./types.js').OcqFailureIndex} OcqFailureIndex */
-/** @typedef {import('./types.js').OcqManifest} OcqManifest */
-/** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
-/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
-/** @typedef {import('./types.js').OcqPreparedOntologyFile} OcqPreparedOntologyFile */
-/** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
-/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
-/** @typedef {import('./types.js').OcqResourceDetail} OcqResourceDetail */
-/** @typedef {import('./types.js').OcqSavedRun} OcqSavedRun */
-/** @typedef {import('./types.js').OcqUiStateSnapshot} OcqUiStateSnapshot */
+/** @typedef {import('./types.js').BatchRunPayload} BatchRunPayload */
+/** @typedef {import('./types.js').EvaluatedReport} EvaluatedReport */
+/** @typedef {import('./types.js').FailureIndex} FailureIndex */
+/** @typedef {import('./types.js').Manifest} Manifest */
+/** @typedef {import('./types.js').OntologyMetadata} OntologyMetadata */
+/** @typedef {import('./types.js').OntologyReport} OntologyReport */
+/** @typedef {import('./types.js').PreparedOntologyFile} PreparedOntologyFile */
+/** @typedef {import('./types.js').PerResourceCurationRow} PerResourceCurationRow */
+/** @typedef {import('./types.js').QueryResultRow} QueryResultRow */
+/** @typedef {import('./types.js').ResourceDetail} ResourceDetail */
+/** @typedef {import('./types.js').SavedRun} SavedRun */
+/** @typedef {import('./types.js').UiStateSnapshot} UiStateSnapshot */
 
 /**
- * @typedef {Object} OcqDownloadAction
+ * @typedef {Object} DownloadAction
  * @property {string} label
  * @property {() => boolean} isAvailable
  * @property {() => string} build
@@ -133,25 +133,25 @@ const curationFiltersContainer = document.getElementById('curationFiltersContain
 /** @type {HTMLElement | null} */
 const curationFiltersSummaryElement = document.getElementById('curationFiltersSummary');
 
-/** @type {OcqManifest | null} */
+/** @type {Manifest | null} */
 let lastManifest = null;
-/** @type {OcqQueryResultRow[] | null} */
+/** @type {QueryResultRow[] | null} */
 let lastResults = null;
-/** @type {OcqPerResourceCurationRow[] | null} */
+/** @type {PerResourceCurationRow[] | null} */
 let lastPerResource = null;
-/** @type {OcqPerResourceCurationRow[] | null} */
+/** @type {PerResourceCurationRow[] | null} */
 let lastPerResourceFull = null;
-/** @type {OcqFailureIndex | null} */
+/** @type {FailureIndex | null} */
 let lastFailuresIndex = null;
-/** @type {OcqOntologyReport | null} */
+/** @type {OntologyReport | null} */
 let lastOntologyReport = null;
-/** @type {OcqOntologyMetadata | null} */
+/** @type {OntologyMetadata | null} */
 let lastOntologyMetadata = null;
-/** @type {Record<string, OcqResourceDetail> | null} */
+/** @type {Record<string, ResourceDetail> | null} */
 let lastResourceDetails = null;
-/** @type {OcqEvaluatedReport[] | null} */
+/** @type {EvaluatedReport[] | null} */
 let lastBatchReports = null;
-/** @type {import('./types.js').OcqInspectionScope | null} */
+/** @type {import('./types.js').InspectionScope | null} */
 let lastInspectionScope = null;
 /** @type {string | null} */
 let selectedBatchKey = null;
@@ -161,7 +161,7 @@ let resourceSearchTimer = null;
 let lastSelectedCriterionId = null;
 /** @type {HTMLTableRowElement | null} */
 let lastSelectedStandardRow = null;
-/** @type {OcqPreparedOntologyFile[]} */
+/** @type {PreparedOntologyFile[]} */
 let preparedOntologyFiles = [];
 /** @type {Array<{ fileName: string, completedQueries: number, totalQueries: number }>} */
 let queryProgressEntries = [];
@@ -292,8 +292,8 @@ function updateQueryProgress(progress) {
 /**
  * Renders completed query progress from existing reports.
  *
- * @param {OcqEvaluatedReport[] | null | undefined} reports
- * @param {OcqManifest | null | undefined} manifest
+ * @param {EvaluatedReport[] | null | undefined} reports
+ * @param {Manifest | null | undefined} manifest
  * @returns {void}
  */
 function syncQueryProgressFromReports(reports, manifest) {
@@ -321,7 +321,7 @@ function syncQueryProgressFromReports(reports, manifest) {
 /**
  * Returns the current UI state snapshot for persistence.
  *
- * @returns {OcqUiStateSnapshot}
+ * @returns {UiStateSnapshot}
  */
 function getUiStateSnapshot() {
   return {
@@ -335,7 +335,7 @@ function getUiStateSnapshot() {
 /**
  * Applies a stored UI state snapshot.
  *
- * @param {OcqUiStateSnapshot | null | undefined} state
+ * @param {UiStateSnapshot | null | undefined} state
  * @returns {void}
  */
 function applyUiStateSnapshot(state) {
@@ -355,7 +355,7 @@ function applyUiStateSnapshot(state) {
 /**
  * Formats a saved run label.
  *
- * @param {OcqSavedRun} run
+ * @param {SavedRun} run
  * @returns {string}
  */
 function formatRunOption(run) {
@@ -724,8 +724,8 @@ function clearResourceFilters() {
 /**
  * Applies one inspected report bundle into UI state.
  *
- * @param {OcqEvaluatedReport} reportObject
- * @param {OcqManifest | null | undefined} manifest
+ * @param {EvaluatedReport} reportObject
+ * @param {Manifest | null | undefined} manifest
  * @param {boolean} [preserveBatchReports=false]
  * @returns {void}
  */
@@ -801,7 +801,7 @@ function restoreSelectedCriterion(criterionId) {
 /**
  * Loads the selected batch item into the active detail panes.
  *
- * @param {OcqEvaluatedReport} reportObject
+ * @param {EvaluatedReport} reportObject
  * @returns {void}
  */
 function loadBatchSelection(reportObject) {
@@ -812,7 +812,7 @@ function loadBatchSelection(reportObject) {
 /**
  * Appends new reports to the cumulative dashboard list.
  *
- * @param {OcqEvaluatedReport[] | null | undefined} reports
+ * @param {EvaluatedReport[] | null | undefined} reports
  * @returns {void}
  */
 function appendBatchReports(reports) {
@@ -855,7 +855,7 @@ function onBatchRowSelected(batchKey) {
 /**
  * Builds the current export state.
  *
- * @returns {import('./types.js').OcqExportState}
+ * @returns {import('./types.js').ExportState}
  */
 function getExportState() {
   return {
@@ -935,7 +935,7 @@ async function analyzeSelectedFiles() {
   }
 }
 
-/** @type {Record<string, OcqDownloadAction>} */
+/** @type {Record<string, DownloadAction>} */
 const downloadActions = {
   resultsCsv: {
     label: 'Results CSV',
@@ -1112,7 +1112,7 @@ function handlePrintReport() {
 /**
  * Loads and caches the manifest.
  *
- * @returns {Promise<OcqManifest>}
+ * @returns {Promise<Manifest>}
  */
 async function ensureManifestLoaded() {
   if (lastManifest) {
@@ -1127,7 +1127,7 @@ async function ensureManifestLoaded() {
 /**
  * Hydrates the UI from a saved run.
  *
- * @param {OcqSavedRun | null} run
+ * @param {SavedRun | null} run
  * @returns {Promise<void>}
  */
 async function hydrateRun(run) {
@@ -1144,7 +1144,7 @@ async function hydrateRun(run) {
 
   if (run.kind === 'batch') {
     const batchPayload = Array.isArray(payload)
-      ? /** @type {OcqBatchRunPayload} */ (payload)
+      ? /** @type {BatchRunPayload} */ (payload)
       : [];
 
     lastBatchReports = batchPayload;
@@ -1173,7 +1173,7 @@ async function hydrateRun(run) {
   }
 
   const reportObject = !Array.isArray(payload) && payload
-    ? /** @type {OcqEvaluatedReport} */ (payload)
+    ? /** @type {EvaluatedReport} */ (payload)
     : null;
 
   if (!reportObject) {

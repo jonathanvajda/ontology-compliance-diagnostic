@@ -4,11 +4,11 @@
 import { getCriterionDefinition } from './criteria.js';
 import { escapeHtml, getReportStandards } from './shared.js';
 
-/** @typedef {import('./types.js').OcqManifest} OcqManifest */
-/** @typedef {import('./types.js').OcqInspectionScope} OcqInspectionScope */
-/** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
-/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
-/** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
+/** @typedef {import('./types.js').Manifest} Manifest */
+/** @typedef {import('./types.js').InspectionScope} InspectionScope */
+/** @typedef {import('./types.js').OntologyMetadata} OntologyMetadata */
+/** @typedef {import('./types.js').OntologyReport} OntologyReport */
+/** @typedef {import('./types.js').OntologyReportStandardRow} OntologyReportStandardRow */
 
 /** @type {HTMLElement | null} */
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
@@ -16,9 +16,9 @@ const ontologyReportContainer = document.getElementById('ontologyReportContainer
 /**
  * Renders the ontology report card.
  *
- * @param {OcqOntologyReport | null | undefined} report
- * @param {OcqInspectionScope | null | undefined} [inspectionScope=null]
- * @param {OcqManifest | null | undefined} [manifest=null]
+ * @param {OntologyReport | null | undefined} report
+ * @param {InspectionScope | null | undefined} [inspectionScope=null]
+ * @param {Manifest | null | undefined} [manifest=null]
  * @param {HTMLElement | null | undefined} [container=ontologyReportContainer]
  * @returns {void}
  */
@@ -110,7 +110,7 @@ export function renderOntologyReport(
 /**
  * Renders ontology metadata as a compact definition list.
  *
- * @param {OcqOntologyMetadata} metadata
+ * @param {OntologyMetadata} metadata
  * @returns {string}
  */
 function renderOntologyMetadata(metadata) {
@@ -147,10 +147,10 @@ function renderMetadataRow(label, value) {
 /**
  * Renders one standards table.
  *
- * @param {OcqOntologyReportStandardRow[]} standards
+ * @param {OntologyReportStandardRow[]} standards
  * @param {string} emptyMessage
  * @param {'ontology' | 'content'} scopeCategory
- * @param {OcqManifest | null | undefined} manifest
+ * @param {Manifest | null | undefined} manifest
  * @returns {string}
  */
 function renderStandardsSection(standards, emptyMessage, scopeCategory, manifest) {
@@ -199,7 +199,7 @@ function renderStandardsSection(standards, emptyMessage, scopeCategory, manifest
 /**
  * Renders a standards summary block.
  *
- * @param {OcqOntologyReportStandardRow[]} standards
+ * @param {OntologyReportStandardRow[]} standards
  * @param {'ontology' | 'content'} scopeCategory
  * @returns {string}
  */
@@ -226,7 +226,7 @@ function renderStandardsSummary(standards, scopeCategory) {
  * Renders one summary metric card.
  *
  * @param {string} label
- * @param {OcqOntologyReportStandardRow[]} standards
+ * @param {OntologyReportStandardRow[]} standards
  * @returns {string}
  */
 function renderSummaryMetricCard(label, standards) {
@@ -248,9 +248,9 @@ function renderSummaryMetricCard(label, standards) {
 /**
  * Renders one standards table.
  *
- * @param {OcqOntologyReportStandardRow[]} standards
+ * @param {OntologyReportStandardRow[]} standards
  * @param {'ontology' | 'content'} scopeCategory
- * @param {OcqManifest | null | undefined} manifest
+ * @param {Manifest | null | undefined} manifest
  * @returns {string}
  */
 function renderStandardsTable(standards, scopeCategory, manifest) {

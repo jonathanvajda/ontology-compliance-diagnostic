@@ -11,16 +11,16 @@
  * - Normalize rows into a stable result shape
  */
 
-/** @typedef {import('./types.js').OcqManifest} OcqManifest */
-/** @typedef {import('./types.js').OcqManifestQuery} OcqManifestQuery */
-/** @typedef {import('./types.js').OcqPreflightSummary} OcqPreflightSummary */
-/** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
-/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
-/** @typedef {import('./types.js').OcqQueryResultStatus} OcqQueryResultStatus */
-/** @typedef {import('./types.js').OcqQueryScope} OcqQueryScope */
-/** @typedef {import('./types.js').OcqResourceDetail} OcqResourceDetail */
-/** @typedef {import('./types.js').OcqResourceDetailField} OcqResourceDetailField */
-/** @typedef {import('./types.js').OcqSeverity} OcqSeverity */
+/** @typedef {import('./types.js').Manifest} Manifest */
+/** @typedef {import('./types.js').ManifestQuery} ManifestQuery */
+/** @typedef {import('./types.js').PreflightSummary} PreflightSummary */
+/** @typedef {import('./types.js').OntologyMetadata} OntologyMetadata */
+/** @typedef {import('./types.js').QueryResultRow} QueryResultRow */
+/** @typedef {import('./types.js').QueryResultStatus} QueryResultStatus */
+/** @typedef {import('./types.js').QueryScope} QueryScope */
+/** @typedef {import('./types.js').ResourceDetail} ResourceDetail */
+/** @typedef {import('./types.js').ResourceDetailField} ResourceDetailField */
+/** @typedef {import('./types.js').Severity} Severity */
 
 import {
   detectRdfFormat,
@@ -42,11 +42,11 @@ import {
 
 /**
  * @typedef {Object} EvaluateAllQueriesOutput
- * @property {OcqQueryResultRow[]} results
+ * @property {QueryResultRow[]} results
  * @property {string[]} resources
- * @property {Record<string, OcqResourceDetail>} resourceDetails
+ * @property {Record<string, ResourceDetail>} resourceDetails
  * @property {string} ontologyIri
- * @property {OcqOntologyMetadata} ontologyMetadata
+ * @property {OntologyMetadata} ontologyMetadata
  */
 
 /** @type {Window & { Comunica?: any }} */
@@ -357,7 +357,7 @@ export async function runAsk(store, sparql, engine = getComunicaEngine()) {
  * Loads and validates the manifest JSON.
  *
  * @param {string} [manifestUrl=DEFAULT_MANIFEST_URL]
- * @returns {Promise<OcqManifest>}
+ * @returns {Promise<Manifest>}
  */
 export async function loadManifest(manifestUrl = DEFAULT_MANIFEST_URL) {
   const response = await fetch(manifestUrl);
@@ -379,8 +379,8 @@ export async function loadManifest(manifestUrl = DEFAULT_MANIFEST_URL) {
     throw new Error('Manifest JSON is invalid: expected an object with a queries array.');
   }
 
-  /** @type {OcqManifest} */
-  const manifest = /** @type {OcqManifest} */ (rawManifest);
+  /** @type {Manifest} */
+  const manifest = /** @type {Manifest} */ (rawManifest);
   const standardsUrl = typeof manifest.standardsUrl === 'string' && manifest.standardsUrl.trim()
     ? manifest.standardsUrl.trim()
     : (
@@ -420,7 +420,7 @@ export async function loadManifest(manifestUrl = DEFAULT_MANIFEST_URL) {
 /**
  * Loads SPARQL query text for one manifest query definition.
  *
- * @param {OcqManifestQuery} queryDefinition
+ * @param {ManifestQuery} queryDefinition
  * @param {string} [queryBasePath=DEFAULT_QUERY_BASE_PATH]
  * @returns {Promise<string>}
  */
@@ -540,10 +540,10 @@ export function getNormalizedObjectValues(store, subjectIri, predicateIri) {
  *
  * @param {any} store
  * @param {string} resourceIri
- * @returns {OcqResourceDetail}
+ * @returns {ResourceDetail}
  */
 export function extractResourceDetail(store, resourceIri) {
-  /** @type {OcqResourceDetailField[]} */
+  /** @type {ResourceDetailField[]} */
   const fields = [];
 
   for (const descriptor of RESOURCE_DETAIL_PREDICATES) {
@@ -570,8 +570,8 @@ export function extractResourceDetail(store, resourceIri) {
  *
  * @param {any} store
  * @param {string[]} resources
- * @param {OcqQueryResultRow[]} [results=[]]
- * @returns {Record<string, OcqResourceDetail>}
+ * @param {QueryResultRow[]} [results=[]]
+ * @returns {Record<string, ResourceDetail>}
  */
 export function extractResourceDetails(store, resources, results = []) {
   /** @type {Set<string>} */
@@ -583,7 +583,7 @@ export function extractResourceDetails(store, resources, results = []) {
     }
   }
 
-  /** @type {Record<string, OcqResourceDetail>} */
+  /** @type {Record<string, ResourceDetail>} */
   const detailsByResource = {};
 
   for (const resourceIri of resourceSet) {
@@ -617,7 +617,7 @@ export function collectLabeledResources(store) {
  *
  * @param {any} store
  * @param {string} fileName
- * @returns {OcqOntologyMetadata}
+ * @returns {OntologyMetadata}
  */
 export function extractOntologyMetadata(store, fileName) {
   const ontologyIri = guessOntologyIri(store);
@@ -696,7 +696,7 @@ export function extractNamespacesFromStore(store) {
 /**
  * Derives default included namespaces for one ontology summary.
  *
- * @param {OcqPreflightSummary} summary
+ * @param {PreflightSummary} summary
  * @returns {string[]}
  */
 export function deriveDefaultIncludedNamespaces(summary) {
@@ -716,7 +716,7 @@ export function deriveDefaultIncludedNamespaces(summary) {
  *
  * @param {string} ontologyText
  * @param {string} [fileName='ontology.ttl']
- * @returns {Promise<OcqPreflightSummary>}
+ * @returns {Promise<PreflightSummary>}
  */
 export async function buildPreflightSummary(ontologyText, fileName = 'ontology.ttl') {
   const store = await loadOntologyIntoStore(ontologyText, fileName);
@@ -736,9 +736,9 @@ export async function buildPreflightSummary(ontologyText, fileName = 'ontology.t
 /**
  * Maps SELECT polarity to result status.
  *
- * @param {OcqManifestQuery['polarity']} polarity
+ * @param {ManifestQuery['polarity']} polarity
  * @param {string} queryId
- * @returns {OcqQueryResultStatus}
+ * @returns {QueryResultStatus}
  */
 export function getSelectStatusFromPolarity(polarity, queryId) {
   switch (polarity) {
@@ -754,10 +754,10 @@ export function getSelectStatusFromPolarity(polarity, queryId) {
 /**
  * Maps ASK polarity and boolean result to result status.
  *
- * @param {OcqManifestQuery['polarity']} polarity
+ * @param {ManifestQuery['polarity']} polarity
  * @param {boolean} askResult
  * @param {string} queryId
- * @returns {OcqQueryResultStatus}
+ * @returns {QueryResultStatus}
  */
 export function getAskStatusFromPolarity(polarity, askResult, queryId) {
   switch (polarity) {
@@ -802,15 +802,15 @@ export function getResourceFromSelectRow(row, resourceVar) {
  * Evaluates a single manifest query definition against the store.
  *
  * @param {any} store
- * @param {OcqManifestQuery} queryDefinition
+ * @param {ManifestQuery} queryDefinition
  * @param {string} queryText
- * @returns {Promise<OcqQueryResultRow[]>}
+ * @returns {Promise<QueryResultRow[]>}
  */
 export async function evaluateSingleQuery(store, queryDefinition, queryText) {
   const criterionId = queryDefinition.checksCriterion || null;
-  /** @type {OcqSeverity} */
+  /** @type {Severity} */
   const severity = queryDefinition.severity || 'info';
-  /** @type {OcqQueryScope} */
+  /** @type {QueryScope} */
   const scope = queryDefinition.scope || 'resource';
 
   if (queryDefinition.kind === 'SELECT') {
@@ -882,7 +882,7 @@ export async function evaluateAllQueries(
   const totalQueries = Array.isArray(manifest.queries) ? manifest.queries.length : 0;
   const resources = collectLabeledResources(store);
 
-  /** @type {OcqQueryResultRow[]} */
+  /** @type {QueryResultRow[]} */
   const allResults = [];
   let completedQueries = 0;
 
