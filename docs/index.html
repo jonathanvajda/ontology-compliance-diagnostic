@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="icon" type="image/x-icon" href="./images/block-logo.png">
+  <link rel="icon" type="image/png" href="./images/block-logo.png" />
 
   <title>Ontology Curation Manager</title>
-    <meta name="description" content="Curation Status Manager (needs a better name) is a web application for checking an ontology against a variety of quality assurance checks (SPARQL or SHACL based, typically), generating a report for recommending a per-ontology error/warn/info list and per-element curation-status (OBO style) maturity tag. Supports exporting in CSV and YAML" />
+  <meta name="description" content="Curation Status Manager (needs a better name) is a web application for checking an ontology against a variety of quality assurance checks (SPARQL or SHACL based, typically), generating a report for recommending a per-ontology error/warn/info list and per-element curation-status (OBO style) maturity tag. Supports exporting in CSV and YAML" />
   <meta name="author" content="Jonathan Vajda" />
   <meta name="dcterms.creator" content="Jonathan Vajda" />
   <meta name="dcterms.rightsHolder" content="Jonathan Vajda" />
   <meta name="license" content="CC BY 4.0" />
-  <meta link rel="license" href="https://creativecommons.org/licenses/by/4.0/" />
+  <link rel="license" href="https://creativecommons.org/licenses/by/4.0/" />
   <meta name="dcterms.license" content="https://creativecommons.org/licenses/by/4.0/" />
   <meta name="version" content="0.2.0" />
-  <link rel="shortcut icon" href="favicon.ico">
+  <link rel="shortcut icon" href="./favicon.ico" />
 
   <!-- Public CSS -->
   <link rel="stylesheet" href="./styles/skeleton.css" />
@@ -134,7 +134,7 @@
           />
 
           <p>
-            Select one or more ontology files to inspect. Select options and then run the quality assurance inspection.<br />
+            Select one or more ontology files to inspect. Turtle, RDF/XML, JSON-LD, and other supported RDF serializations are parsed locally in your browser. Select options and then run the quality assurance inspection.<br />
             The dashboard accumulates ontology runs, and selecting a row opens the ontology metadata, ontology checks, and element checks below.
           </p>
 
@@ -248,13 +248,27 @@
 
     <div id="curationTableContainer" class="ocq-section ocq-card"></div>
   </div>
-  <footer style="margin: 1em;">
-		<details open=""><summary><b>Important User Data Notice</b></summary>By design, any data that a user inputs stays <i>local</i> to the user's device. Ontology settings and data can be saved in the browser ('Save Session' button), but users are encouraged to export their work ('Download RDF' button), since it <i>cannot</i> be otherwise recovered. This is on purpose: I do not harvest your data or process your data. This site does not receive data from a user, and therefore no user data is stored anywhere except locally. If you are interested in storing data on the cloud (on a server), please contact me (jonathan.vajda [at] gmail.com) so I know about your interest and so I can notify you if/when I add that feature.</details><br>
-		<span style="text-align:right"><small>Copyright 2026, Jonathan Vajda</small></span>
+  <footer class="ocq-site-footer">
+    <details class="ocq-site-footer-notice" open>
+      <summary><strong>Important User Data Notice</strong></summary>
+      <p>
+        By design, the ontology files and reports you work with here stay <i>local</i> to your device.
+        Saved runs use your browser's local storage, and exports created from the Download menu or the Print button
+        are generated on your machine. This site does not upload or store your ontology data on a server.
+      </p>
+      <p>
+        Because saved runs are browser-local, you should still export the reports you want to keep or share.
+        If you are interested in optional cloud storage in the future, contact Jonathan Vajda
+        (jonathan.vajda [at] gmail.com).
+      </p>
+    </details>
+    <p class="ocq-site-footer-meta"><small>Copyright 2026, Jonathan Vajda</small></p>
   </footer>
 
   <!-- Vendor JS -->
   <script src="./app/n3.min.js"></script>
+  <script src="./app/jsonld.min.js"></script>
+  <script src="./app/rdflib.min.js"></script>
   <script src="./app/comunica-browser.js"></script>
 
   <!-- Header JS -->

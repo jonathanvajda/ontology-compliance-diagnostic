@@ -41,7 +41,7 @@ export const CURATION_STATUS_IRIS = Object.freeze({
   METADATA_COMPLETE: 'http://purl.obolibrary.org/obo/IAO_0000120',
   PENDING_FINAL_VETTING: 'http://purl.obolibrary.org/obo/IAO_0000125',
   REQUIRES_DISCUSSION: 'http://example.org/curation-status/requires-discussion',
-  READY_FOR_RELEASE: 'http://example.org/curation-status/ready-for-release'
+  READY_FOR_RELEASE: 'http://purl.obolibrary.org/obo/IAO_0000122'
 });
 
 /** @type {Readonly<Record<string, string>>} */
@@ -52,6 +52,16 @@ export const CURATION_STATUS_LABELS = Object.freeze({
   [CURATION_STATUS_IRIS.PENDING_FINAL_VETTING]: 'pending final vetting',
   [CURATION_STATUS_IRIS.REQUIRES_DISCUSSION]: 'requires discussion',
   [CURATION_STATUS_IRIS.READY_FOR_RELEASE]: 'ready for release'
+});
+
+/** @type {Readonly<Record<string, number>>} */
+export const CURATION_STATUS_RANKS = Object.freeze({
+  [CURATION_STATUS_IRIS.UNCURATED]: 0,
+  [CURATION_STATUS_IRIS.METADATA_INCOMPLETE]: 1,
+  [CURATION_STATUS_IRIS.METADATA_COMPLETE]: 2,
+  [CURATION_STATUS_IRIS.PENDING_FINAL_VETTING]: 3,
+  [CURATION_STATUS_IRIS.REQUIRES_DISCUSSION]: 4,
+  [CURATION_STATUS_IRIS.READY_FOR_RELEASE]: 5
 });
 
 export const UNKNOWN_ONTOLOGY_IRI = 'urn:ontology:unknown';
@@ -128,7 +138,19 @@ export function getCurationStatusIri(
  * @returns {string}
  */
 export function getCurationStatusLabel(statusIri) {
-  return CURATION_STATUS_LABELS[statusIri] || 'unknown';
+  return CURATION_STATUS_LABELS[statusIri] || statusIri || 'unknown';
+}
+
+/**
+ * Returns the relative maturity rank for one curation status IRI.
+ *
+ * Higher numbers indicate more mature states.
+ *
+ * @param {string} statusIri
+ * @returns {number}
+ */
+export function getCurationStatusRank(statusIri) {
+  return CURATION_STATUS_RANKS[statusIri] ?? -1;
 }
 
 /**

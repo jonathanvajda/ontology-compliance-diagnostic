@@ -775,3 +775,33 @@
 .ocq-app .ocq-resource-meta-row dd {
   word-break: break-word;
 }
+
+.ocq-site-footer {
+  max-width: 70%;
+  margin: 0 auto 2rem auto;
+  color: var(--ont-text);
+}
+
+.ocq-site-footer-notice {
+  border: 1px solid var(--ont-border);
+  border-radius: var(--ocq-radius);
+  background: var(--ocq-surface);
+  box-shadow: var(--ocq-shadow-sm);
+  padding: var(--ocq-space-3) var(--ocq-space-4);
+}
+
+.ocq-site-footer-notice summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.ocq-site-footer-notice p {
+  margin: 0.75rem 0 0 0;
+  line-height: 1.5;
+}
+
+.ocq-site-footer-meta {
+  margin: 0.75rem 0 0 0;
+  text-align: right;
+  color: var(--ont-muted);
+}

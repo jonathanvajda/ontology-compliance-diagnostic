@@ -22,6 +22,17 @@
 /** @typedef {import('./types.js').OcqResourceDetailField} OcqResourceDetailField */
 /** @typedef {import('./types.js').OcqSeverity} OcqSeverity */
 
+import {
+  detectRdfFormat,
+  parseRdfInput,
+  RDF_EXTENSIONS,
+  RDF_FORMATS
+} from './rdf-io.js';
+import {
+  getCurationStatusLabel,
+  getCurationStatusRank
+} from './grader.js';
+
 /**
  * @typedef {Object} EvaluateAllQueriesOptions
  * @property {string} [manifestUrl]
@@ -38,11 +49,8 @@
  * @property {OcqOntologyMetadata} ontologyMetadata
  */
 
-/** @type {Window & { N3?: any, Comunica?: any }} */
+/** @type {Window & { Comunica?: any }} */
 const runtimeWindow = window;
-
-/** @type {{ Parser?: any, Store?: any }} */
-const N3_GLOBAL = runtimeWindow.N3 || {};
 
 /** @type {{ newEngine?: Function, QueryEngine?: any }} */
 const COMUNICA_GLOBAL = runtimeWindow.Comunica || {};
@@ -91,7 +99,7 @@ export const OBO_IAO_0000232_IRI = 'http://purl.obolibrary.org/obo/IAO_0000232';
 export const CCO_ACRONYM_IRI = 'http://www.ontologyrepository.com/CommonCoreOntologies/ont00001753';
 export const CCO_CURATED_IN_ONTOLOGY_IRI = 'http://www.ontologyrepository.com/CommonCoreOntologies/ont00001760';
 
-/** @type {Array<{ id: string, predicateIri: string, label: string }>} */
+/** @type {ReadonlyArray<{ id: string, predicateIri: string, label: string }>} */
 const RESOURCE_DETAIL_PREDICATES = Object.freeze([
   { id: 'rdfType', predicateIri: RDF_TYPE_IRI, label: 'RDF type' },
   { id: 'label', predicateIri: RDFS_LABEL_IRI, label: 'Label' },
@@ -126,49 +134,8 @@ const KNOWN_IRI_LABELS = Object.freeze({
   [OWL_ANNOTATION_PROPERTY_IRI]: 'owl:AnnotationProperty'
 });
 
-export const SUPPORTED_RDF_FORMATS = Object.freeze({
-  TURTLE: 'text/turtle',
-  N_TRIPLES: 'application/n-triples',
-  N_QUADS: 'application/n-quads',
-  TRIG: 'application/trig',
-  N3: 'text/n3'
-});
-
-export const SUPPORTED_RDF_EXTENSIONS = Object.freeze([
-  '.ttl',
-  '.turtle',
-  '.nt',
-  '.ntriples',
-  '.nq',
-  '.trig',
-  '.n3'
-]);
-
-/**
- * Returns the N3 Parser constructor.
- *
- * @returns {any}
- */
-function getParserConstructor() {
-  const Parser = N3_GLOBAL.Parser;
-  if (!Parser) {
-    throw new Error('N3.Parser not found on window.N3. Check that n3.min.js is loaded.');
-  }
-  return Parser;
-}
-
-/**
- * Returns the N3 Store constructor.
- *
- * @returns {any}
- */
-function getStoreConstructor() {
-  const Store = N3_GLOBAL.Store;
-  if (!Store) {
-    throw new Error('N3.Store not found on window.N3. Check that n3.min.js is loaded.');
-  }
-  return Store;
-}
+export const SUPPORTED_RDF_FORMATS = RDF_FORMATS;
+export const SUPPORTED_RDF_EXTENSIONS = RDF_EXTENSIONS;
 
 /**
  * Creates a Comunica engine using the browser bundle shape available at runtime.
@@ -206,36 +173,11 @@ export function getComunicaEngine() {
 /**
  * Guesses an RDF syntax from the file name.
  *
- * This function only returns formats that N3.Parser can actually parse.
- * It intentionally does not claim RDF/XML or JSON-LD support.
- *
  * @param {string} [fileName]
  * @returns {string}
  */
 export function guessRdfFormatFromFilename(fileName) {
-  if (!fileName) {
-    return SUPPORTED_RDF_FORMATS.TURTLE;
-  }
-
-  const lower = fileName.toLowerCase();
-
-  if (lower.endsWith('.ttl') || lower.endsWith('.turtle')) {
-    return SUPPORTED_RDF_FORMATS.TURTLE;
-  }
-  if (lower.endsWith('.nt') || lower.endsWith('.ntriples')) {
-    return SUPPORTED_RDF_FORMATS.N_TRIPLES;
-  }
-  if (lower.endsWith('.nq')) {
-    return SUPPORTED_RDF_FORMATS.N_QUADS;
-  }
-  if (lower.endsWith('.trig')) {
-    return SUPPORTED_RDF_FORMATS.TRIG;
-  }
-  if (lower.endsWith('.n3')) {
-    return SUPPORTED_RDF_FORMATS.N3;
-  }
-
-  return SUPPORTED_RDF_FORMATS.TURTLE;
+  return detectRdfFormat(fileName);
 }
 
 /**
@@ -250,16 +192,10 @@ export function assertSupportedOntologyFile(fileName) {
   }
 
   const lower = fileName.toLowerCase();
-
-  if (
-    lower.endsWith('.rdf') ||
-    lower.endsWith('.owl') ||
-    lower.endsWith('.xml') ||
-    lower.endsWith('.jsonld') ||
-    lower.endsWith('.json-ld')
-  ) {
+  const isSupported = SUPPORTED_RDF_EXTENSIONS.some((extension) => lower.endsWith(extension));
+  if (!isSupported) {
     throw new Error(
-      'This engine currently supports only N3.js-compatible syntaxes: Turtle, N-Triples, N-Quads, TriG, and N3.'
+      'Unsupported ontology file type. Supported inputs are Turtle, N-Triples, N-Quads, TriG, N3, JSON-LD, and RDF/XML.'
     );
   }
 }
@@ -277,17 +213,8 @@ export async function loadOntologyIntoStore(ontologyText, fileName = 'ontology.t
   }
 
   assertSupportedOntologyFile(fileName);
-
-  const Parser = getParserConstructor();
-  const Store = getStoreConstructor();
-  const format = guessRdfFormatFromFilename(fileName);
-
-  const parser = new Parser({ format });
-  const store = new Store();
-  const quads = parser.parse(ontologyText);
-
-  store.addQuads(quads);
-  return store;
+  const parsed = await parseRdfInput(ontologyText, fileName);
+  return parsed.store;
 }
 
 /**
@@ -562,8 +489,14 @@ export function getFirstObjectValue(store, subjectIri, predicateIri) {
 export function getObjectValues(store, subjectIri, predicateIri) {
   return store
     .getQuads(subjectIri, predicateIri, null, null)
-    .map((quad) => quad?.object?.value || '')
-    .filter((value) => value !== '');
+    .map(
+      /** @param {{ object?: { value?: string } | null | undefined }} quad */
+      (quad) => quad?.object?.value || ''
+    )
+    .filter(
+      /** @param {string} value */
+      (value) => value !== ''
+    );
 }
 
 /**
@@ -575,7 +508,27 @@ export function getObjectValues(store, subjectIri, predicateIri) {
  * @returns {string[]}
  */
 export function getNormalizedObjectValues(store, subjectIri, predicateIri) {
-  const values = getObjectValues(store, subjectIri, predicateIri)
+  const rawValues = getObjectValues(store, subjectIri, predicateIri);
+
+  if (predicateIri === OBO_IAO_0000114_IRI) {
+    const normalizedStatuses = rawValues
+      .map((value) => ({
+        iri: value,
+        label: getCurationStatusLabel(value)
+      }))
+      .filter((entry) => entry.iri !== '')
+      .sort((a, b) => {
+        const rankDiff = getCurationStatusRank(a.iri) - getCurationStatusRank(b.iri);
+        if (rankDiff !== 0) {
+          return rankDiff;
+        }
+        return a.label.localeCompare(b.label);
+      });
+
+    return Array.from(new Set(normalizedStatuses.map((entry) => entry.label)));
+  }
+
+  const values = rawValues
     .map((value) => KNOWN_IRI_LABELS[value] || value)
     .filter((value) => value !== '');
 
