@@ -16,7 +16,8 @@
     "eslint-plugin-import": "^2.32.0"
   },
   "scripts": {
-    "lint": "eslint . --ext .js,.mjs"
+    "lint": "eslint . --ext .js,.mjs",
+    "test": "node ./test/rdf-io.test.js"
   },
   "repository": {
     "type": "git",

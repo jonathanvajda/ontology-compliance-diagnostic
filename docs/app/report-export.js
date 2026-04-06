@@ -9,12 +9,12 @@ import {
   rowsToCsv
 } from './shared.js';
 
-/** @typedef {import('./types.js').OcqEvaluatedReport} OcqEvaluatedReport */
-/** @typedef {import('./types.js').OcqExportState} OcqExportState */
-/** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
-/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
-/** @typedef {import('./types.js').OcqPerResourceCurationRow} OcqPerResourceCurationRow */
-/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
+/** @typedef {import('./types.js').EvaluatedReport} EvaluatedReport */
+/** @typedef {import('./types.js').ExportState} ExportState */
+/** @typedef {import('./types.js').OntologyMetadata} OntologyMetadata */
+/** @typedef {import('./types.js').OntologyReport} OntologyReport */
+/** @typedef {import('./types.js').PerResourceCurationRow} PerResourceCurationRow */
+/** @typedef {import('./types.js').QueryResultRow} QueryResultRow */
 
 /**
  * Downloads a text file.
@@ -41,7 +41,7 @@ export function downloadTextFile(text, fileName, mimeType) {
 /**
  * Serializes result rows as CSV.
  *
- * @param {OcqQueryResultRow[] | null | undefined} results
+ * @param {QueryResultRow[] | null | undefined} results
  * @param {string} ontologyIri
  * @returns {string}
  */
@@ -75,7 +75,7 @@ export function buildResultsCsv(results, ontologyIri) {
 /**
  * Serializes an ontology report as YAML-like text.
  *
- * @param {OcqOntologyReport | null | undefined} report
+ * @param {OntologyReport | null | undefined} report
  * @returns {string}
  */
 export function buildOntologyReportYaml(report) {
@@ -101,7 +101,7 @@ export function buildOntologyReportYaml(report) {
 /**
  * Builds CSV for filtered per-resource rows.
  *
- * @param {OcqPerResourceCurationRow[] | null | undefined} perResourceRows
+ * @param {PerResourceCurationRow[] | null | undefined} perResourceRows
  * @returns {string}
  */
 export function buildFilteredResourcesCsv(perResourceRows) {
@@ -140,7 +140,7 @@ export function buildFilteredResourcesCsv(perResourceRows) {
  * Builds CSV for one selected standard detail.
  *
  * @param {string | null | undefined} criterionId
- * @param {OcqQueryResultRow[] | null | undefined} results
+ * @param {QueryResultRow[] | null | undefined} results
  * @returns {string}
  */
 export function buildStandardDetailCsv(criterionId, results) {
@@ -169,7 +169,7 @@ export function buildStandardDetailCsv(criterionId, results) {
 /**
  * Builds CSV summary for batch results.
  *
- * @param {OcqEvaluatedReport[] | null | undefined} batchReports
+ * @param {EvaluatedReport[] | null | undefined} batchReports
  * @returns {string}
  */
 export function buildBatchSummaryCsv(batchReports) {
@@ -229,7 +229,7 @@ export function buildBatchSummaryCsv(batchReports) {
 /**
  * Builds an HTML report for the current view.
  *
- * @param {OcqExportState} state
+ * @param {ExportState} state
  * @returns {string}
  */
 export function buildHtmlReport(state) {

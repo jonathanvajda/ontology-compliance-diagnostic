@@ -11,16 +11,27 @@
  * - Normalize rows into a stable result shape
  */
 
-/** @typedef {import('./types.js').OcqManifest} OcqManifest */
-/** @typedef {import('./types.js').OcqManifestQuery} OcqManifestQuery */
-/** @typedef {import('./types.js').OcqPreflightSummary} OcqPreflightSummary */
-/** @typedef {import('./types.js').OcqOntologyMetadata} OcqOntologyMetadata */
-/** @typedef {import('./types.js').OcqQueryResultRow} OcqQueryResultRow */
-/** @typedef {import('./types.js').OcqQueryResultStatus} OcqQueryResultStatus */
-/** @typedef {import('./types.js').OcqQueryScope} OcqQueryScope */
-/** @typedef {import('./types.js').OcqResourceDetail} OcqResourceDetail */
-/** @typedef {import('./types.js').OcqResourceDetailField} OcqResourceDetailField */
-/** @typedef {import('./types.js').OcqSeverity} OcqSeverity */
+/** @typedef {import('./types.js').Manifest} Manifest */
+/** @typedef {import('./types.js').ManifestQuery} ManifestQuery */
+/** @typedef {import('./types.js').PreflightSummary} PreflightSummary */
+/** @typedef {import('./types.js').OntologyMetadata} OntologyMetadata */
+/** @typedef {import('./types.js').QueryResultRow} QueryResultRow */
+/** @typedef {import('./types.js').QueryResultStatus} QueryResultStatus */
+/** @typedef {import('./types.js').QueryScope} QueryScope */
+/** @typedef {import('./types.js').ResourceDetail} ResourceDetail */
+/** @typedef {import('./types.js').ResourceDetailField} ResourceDetailField */
+/** @typedef {import('./types.js').Severity} Severity */
+
+import {
+  detectRdfFormat,
+  parseRdfInput,
+  RDF_EXTENSIONS,
+  RDF_FORMATS
+} from './rdf-io.js';
+import {
+  getCurationStatusLabel,
+  getCurationStatusRank
+} from './grader.js';
 
 /**
  * @typedef {Object} EvaluateAllQueriesOptions
@@ -31,18 +42,15 @@
 
 /**
  * @typedef {Object} EvaluateAllQueriesOutput
- * @property {OcqQueryResultRow[]} results
+ * @property {QueryResultRow[]} results
  * @property {string[]} resources
- * @property {Record<string, OcqResourceDetail>} resourceDetails
+ * @property {Record<string, ResourceDetail>} resourceDetails
  * @property {string} ontologyIri
- * @property {OcqOntologyMetadata} ontologyMetadata
+ * @property {OntologyMetadata} ontologyMetadata
  */
 
-/** @type {Window & { N3?: any, Comunica?: any }} */
+/** @type {Window & { Comunica?: any }} */
 const runtimeWindow = window;
-
-/** @type {{ Parser?: any, Store?: any }} */
-const N3_GLOBAL = runtimeWindow.N3 || {};
 
 /** @type {{ newEngine?: Function, QueryEngine?: any }} */
 const COMUNICA_GLOBAL = runtimeWindow.Comunica || {};
@@ -91,7 +99,7 @@ export const OBO_IAO_0000232_IRI = 'http://purl.obolibrary.org/obo/IAO_0000232';
 export const CCO_ACRONYM_IRI = 'http://www.ontologyrepository.com/CommonCoreOntologies/ont00001753';
 export const CCO_CURATED_IN_ONTOLOGY_IRI = 'http://www.ontologyrepository.com/CommonCoreOntologies/ont00001760';
 
-/** @type {Array<{ id: string, predicateIri: string, label: string }>} */
+/** @type {ReadonlyArray<{ id: string, predicateIri: string, label: string }>} */
 const RESOURCE_DETAIL_PREDICATES = Object.freeze([
   { id: 'rdfType', predicateIri: RDF_TYPE_IRI, label: 'RDF type' },
   { id: 'label', predicateIri: RDFS_LABEL_IRI, label: 'Label' },
@@ -126,49 +134,8 @@ const KNOWN_IRI_LABELS = Object.freeze({
   [OWL_ANNOTATION_PROPERTY_IRI]: 'owl:AnnotationProperty'
 });
 
-export const SUPPORTED_RDF_FORMATS = Object.freeze({
-  TURTLE: 'text/turtle',
-  N_TRIPLES: 'application/n-triples',
-  N_QUADS: 'application/n-quads',
-  TRIG: 'application/trig',
-  N3: 'text/n3'
-});
-
-export const SUPPORTED_RDF_EXTENSIONS = Object.freeze([
-  '.ttl',
-  '.turtle',
-  '.nt',
-  '.ntriples',
-  '.nq',
-  '.trig',
-  '.n3'
-]);
-
-/**
- * Returns the N3 Parser constructor.
- *
- * @returns {any}
- */
-function getParserConstructor() {
-  const Parser = N3_GLOBAL.Parser;
-  if (!Parser) {
-    throw new Error('N3.Parser not found on window.N3. Check that n3.min.js is loaded.');
-  }
-  return Parser;
-}
-
-/**
- * Returns the N3 Store constructor.
- *
- * @returns {any}
- */
-function getStoreConstructor() {
-  const Store = N3_GLOBAL.Store;
-  if (!Store) {
-    throw new Error('N3.Store not found on window.N3. Check that n3.min.js is loaded.');
-  }
-  return Store;
-}
+export const SUPPORTED_RDF_FORMATS = RDF_FORMATS;
+export const SUPPORTED_RDF_EXTENSIONS = RDF_EXTENSIONS;
 
 /**
  * Creates a Comunica engine using the browser bundle shape available at runtime.
@@ -206,36 +173,11 @@ export function getComunicaEngine() {
 /**
  * Guesses an RDF syntax from the file name.
  *
- * This function only returns formats that N3.Parser can actually parse.
- * It intentionally does not claim RDF/XML or JSON-LD support.
- *
  * @param {string} [fileName]
  * @returns {string}
  */
 export function guessRdfFormatFromFilename(fileName) {
-  if (!fileName) {
-    return SUPPORTED_RDF_FORMATS.TURTLE;
-  }
-
-  const lower = fileName.toLowerCase();
-
-  if (lower.endsWith('.ttl') || lower.endsWith('.turtle')) {
-    return SUPPORTED_RDF_FORMATS.TURTLE;
-  }
-  if (lower.endsWith('.nt') || lower.endsWith('.ntriples')) {
-    return SUPPORTED_RDF_FORMATS.N_TRIPLES;
-  }
-  if (lower.endsWith('.nq')) {
-    return SUPPORTED_RDF_FORMATS.N_QUADS;
-  }
-  if (lower.endsWith('.trig')) {
-    return SUPPORTED_RDF_FORMATS.TRIG;
-  }
-  if (lower.endsWith('.n3')) {
-    return SUPPORTED_RDF_FORMATS.N3;
-  }
-
-  return SUPPORTED_RDF_FORMATS.TURTLE;
+  return detectRdfFormat(fileName);
 }
 
 /**
@@ -250,16 +192,10 @@ export function assertSupportedOntologyFile(fileName) {
   }
 
   const lower = fileName.toLowerCase();
-
-  if (
-    lower.endsWith('.rdf') ||
-    lower.endsWith('.owl') ||
-    lower.endsWith('.xml') ||
-    lower.endsWith('.jsonld') ||
-    lower.endsWith('.json-ld')
-  ) {
+  const isSupported = SUPPORTED_RDF_EXTENSIONS.some((extension) => lower.endsWith(extension));
+  if (!isSupported) {
     throw new Error(
-      'This engine currently supports only N3.js-compatible syntaxes: Turtle, N-Triples, N-Quads, TriG, and N3.'
+      'Unsupported ontology file type. Supported inputs are Turtle, N-Triples, N-Quads, TriG, N3, JSON-LD, and RDF/XML.'
     );
   }
 }
@@ -277,17 +213,8 @@ export async function loadOntologyIntoStore(ontologyText, fileName = 'ontology.t
   }
 
   assertSupportedOntologyFile(fileName);
-
-  const Parser = getParserConstructor();
-  const Store = getStoreConstructor();
-  const format = guessRdfFormatFromFilename(fileName);
-
-  const parser = new Parser({ format });
-  const store = new Store();
-  const quads = parser.parse(ontologyText);
-
-  store.addQuads(quads);
-  return store;
+  const parsed = await parseRdfInput(ontologyText, fileName);
+  return parsed.store;
 }
 
 /**
@@ -430,7 +357,7 @@ export async function runAsk(store, sparql, engine = getComunicaEngine()) {
  * Loads and validates the manifest JSON.
  *
  * @param {string} [manifestUrl=DEFAULT_MANIFEST_URL]
- * @returns {Promise<OcqManifest>}
+ * @returns {Promise<Manifest>}
  */
 export async function loadManifest(manifestUrl = DEFAULT_MANIFEST_URL) {
   const response = await fetch(manifestUrl);
@@ -452,8 +379,8 @@ export async function loadManifest(manifestUrl = DEFAULT_MANIFEST_URL) {
     throw new Error('Manifest JSON is invalid: expected an object with a queries array.');
   }
 
-  /** @type {OcqManifest} */
-  const manifest = /** @type {OcqManifest} */ (rawManifest);
+  /** @type {Manifest} */
+  const manifest = /** @type {Manifest} */ (rawManifest);
   const standardsUrl = typeof manifest.standardsUrl === 'string' && manifest.standardsUrl.trim()
     ? manifest.standardsUrl.trim()
     : (
@@ -493,7 +420,7 @@ export async function loadManifest(manifestUrl = DEFAULT_MANIFEST_URL) {
 /**
  * Loads SPARQL query text for one manifest query definition.
  *
- * @param {OcqManifestQuery} queryDefinition
+ * @param {ManifestQuery} queryDefinition
  * @param {string} [queryBasePath=DEFAULT_QUERY_BASE_PATH]
  * @returns {Promise<string>}
  */
@@ -562,8 +489,14 @@ export function getFirstObjectValue(store, subjectIri, predicateIri) {
 export function getObjectValues(store, subjectIri, predicateIri) {
   return store
     .getQuads(subjectIri, predicateIri, null, null)
-    .map((quad) => quad?.object?.value || '')
-    .filter((value) => value !== '');
+    .map(
+      /** @param {{ object?: { value?: string } | null | undefined }} quad */
+      (quad) => quad?.object?.value || ''
+    )
+    .filter(
+      /** @param {string} value */
+      (value) => value !== ''
+    );
 }
 
 /**
@@ -575,7 +508,27 @@ export function getObjectValues(store, subjectIri, predicateIri) {
  * @returns {string[]}
  */
 export function getNormalizedObjectValues(store, subjectIri, predicateIri) {
-  const values = getObjectValues(store, subjectIri, predicateIri)
+  const rawValues = getObjectValues(store, subjectIri, predicateIri);
+
+  if (predicateIri === OBO_IAO_0000114_IRI) {
+    const normalizedStatuses = rawValues
+      .map((value) => ({
+        iri: value,
+        label: getCurationStatusLabel(value)
+      }))
+      .filter((entry) => entry.iri !== '')
+      .sort((a, b) => {
+        const rankDiff = getCurationStatusRank(a.iri) - getCurationStatusRank(b.iri);
+        if (rankDiff !== 0) {
+          return rankDiff;
+        }
+        return a.label.localeCompare(b.label);
+      });
+
+    return Array.from(new Set(normalizedStatuses.map((entry) => entry.label)));
+  }
+
+  const values = rawValues
     .map((value) => KNOWN_IRI_LABELS[value] || value)
     .filter((value) => value !== '');
 
@@ -587,10 +540,10 @@ export function getNormalizedObjectValues(store, subjectIri, predicateIri) {
  *
  * @param {any} store
  * @param {string} resourceIri
- * @returns {OcqResourceDetail}
+ * @returns {ResourceDetail}
  */
 export function extractResourceDetail(store, resourceIri) {
-  /** @type {OcqResourceDetailField[]} */
+  /** @type {ResourceDetailField[]} */
   const fields = [];
 
   for (const descriptor of RESOURCE_DETAIL_PREDICATES) {
@@ -617,8 +570,8 @@ export function extractResourceDetail(store, resourceIri) {
  *
  * @param {any} store
  * @param {string[]} resources
- * @param {OcqQueryResultRow[]} [results=[]]
- * @returns {Record<string, OcqResourceDetail>}
+ * @param {QueryResultRow[]} [results=[]]
+ * @returns {Record<string, ResourceDetail>}
  */
 export function extractResourceDetails(store, resources, results = []) {
   /** @type {Set<string>} */
@@ -630,7 +583,7 @@ export function extractResourceDetails(store, resources, results = []) {
     }
   }
 
-  /** @type {Record<string, OcqResourceDetail>} */
+  /** @type {Record<string, ResourceDetail>} */
   const detailsByResource = {};
 
   for (const resourceIri of resourceSet) {
@@ -664,7 +617,7 @@ export function collectLabeledResources(store) {
  *
  * @param {any} store
  * @param {string} fileName
- * @returns {OcqOntologyMetadata}
+ * @returns {OntologyMetadata}
  */
 export function extractOntologyMetadata(store, fileName) {
   const ontologyIri = guessOntologyIri(store);
@@ -743,7 +696,7 @@ export function extractNamespacesFromStore(store) {
 /**
  * Derives default included namespaces for one ontology summary.
  *
- * @param {OcqPreflightSummary} summary
+ * @param {PreflightSummary} summary
  * @returns {string[]}
  */
 export function deriveDefaultIncludedNamespaces(summary) {
@@ -763,7 +716,7 @@ export function deriveDefaultIncludedNamespaces(summary) {
  *
  * @param {string} ontologyText
  * @param {string} [fileName='ontology.ttl']
- * @returns {Promise<OcqPreflightSummary>}
+ * @returns {Promise<PreflightSummary>}
  */
 export async function buildPreflightSummary(ontologyText, fileName = 'ontology.ttl') {
   const store = await loadOntologyIntoStore(ontologyText, fileName);
@@ -783,9 +736,9 @@ export async function buildPreflightSummary(ontologyText, fileName = 'ontology.t
 /**
  * Maps SELECT polarity to result status.
  *
- * @param {OcqManifestQuery['polarity']} polarity
+ * @param {ManifestQuery['polarity']} polarity
  * @param {string} queryId
- * @returns {OcqQueryResultStatus}
+ * @returns {QueryResultStatus}
  */
 export function getSelectStatusFromPolarity(polarity, queryId) {
   switch (polarity) {
@@ -801,10 +754,10 @@ export function getSelectStatusFromPolarity(polarity, queryId) {
 /**
  * Maps ASK polarity and boolean result to result status.
  *
- * @param {OcqManifestQuery['polarity']} polarity
+ * @param {ManifestQuery['polarity']} polarity
  * @param {boolean} askResult
  * @param {string} queryId
- * @returns {OcqQueryResultStatus}
+ * @returns {QueryResultStatus}
  */
 export function getAskStatusFromPolarity(polarity, askResult, queryId) {
   switch (polarity) {
@@ -849,15 +802,15 @@ export function getResourceFromSelectRow(row, resourceVar) {
  * Evaluates a single manifest query definition against the store.
  *
  * @param {any} store
- * @param {OcqManifestQuery} queryDefinition
+ * @param {ManifestQuery} queryDefinition
  * @param {string} queryText
- * @returns {Promise<OcqQueryResultRow[]>}
+ * @returns {Promise<QueryResultRow[]>}
  */
 export async function evaluateSingleQuery(store, queryDefinition, queryText) {
   const criterionId = queryDefinition.checksCriterion || null;
-  /** @type {OcqSeverity} */
+  /** @type {Severity} */
   const severity = queryDefinition.severity || 'info';
-  /** @type {OcqQueryScope} */
+  /** @type {QueryScope} */
   const scope = queryDefinition.scope || 'resource';
 
   if (queryDefinition.kind === 'SELECT') {
@@ -929,7 +882,7 @@ export async function evaluateAllQueries(
   const totalQueries = Array.isArray(manifest.queries) ? manifest.queries.length : 0;
   const resources = collectLabeledResources(store);
 
-  /** @type {OcqQueryResultRow[]} */
+  /** @type {QueryResultRow[]} */
   const allResults = [];
   let completedQueries = 0;
 

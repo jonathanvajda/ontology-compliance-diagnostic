@@ -1,8 +1,8 @@
 // app/shared.js
 // @ts-check
 
-/** @typedef {import('./types.js').OcqOntologyReport} OcqOntologyReport */
-/** @typedef {import('./types.js').OcqOntologyReportStandardRow} OcqOntologyReportStandardRow */
+/** @typedef {import('./types.js').OntologyReport} OntologyReport */
+/** @typedef {import('./types.js').OntologyReportStandardRow} OntologyReportStandardRow */
 
 /**
  * Escapes text for safe HTML insertion.
@@ -88,8 +88,8 @@ export function rowsToCsv(rows) {
 /**
  * Returns the standards array from an ontology report.
  *
- * @param {OcqOntologyReport | null | undefined} report
- * @returns {OcqOntologyReportStandardRow[]}
+ * @param {OntologyReport | null | undefined} report
+ * @returns {OntologyReportStandardRow[]}
  */
 export function getReportStandards(report) {
   return Array.isArray(report?.standards) ? report.standards : [];

@@ -8,7 +8,8 @@ export default [
     ignores: [
       "docs/app/comunica-browser.js",
       "docs/app/n3.min.js",
-      "docs/app/rdflib.min.js"
+      "docs/app/rdflib.min.js",
+      "docs/app/jsonld.min.js"
     ]
   },
 
@@ -61,6 +62,15 @@ export default [
       // Extra hygiene (optional)
       "no-shadow": "warn",
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }]
+    }
+  },
+  {
+    files: ["test/**/*.js"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly"
+      }
     }
   }
 ];
