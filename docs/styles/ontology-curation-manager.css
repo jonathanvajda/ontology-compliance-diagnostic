@@ -1,5 +1,5 @@
 /* =========================
-   Ontology Curation QA (OCQ)
+   Ontology Conformance Diagnostic (OCD)
    Scoped UX styles
    - Relies on global theme tokens: --ont-*
    - Theme toggled via <html data-theme="dark|light">
@@ -20,7 +20,7 @@
   color: var(--ont-text);
   font-family: var(--ont-font-body);
 
-  /* OCQ-local shape + elevation */
+  /* OCD-local shape + elevation */
   --ocq-radius: 12px;
   --ocq-radius-sm: 10px;
   --ocq-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
