@@ -119,14 +119,14 @@
 
   <header id="siteHeader" class="sitehdr-root table-nova-header" role="banner" aria-label="Site header"></header>
 
-  <div class="ocq-app ocq-theme-light" id="appRoot">
-    <div class="ocq-section ocq-card">
-      <div class="ocq-toolbar">
-        <div class="ocq-toolbar-left">
-          <label class="ocq-label" for="ontologyFiles">Ontology files</label>
+  <div class="ocd-app ocd-theme-light" id="appRoot">
+    <div class="ocd-section ocd-card">
+      <div class="ocd-toolbar">
+        <div class="ocd-toolbar-left">
+          <label class="ocd-label" for="ontologyFiles">Ontology files</label>
 
           <input
-            class="ocq-input ocq-input-file"
+            class="ocd-input ocd-input-file"
             type="file"
             id="ontologyFiles"
             accept=".ttl,.rdf,.owl,.nt,.nq,.trig,.jsonld"
@@ -138,21 +138,21 @@
             The dashboard accumulates ontology runs, and selecting a row opens the ontology metadata, ontology checks, and element checks below.
           </p>
 
-          <div class="ocq-actions">
-            <button id="loadFilesForInspectionBtn" class="ocq-btn ocq-btn-primary" type="button">Load files</button>
-            <button id="runInspectionBtn" class="ocq-btn ocq-btn-secondary" type="button">Run Inspection</button>
+          <div class="ocd-actions">
+            <button id="loadFilesForInspectionBtn" class="ocd-btn ocd-btn-primary" type="button">Load files</button>
+            <button id="runInspectionBtn" class="ocd-btn ocd-btn-secondary" type="button">Run Inspection</button>
           </div>
 
-          <p class="ocq-help">
+          <p class="ocd-help">
             Tip: For keyboard users, standard rows are focusable — press Enter/Space to open details.
           </p>
         </div>
 
-        <div class="ocq-toolbar-right">
-          <div class="ocq-export" role="group" aria-label="Download exports">
-            <label for="downloadActionSelect" class="ocq-label">Download</label>
+        <div class="ocd-toolbar-right">
+          <div class="ocd-export" role="group" aria-label="Download exports">
+            <label for="downloadActionSelect" class="ocd-label">Download</label>
 
-            <select id="downloadActionSelect" class="ocq-select">
+            <select id="downloadActionSelect" class="ocd-select">
               <option value="">Choose export…</option>
 
               <optgroup label="Current run">
@@ -170,7 +170,7 @@
 
             <button
               id="downloadSelectedBtn"
-              class="ocq-btn ocq-btn-tertiary"
+              class="ocd-btn ocd-btn-tertiary"
               type="button"
               disabled
             >
@@ -179,37 +179,37 @@
             </div>
             
             <br />
-          <div class="ocq-session" role="group" aria-label="Saved runs">
-            <select id="savedRunsSelect" class="ocq-input ocq-select" aria-label="Saved runs">
+          <div class="ocd-session" role="group" aria-label="Saved runs">
+            <select id="savedRunsSelect" class="ocd-input ocd-select" aria-label="Saved runs">
               <option value="">Saved runs…</option>
             </select>
             <br />
-            <button id="loadSavedRunBtn" class="ocq-btn ocq-btn-tertiary" type="button">Load</button>
-            <button id="deleteSavedRunBtn" class="ocq-btn ocq-btn-tertiary" type="button">Delete</button>
-            <button id="printReportBtn" class="ocq-btn ocq-btn-tertiary" type="button" disabled>Print</button>
+            <button id="loadSavedRunBtn" class="ocd-btn ocd-btn-tertiary" type="button">Load</button>
+            <button id="deleteSavedRunBtn" class="ocd-btn ocd-btn-tertiary" type="button">Delete</button>
+            <button id="printReportBtn" class="ocd-btn ocd-btn-tertiary" type="button" disabled>Print</button>
           </div>
         </div>
       </div>
 
-      <div id="preflightContainer" class="ocq-inline-preflight"></div>
+      <div id="preflightContainer" class="ocd-inline-preflight"></div>
 
-      <div id="status" class="ocq-status" aria-live="polite"></div>
-      <div id="queryCounter" class="ocq-status" aria-live="polite"></div>
+      <div id="status" class="ocd-status" aria-live="polite"></div>
+      <div id="queryCounter" class="ocd-status" aria-live="polite"></div>
     </div>
 
-    <div id="dashboardContainer" class="ocq-section ocq-card"></div>
+    <div id="dashboardContainer" class="ocd-section ocd-card"></div>
 
-    <div id="ontologyReportContainer" class="ocq-section ocq-card"></div>
+    <div id="ontologyReportContainer" class="ocd-section ocd-card"></div>
 
-    <div id="standardDetailContainer" class="ocq-modal" aria-hidden="true"></div>
+    <div id="standardDetailContainer" class="ocd-modal" aria-hidden="true"></div>
 
-    <div id="curationFiltersContainer" class="ocq-section ocq-card" hidden>
-      <h2 class="ocq-title">Resource filters</h2>
+    <div id="curationFiltersContainer" class="ocd-section ocd-card" hidden>
+      <h2 class="ocd-title">Resource filters</h2>
 
-      <div id="curationFilters" class="ocq-filters">
-        <div class="ocq-filter">
-          <label class="ocq-label" for="statusFilter">Curation status</label>
-          <select id="statusFilter" class="ocq-input ocq-select">
+      <div id="curationFilters" class="ocd-filters">
+        <div class="ocd-filter">
+          <label class="ocd-label" for="statusFilter">Curation status</label>
+          <select id="statusFilter" class="ocd-input ocd-select">
             <option value="">All</option>
             <option value="uncurated">uncurated</option>
             <option value="metadata incomplete">metadata incomplete</option>
@@ -218,38 +218,38 @@
           </select>
         </div>
 
-        <div class="ocq-filter">
-          <label class="ocq-label" for="standardFilter">Fails requirement / recommendation</label>
-          <select id="standardFilter" class="ocq-input ocq-select">
+        <div class="ocd-filter">
+          <label class="ocd-label" for="standardFilter">Fails requirement / recommendation</label>
+          <select id="standardFilter" class="ocd-input ocd-select">
             <option value="">Any</option>
           </select>
         </div>
 
-        <div class="ocq-filter">
-          <label class="ocq-label" for="resourceSearch">Resource IRI contains:</label>
+        <div class="ocd-filter">
+          <label class="ocd-label" for="resourceSearch">Resource IRI contains:</label>
           <input
             id="resourceSearch"
-            class="ocq-input"
+            class="ocd-input"
             type="text"
             placeholder="e.g., obo:IAO_"
             autocomplete="off"
           />
         </div>
 
-        <div class="ocq-filter ocq-filter-actions">
-          <button id="clearFiltersBtn" class="ocq-btn ocq-btn-secondary" type="button">
+        <div class="ocd-filter ocd-filter-actions">
+          <button id="clearFiltersBtn" class="ocd-btn ocd-btn-secondary" type="button">
             Clear filters
           </button>
         </div>
       </div>
 
-      <div id="curationFiltersSummary" class="ocq-status" aria-live="polite"></div>
+      <div id="curationFiltersSummary" class="ocd-status" aria-live="polite"></div>
     </div>
 
-    <div id="curationTableContainer" class="ocq-section ocq-card"></div>
+    <div id="curationTableContainer" class="ocd-section ocd-card"></div>
   </div>
-  <footer class="ocq-site-footer">
-    <details class="ocq-site-footer-notice" open>
+  <footer class="ocd-site-footer">
+    <details class="ocd-site-footer-notice" open>
       <summary><strong>Important User Data Notice</strong></summary>
       <p>
         By design, the ontology files and reports you work with here stay <i>local</i> to your device.
@@ -262,7 +262,7 @@
         (jonathan.vajda [at] gmail.com).
       </p>
     </details>
-    <p class="ocq-site-footer-meta"><small>Copyright 2026, Jonathan Vajda</small></p>
+    <p class="ocd-site-footer-meta"><small>Copyright 2026, Jonathan Vajda</small></p>
   </footer>
 
   <!-- Vendor JS -->

@@ -192,8 +192,8 @@ function updateRunButtonState() {
 
   const isReady = preparedOntologyFiles.length > 0;
   runInspectionButton.disabled = !isReady;
-  runInspectionButton.classList.toggle('ocq-btn-primary', isReady);
-  runInspectionButton.classList.toggle('ocq-btn-secondary', !isReady);
+  runInspectionButton.classList.toggle('ocd-btn-primary', isReady);
+  runInspectionButton.classList.toggle('ocd-btn-secondary', !isReady);
 }
 
 /**
@@ -211,7 +211,7 @@ function renderQueryProgress() {
     return;
   }
 
-  let html = '<div class="ocq-progress-board">';
+  let html = '<div class="ocd-progress-board">';
 
   for (const entry of queryProgressEntries) {
     const total = Math.max(0, Number(entry.totalQueries) || 0);
@@ -220,15 +220,15 @@ function renderQueryProgress() {
     const isComplete = total > 0 && completed >= total;
     const progressLabel = isComplete ? 'Inspection complete' : `${completed} of ${total}`;
 
-    html += '<div class="ocq-progress-card">';
-    html += '<div class="ocq-progress-header">';
+    html += '<div class="ocd-progress-card">';
+    html += '<div class="ocd-progress-header">';
     html += `<strong>${escapeHtml(entry.fileName)}</strong>`;
-    html += `<span class="ocq-mono">${escapeHtml(progressLabel)}</span>`;
+    html += `<span class="ocd-mono">${escapeHtml(progressLabel)}</span>`;
     html += '</div>';
-    html += '<div class="ocq-progress-track" aria-hidden="true">';
-    html += `<div class="ocq-progress-fill" style="width:${escapeHtml(String(percent))}%"></div>`;
+    html += '<div class="ocd-progress-track" aria-hidden="true">';
+    html += `<div class="ocd-progress-fill" style="width:${escapeHtml(String(percent))}%"></div>`;
     html += '</div>';
-    html += `<div class="ocq-progress-meta"><span>${escapeHtml(`${percent}%`)}</span></div>`;
+    html += `<div class="ocd-progress-meta"><span>${escapeHtml(`${percent}%`)}</span></div>`;
     html += '</div>';
   }
 
@@ -388,7 +388,7 @@ async function refreshSavedRunsUi() {
 /**
  * Sets the app theme.
  *
- * @param {'ocq-theme-light' | 'ocq-theme-dark'} themeClass
+ * @param {'ocd-theme-light' | 'ocd-theme-dark'} themeClass
  * @returns {void}
  */
 function setTheme(themeClass) {
@@ -396,9 +396,9 @@ function setTheme(themeClass) {
     return;
   }
 
-  appRoot.classList.remove('ocq-theme-light', 'ocq-theme-dark');
+  appRoot.classList.remove('ocd-theme-light', 'ocd-theme-dark');
   appRoot.classList.add(themeClass);
-  localStorage.setItem('ocq-theme', themeClass);
+  localStorage.setItem('ocd-theme', themeClass);
 }
 
 /**
@@ -411,8 +411,8 @@ function toggleTheme() {
     return;
   }
 
-  const isDark = appRoot.classList.contains('ocq-theme-dark');
-  setTheme(isDark ? 'ocq-theme-light' : 'ocq-theme-dark');
+  const isDark = appRoot.classList.contains('ocd-theme-dark');
+  setTheme(isDark ? 'ocd-theme-light' : 'ocd-theme-dark');
 }
 
 /**
@@ -421,8 +421,8 @@ function toggleTheme() {
  * @returns {void}
  */
 function initTheme() {
-  const savedTheme = localStorage.getItem('ocq-theme');
-  if (savedTheme === 'ocq-theme-dark' || savedTheme === 'ocq-theme-light') {
+  const savedTheme = localStorage.getItem('ocd-theme');
+  if (savedTheme === 'ocd-theme-dark' || savedTheme === 'ocd-theme-light') {
     setTheme(savedTheme);
   }
 }
@@ -462,7 +462,7 @@ function clearPreflightState() {
  */
 function clearStandardSelection() {
   if (lastSelectedStandardRow) {
-    lastSelectedStandardRow.classList.remove('ocq-row-selected');
+    lastSelectedStandardRow.classList.remove('ocd-row-selected');
   }
 
   lastSelectedStandardRow = null;
@@ -470,7 +470,7 @@ function clearStandardSelection() {
 
   if (standardDetailContainer) {
     standardDetailContainer.innerHTML = '';
-    standardDetailContainer.classList.remove('ocq-modal-open');
+    standardDetailContainer.classList.remove('ocd-modal-open');
     standardDetailContainer.setAttribute('aria-hidden', 'true');
   }
 }
@@ -485,7 +485,7 @@ function openStandardDetailModal() {
     return;
   }
 
-  standardDetailContainer.classList.add('ocq-modal-open');
+  standardDetailContainer.classList.add('ocd-modal-open');
   standardDetailContainer.setAttribute('aria-hidden', 'false');
 }
 
@@ -577,18 +577,18 @@ function renderPreflightUi() {
 
   if (!preparedOntologyFiles.length) {
     preflightContainer.innerHTML = `
-      <p class="ocq-muted ocq-inline-preflight-empty">Load files to review ontology metadata, imports, and candidate namespaces before running inspection.</p>
+      <p class="ocd-muted ocd-inline-preflight-empty">Load files to review ontology metadata, imports, and candidate namespaces before running inspection.</p>
     `;
     return;
   }
 
-  let html = '<details class="ocq-preflight-shell"' + (preflightCollapsed ? '' : ' open') + '>';
-  html += '<summary class="ocq-preflight-summary">';
-  html += '<span class="ocq-title">Inspection staging options</span>';
-  html += `<span class="ocq-muted">${escapeHtml(`${preparedOntologyFiles.length} file(s) ready`)}</span>`;
+  let html = '<details class="ocd-preflight-shell"' + (preflightCollapsed ? '' : ' open') + '>';
+  html += '<summary class="ocd-preflight-summary">';
+  html += '<span class="ocd-title">Inspection staging options</span>';
+  html += `<span class="ocd-muted">${escapeHtml(`${preparedOntologyFiles.length} file(s) ready`)}</span>`;
   html += '</summary>';
-  html += '<p class="ocq-muted">Choose which namespaces should count as in-scope for resource-level inspection. Ontology-level checks will still run on the ontology itself.</p>';
-  html += '<div class="ocq-preflight-list">';
+  html += '<p class="ocd-muted">Choose which namespaces should count as in-scope for resource-level inspection. Ontology-level checks will still run on the ontology itself.</p>';
+  html += '<div class="ocd-preflight-list">';
 
   for (const prepared of preparedOntologyFiles) {
     const summary = prepared.summary;
@@ -598,42 +598,42 @@ function renderPreflightUi() {
       ? summary.discoveredNamespaces
       : [];
 
-    html += '<div class="ocq-preflight-card">';
-    html += '<div class="ocq-preflight-header">';
-    html += `<h3 class="ocq-preflight-title">${escapeHtml(summary.fileName)}</h3>`;
-    html += `<span class="ocq-chip">${escapeHtml(String(summary.resourceCountEstimate))} labeled resources</span>`;
+    html += '<div class="ocd-preflight-card">';
+    html += '<div class="ocd-preflight-header">';
+    html += `<h3 class="ocd-preflight-title">${escapeHtml(summary.fileName)}</h3>`;
+    html += `<span class="ocd-chip">${escapeHtml(String(summary.resourceCountEstimate))} labeled resources</span>`;
     html += '</div>';
-    html += '<div class="ocq-preflight-grid">';
-    html += '<div class="ocq-preflight-block">';
+    html += '<div class="ocd-preflight-grid">';
+    html += '<div class="ocd-preflight-block">';
     html += '<strong>Ontology</strong>';
-    html += `<div class="ocq-table-meta ocq-mono">${escapeHtml(summary.ontologyIri || 'urn:ontology:unknown')}</div>`;
-    html += `<div class="ocq-table-meta">Title: ${escapeHtml(summary.metadata?.title || 'Not found')}</div>`;
-    html += `<div class="ocq-table-meta">Version IRI: ${escapeHtml(summary.metadata?.versionIri || 'Not found')}</div>`;
+    html += `<div class="ocd-table-meta ocd-mono">${escapeHtml(summary.ontologyIri || 'urn:ontology:unknown')}</div>`;
+    html += `<div class="ocd-table-meta">Title: ${escapeHtml(summary.metadata?.title || 'Not found')}</div>`;
+    html += `<div class="ocd-table-meta">Version IRI: ${escapeHtml(summary.metadata?.versionIri || 'Not found')}</div>`;
     html += '</div>';
-    html += '<div class="ocq-preflight-block">';
+    html += '<div class="ocd-preflight-block">';
     html += '<strong>Imports</strong>';
 
     if (imports.length) {
-      html += '<div class="ocq-chip-list">';
+      html += '<div class="ocd-chip-list">';
       for (const importIri of imports) {
-        html += `<span class="ocq-chip ocq-mono">${escapeHtml(importIri)}</span>`;
+        html += `<span class="ocd-chip ocd-mono">${escapeHtml(importIri)}</span>`;
       }
       html += '</div>';
     } else {
-      html += '<div class="ocq-table-meta">None found</div>';
+      html += '<div class="ocd-table-meta">None found</div>';
     }
 
     html += '</div>';
-    html += '<div class="ocq-preflight-block">';
+    html += '<div class="ocd-preflight-block">';
     html += '<strong>Included namespaces</strong>';
-    html += '<div class="ocq-checkbox-list">';
+    html += '<div class="ocd-checkbox-list">';
 
     for (const namespace of discoveredNamespaces) {
       const checkboxId = `scope-${encodeURIComponent(summary.fileName)}-${encodeURIComponent(namespace)}`;
       const isChecked = selectedNamespaces.includes(namespace);
-      html += '<label class="ocq-checkbox" for="' + escapeHtml(checkboxId) + '">';
+      html += '<label class="ocd-checkbox" for="' + escapeHtml(checkboxId) + '">';
       html += '<input type="checkbox" data-scope-file="' + escapeHtml(summary.fileName) + '" data-scope-namespace="' + escapeHtml(namespace) + '" id="' + escapeHtml(checkboxId) + '"' + (isChecked ? ' checked' : '') + ' />';
-      html += '<span class="ocq-mono">' + escapeHtml(namespace) + '</span>';
+      html += '<span class="ocd-mono">' + escapeHtml(namespace) + '</span>';
       html += '</label>';
     }
 
@@ -791,7 +791,7 @@ function restoreSelectedCriterion(criterionId) {
   );
 
   if (row instanceof HTMLTableRowElement) {
-    row.classList.add('ocq-row-selected');
+    row.classList.add('ocd-row-selected');
     lastSelectedStandardRow = row;
   }
 
@@ -941,14 +941,14 @@ const downloadActions = {
     label: 'Results CSV',
     isAvailable: () => Array.isArray(lastResults) && lastResults.length > 0,
     build: () => buildResultsCsv(lastResults, lastOntologyReport?.ontologyIri || ''),
-    getFileName: () => `ocq-results_${getTimestampForFileName()}.csv`,
+    getFileName: () => `ocd-results_${getTimestampForFileName()}.csv`,
     mimeType: 'text/csv;charset=utf-8'
   },
   ontologyYaml: {
     label: 'Ontology Report YAML',
     isAvailable: () => !!lastOntologyReport,
     build: () => buildOntologyReportYaml(lastOntologyReport),
-    getFileName: () => `ocq-ontology-report_${getTimestampForFileName()}.yaml`,
+    getFileName: () => `ocd-ontology-report_${getTimestampForFileName()}.yaml`,
     mimeType: 'text/yaml;charset=utf-8'
   },
   htmlReport: {
@@ -956,14 +956,14 @@ const downloadActions = {
     isAvailable: () =>
       !!lastOntologyReport || (Array.isArray(lastResults) && lastResults.length > 0),
     build: () => buildHtmlReport(getExportState()),
-    getFileName: () => `ocq-report_${getTimestampForFileName()}.html`,
+    getFileName: () => `ocd-report_${getTimestampForFileName()}.html`,
     mimeType: 'text/html;charset=utf-8'
   },
   filteredResourcesCsv: {
     label: 'Filtered Resources CSV',
     isAvailable: () => Array.isArray(lastPerResource) && lastPerResource.length > 0,
     build: () => buildFilteredResourcesCsv(lastPerResource),
-    getFileName: () => `ocq-filtered-resources_${getTimestampForFileName()}.csv`,
+    getFileName: () => `ocd-filtered-resources_${getTimestampForFileName()}.csv`,
     mimeType: 'text/csv;charset=utf-8'
   },
   standardDetailCsv: {
@@ -974,14 +974,14 @@ const downloadActions = {
       lastResults.length > 0,
     build: () => buildStandardDetailCsv(lastSelectedCriterionId, lastResults),
     getFileName: () =>
-      `ocq-standard-detail_${safeFilePart(lastSelectedCriterionId || 'standard')}_${getTimestampForFileName()}.csv`,
+      `ocd-standard-detail_${safeFilePart(lastSelectedCriterionId || 'standard')}_${getTimestampForFileName()}.csv`,
     mimeType: 'text/csv;charset=utf-8'
   },
   batchSummaryCsv: {
     label: 'Batch Summary CSV',
     isAvailable: () => Array.isArray(lastBatchReports) && lastBatchReports.length > 0,
     build: () => buildBatchSummaryCsv(lastBatchReports),
-    getFileName: () => `ocq-batch-summary_${getTimestampForFileName()}.csv`,
+    getFileName: () => `ocd-batch-summary_${getTimestampForFileName()}.csv`,
     mimeType: 'text/csv;charset=utf-8'
   }
 };
@@ -1331,7 +1331,7 @@ async function initializeApp() {
       }
 
       clearStandardSelection();
-      row.classList.add('ocq-row-selected');
+      row.classList.add('ocd-row-selected');
       lastSelectedStandardRow = row;
       lastSelectedCriterionId = criterionId;
 

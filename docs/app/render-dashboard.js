@@ -43,17 +43,17 @@ export function renderDashboard(
     return;
   }
 
-  let html = '<h2 class="ocq-title">Ontology dashboard</h2>';
-  html += '<table class="ocq-table">';
-  html += '<thead class="ocq-table-head"><tr>';
-  html += '<th class="ocq-table-th">Run</th>';
-  html += '<th class="ocq-table-th">File</th>';
-  html += '<th class="ocq-table-th">Ontology IRI</th>';
-  html += '<th class="ocq-table-th">Title</th>';
-  html += '<th class="ocq-table-th">Version</th>';
-  html += '<th class="ocq-table-th">Status</th>';
-  html += '<th class="ocq-table-th">Ontology Fails</th>';
-  html += '<th class="ocq-table-th">Element Fails</th>';
+  let html = '<h2 class="ocd-title">Ontology dashboard</h2>';
+  html += '<table class="ocd-table">';
+  html += '<thead class="ocd-table-head"><tr>';
+  html += '<th class="ocd-table-th">Run</th>';
+  html += '<th class="ocd-table-th">File</th>';
+  html += '<th class="ocd-table-th">Ontology IRI</th>';
+  html += '<th class="ocd-table-th">Title</th>';
+  html += '<th class="ocd-table-th">Version</th>';
+  html += '<th class="ocd-table-th">Status</th>';
+  html += '<th class="ocd-table-th">Ontology Fails</th>';
+  html += '<th class="ocd-table-th">Element Fails</th>';
   html += '</tr></thead><tbody>';
 
   for (const item of batchReports) {
@@ -77,20 +77,20 @@ export function renderDashboard(
     const batchKey = getBatchKey(item);
     const isSelected = selectedBatchKey === batchKey;
 
-    html += '<tr class="ocq-table-tr ocq-row-clickable ocq-batch-row' +
-      (isSelected ? ' ocq-batch-row--selected' : '') +
+    html += '<tr class="ocd-table-tr ocd-row-clickable ocd-batch-row' +
+      (isSelected ? ' ocd-batch-row--selected' : '') +
       '" tabindex="0" role="button" data-batch-key="' +
       escapeHtml(batchKey) +
       '">';
 
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(item.inspectedAt || '') + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(item.fileName) + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(report?.ontologyIri || '') + '</td>';
-    html += '<td class="ocq-table-td">' + escapeHtml(metadata?.title || '') + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(metadata?.versionInfo || metadata?.versionIri || '') + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(report?.statusLabel || '') + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(String(failedOntologyChecks)) + '</td>';
-    html += '<td class="ocq-table-td ocq-mono">' + escapeHtml(String(failedContentChecks)) + '</td>';
+    html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(item.inspectedAt || '') + '</td>';
+    html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(item.fileName) + '</td>';
+    html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(report?.ontologyIri || '') + '</td>';
+    html += '<td class="ocd-table-td">' + escapeHtml(metadata?.title || '') + '</td>';
+    html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(metadata?.versionInfo || metadata?.versionIri || '') + '</td>';
+    html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(report?.statusLabel || '') + '</td>';
+    html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(String(failedOntologyChecks)) + '</td>';
+    html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(String(failedContentChecks)) + '</td>';
     html += '</tr>';
   }
 

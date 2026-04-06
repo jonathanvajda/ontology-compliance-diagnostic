@@ -125,42 +125,42 @@ export function renderStandardDetail(
   const relatedQueries = Array.isArray(criterion?.queries) ? criterion.queries : [];
 
   let html = '';
-  html += '<div class="ocq-modal-dialog ocq-detail" role="dialog" aria-modal="true" aria-labelledby="ocqStandardDetailTitle">';
-  html += '  <div class="ocq-detail-header">';
-  html += `    <h3 id="ocqStandardDetailTitle" class="ocq-detail-title">${escapeHtml(criterion?.label || selectedStandard.id)}</h3>`;
-  html += '    <button class="ocq-modal-close" type="button" data-standard-close aria-label="Close standard detail">&times;</button>';
+  html += '<div class="ocd-modal-dialog ocd-detail" role="dialog" aria-modal="true" aria-labelledby="ocqStandardDetailTitle">';
+  html += '  <div class="ocd-detail-header">';
+  html += `    <h3 id="ocqStandardDetailTitle" class="ocd-detail-title">${escapeHtml(criterion?.label || selectedStandard.id)}</h3>`;
+  html += '    <button class="ocd-modal-close" type="button" data-standard-close aria-label="Close standard detail">&times;</button>';
   html += '  </div>';
 
-  html += '  <div class="ocq-detail-section">';
-  html += '    <div class="ocq-detail-section-title">Criterion</div>';
-  html += `    <div class="ocq-detail-meta ocq-mono">${escapeHtml(selectedStandard.id)}</div>`;
+  html += '  <div class="ocd-detail-section">';
+  html += '    <div class="ocd-detail-section-title">Criterion</div>';
+  html += `    <div class="ocd-detail-meta ocd-mono">${escapeHtml(selectedStandard.id)}</div>`;
   html +=
-    '    <div class="ocq-detail-meta">Status: <strong>' +
+    '    <div class="ocd-detail-meta">Status: <strong>' +
     escapeHtml(selectedStandard.status) +
     '</strong> (' +
     escapeHtml(selectedStandard.type) +
     ')</div>';
   html +=
-    '    <div class="ocq-detail-meta">Remediation effort: <strong>' +
+    '    <div class="ocd-detail-meta">Remediation effort: <strong>' +
     escapeHtml(criterion?.remediationEffort || 'case-by-case') +
     '</strong></div>';
   html +=
-    '    <div class="ocq-detail-meta">Failing resources: <strong>' +
+    '    <div class="ocd-detail-meta">Failing resources: <strong>' +
     escapeHtml(resources.length) +
     '</strong></div>';
   html += '  </div>';
 
   if (criterion?.guidance) {
-    html += '  <div class="ocq-detail-section">';
-    html += '    <div class="ocq-detail-section-title">Brief guidance</div>';
+    html += '  <div class="ocd-detail-section">';
+    html += '    <div class="ocd-detail-section-title">Brief guidance</div>';
     html += `    <p>${escapeHtml(criterion.guidance)}</p>`;
     html += '  </div>';
   }
 
   if (relatedQueries.length || queryIds.length) {
-    html += '  <div class="ocq-detail-section">';
-    html += '    <div class="ocq-detail-section-title">Related checks</div>';
-    html += '    <ul class="ocq-detail-list">';
+    html += '  <div class="ocd-detail-section">';
+    html += '    <div class="ocd-detail-section-title">Related checks</div>';
+    html += '    <ul class="ocd-detail-list">';
 
     for (const query of relatedQueries) {
       const queryTitle = String(query?.title || '').trim();
@@ -173,13 +173,13 @@ export function renderStandardDetail(
 
       html += '      <li>' + escapeHtml(queryLabel);
       if (queryId && queryTitle && queryId !== queryTitle) {
-        html += ` <span class="ocq-table-meta ocq-mono">(${escapeHtml(queryId)})</span>`;
+        html += ` <span class="ocd-table-meta ocd-mono">(${escapeHtml(queryId)})</span>`;
       }
       html += '</li>';
     }
 
     if (!relatedQueries.length && queryIds.length) {
-      html += `      <li><span class="ocq-mono">${escapeHtml(queryIds.join(', '))}</span></li>`;
+      html += `      <li><span class="ocd-mono">${escapeHtml(queryIds.join(', '))}</span></li>`;
     }
 
     html += '    </ul>';
@@ -189,11 +189,11 @@ export function renderStandardDetail(
   if (!entries.length) {
     html += '  <p>No failing resources found in details.</p>';
   } else {
-    html += '  <table class="ocq-table">';
-    html += '    <thead class="ocq-table-head">';
+    html += '  <table class="ocd-table">';
+    html += '    <thead class="ocd-table-head">';
     html += '      <tr>';
-    html += '        <th class="ocq-table-th">Resource IRI</th>';
-    html += '        <th class="ocq-table-th">Failing query IDs</th>';
+    html += '        <th class="ocd-table-th">Resource IRI</th>';
+    html += '        <th class="ocd-table-th">Failing query IDs</th>';
     html += '      </tr>';
     html += '    </thead>';
     html += '    <tbody>';
@@ -201,11 +201,11 @@ export function renderStandardDetail(
     for (const entry of entries) {
       html += '      <tr>';
       html +=
-        '        <td class="ocq-table-td ocq-mono">' +
+        '        <td class="ocd-table-td ocd-mono">' +
         escapeHtml(entry.resource) +
         '</td>';
       html +=
-        '        <td class="ocq-table-td ocq-mono">' +
+        '        <td class="ocd-table-td ocd-mono">' +
         escapeHtml(entry.queryIds.join(', ')) +
         '</td>';
       html += '      </tr>';

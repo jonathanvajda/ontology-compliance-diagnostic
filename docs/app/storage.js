@@ -15,7 +15,7 @@
 /** @typedef {import('./types.js').SavedRun} SavedRun */
 /** @typedef {import('./types.js').LastRunPointer} LastRunPointer */
 
-export const DB_NAME = 'ocq-db';
+export const DB_NAME = 'ocd-db';
 export const DB_VERSION = 1;
 
 export const STORE_NAMES = Object.freeze({
