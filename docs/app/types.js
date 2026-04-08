@@ -70,6 +70,7 @@
  *
  * @typedef {Object} SupplementalOntologyFile
  * @property {File} file
+ * @property {string} importIri
  * @property {ParsedOntologyState} parsedOntology
  * @property {PreflightSummary} summary
  */

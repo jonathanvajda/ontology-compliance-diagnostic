@@ -670,6 +670,20 @@
   gap: 6px;
 }
 
+.ocd-app .ocd-preflight-import-list {
+  display: grid;
+  gap: 10px;
+}
+
+.ocd-app .ocd-preflight-import-row {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--ont-border);
+  border-radius: var(--ocd-radius-sm);
+  background: var(--ocd-surface);
+  padding: 10px;
+}
+
 .ocd-app .ocd-checkbox-list {
   display: grid;
   gap: 6px;
