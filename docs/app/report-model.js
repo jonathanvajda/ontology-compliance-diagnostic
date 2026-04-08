@@ -2,6 +2,8 @@
 // @ts-check
 
 import {
+  collectAssertedNamedResources,
+  collectLabeledResources,
   evaluateAllQueries,
   evaluateQueriesAgainstStore,
   OBO_IAO_0000114_IRI
@@ -27,6 +29,7 @@ import {
 /**
  * @typedef {Object} InspectFilesOptions
  * @property {(progress: InspectProgress) => void} [onQueryProgress]
+ * @property {any} [primaryStore]
  */
 
 /**
@@ -157,9 +160,16 @@ export async function inspectOntologyText(
  * @returns {Promise<EvaluatedReport>}
  */
 export async function inspectStore(store, fileName, manifest, inspectionScope, options = {}) {
+  const primaryStore = options.primaryStore || store;
+  const resultResourceFilter = collectAssertedNamedResources(primaryStore);
+  const resourceInventory = collectLabeledResources(primaryStore);
   const { results, resources, resourceDetails, ontologyIri, ontologyMetadata } =
     await evaluateQueriesAgainstStore(store, fileName || 'ontology.ttl', {
       manifest,
+      resultResourceFilter,
+      resourceInventory,
+      resourceDetailsStore: primaryStore,
+      ontologyMetadataStore: primaryStore,
       onQueryProgress: options.onQueryProgress
     });
 

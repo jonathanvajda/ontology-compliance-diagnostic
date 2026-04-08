@@ -51,6 +51,7 @@
  * @property {PreflightSummary} summary
  * @property {InspectionScope} inspectionScope
  * @property {ParsedOntologyState} parsedOntology
+ * @property {SupplementalOntologyFile[]} supplementalOntologies
  */
 
 /**
@@ -69,6 +70,7 @@
  * Supplemental closure ontology input retained for inspection/rerun only.
  *
  * @typedef {Object} SupplementalOntologyFile
+ * @property {string} attachmentId
  * @property {File} file
  * @property {string} importIri
  * @property {ParsedOntologyState} parsedOntology

@@ -38,6 +38,10 @@ import {
  * @property {string} [manifestUrl]
  * @property {string} [queryBasePath]
  * @property {Manifest | null | undefined} [manifest]
+ * @property {string[] | Set<string> | null | undefined} [resultResourceFilter]
+ * @property {string[] | null | undefined} [resourceInventory]
+ * @property {any} [resourceDetailsStore]
+ * @property {any} [ontologyMetadataStore]
  * @property {(progress: { fileName: string, queryId: string, completedQueries: number, totalQueries: number }) => void} [onQueryProgress]
  */
 
@@ -787,6 +791,25 @@ export function collectLabeledResources(store) {
 }
 
 /**
+ * Returns named resources directly asserted as subjects in the supplied store.
+ *
+ * @param {any} store
+ * @returns {string[]}
+ */
+export function collectAssertedNamedResources(store) {
+  const resources = new Set();
+  const quads = store?.getQuads ? store.getQuads(null, null, null, null) : [];
+
+  for (const quad of quads) {
+    if (quad?.subject?.termType === 'NamedNode' && quad.subject.value) {
+      resources.add(quad.subject.value);
+    }
+  }
+
+  return Array.from(resources).sort((left, right) => left.localeCompare(right));
+}
+
+/**
  * Extracts ontology metadata and simple run facts from the loaded store.
  *
  * @param {any} store
@@ -1065,9 +1088,18 @@ export async function evaluateQueriesAgainstStore(
   const manifestUrl = options.manifestUrl || DEFAULT_MANIFEST_URL;
   const queryBasePath = options.queryBasePath || DEFAULT_QUERY_BASE_PATH;
   const manifest = options.manifest || await loadManifest(manifestUrl);
-  const ontologyMetadata = extractOntologyMetadata(store, fileName);
+  const ontologyMetadataStore = options.ontologyMetadataStore || store;
+  const resourceDetailsStore = options.resourceDetailsStore || store;
+  const ontologyMetadata = extractOntologyMetadata(ontologyMetadataStore, fileName);
   const totalQueries = Array.isArray(manifest.queries) ? manifest.queries.length : 0;
-  const resources = collectLabeledResources(store);
+  const resources = Array.isArray(options.resourceInventory)
+    ? Array.from(new Set(options.resourceInventory.filter(Boolean))).sort((left, right) => left.localeCompare(right))
+    : collectLabeledResources(resourceDetailsStore);
+  const resultResourceFilter = options.resultResourceFilter instanceof Set
+    ? options.resultResourceFilter
+    : Array.isArray(options.resultResourceFilter)
+      ? new Set(options.resultResourceFilter.filter(Boolean))
+      : null;
 
   /** @type {QueryResultRow[]} */
   const allResults = [];
@@ -1079,7 +1111,8 @@ export async function evaluateQueriesAgainstStore(
       const queryText = await loadQueryText(queryDefinition, queryBasePath);
       const rows = await evaluateSingleQuery(store, queryDefinition, queryText);
       console.timeEnd(queryDefinition.id);
-      allResults.push(...rows);
+      const filteredRows = filterResultsByResourceSet(rows, resultResourceFilter);
+      allResults.push(...filteredRows);
     } catch (error) {
       console.error(`Error evaluating query ${queryDefinition.id}:`, error);
     } finally {
@@ -1095,7 +1128,7 @@ export async function evaluateQueriesAgainstStore(
     }
   }
 
-  const resourceDetails = extractResourceDetails(store, resources, allResults);
+  const resourceDetails = extractResourceDetails(resourceDetailsStore, resources, allResults);
 
   return {
     results: allResults,
@@ -1104,6 +1137,38 @@ export async function evaluateQueriesAgainstStore(
     ontologyIri: ontologyMetadata.ontologyIri,
     ontologyMetadata
   };
+}
+
+/**
+ * Returns true when the query scope should be filtered by resource ownership.
+ *
+ * @param {string | null | undefined} scope
+ * @returns {boolean}
+ */
+function isResourceScopedQueryScope(scope) {
+  return scope === 'resource' || scope === 'TBox';
+}
+
+/**
+ * Filters resource/TBox query rows to a supplied owned-resource set.
+ *
+ * Ontology-scoped rows are preserved unchanged.
+ *
+ * @param {QueryResultRow[]} rows
+ * @param {Set<string> | null | undefined} ownedResources
+ * @returns {QueryResultRow[]}
+ */
+export function filterResultsByResourceSet(rows, ownedResources) {
+  if (!(ownedResources instanceof Set)) {
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    if (!row || !isResourceScopedQueryScope(row.scope)) {
+      return true;
+    }
+    return !!row.resource && ownedResources.has(row.resource);
+  });
 }
 
 /**

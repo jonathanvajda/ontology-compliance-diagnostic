@@ -74,7 +74,7 @@ import {
 const filesInput = /** @type {HTMLInputElement | null} */ (
   document.getElementById('ontologyFiles')
 );
-/** @type {HTMLInputElement | null} */
+/** @type {HTMLButtonElement | null} */
 const runInspectionButton = /** @type {HTMLButtonElement | null} */ (
   document.getElementById('runInspectionBtn')
 );
@@ -181,8 +181,6 @@ let lastSelectedCriterionId = null;
 let lastSelectedStandardRow = null;
 /** @type {PreparedOntologyFile[]} */
 let preparedOntologyFiles = [];
-/** @type {SupplementalOntologyFile[]} */
-let supplementalOntologyFiles = [];
 /** @type {Map<string, { primaryOntology: import('./types.js').ParsedOntologyState, supplementalOntologies: SupplementalOntologyFile[] }>} */
 let reportSourceByBatchKey = new Map();
 /** @type {EditSessionState} */
@@ -521,20 +519,102 @@ function clearRenderedViews() {
  */
 function clearPreflightState() {
   preparedOntologyFiles = [];
-  supplementalOntologyFiles = [];
   preflightCollapsed = false;
   renderPreflightUi();
   updateRunButtonState();
 }
 
 /**
- * Returns one assigned supplemental ontology for a declared import, if present.
+ * Returns the total number of attached supplemental ontologies across prepared primary files.
+ *
+ * @returns {number}
+ */
+function countPreparedSupplementalOntologies() {
+  return preparedOntologyFiles.reduce(
+    (count, prepared) => count + (Array.isArray(prepared.supplementalOntologies) ? prepared.supplementalOntologies.length : 0),
+    0
+  );
+}
+
+/**
+ * Returns direct and transitive import IRIs known for one prepared ontology.
+ *
+ * Direct imports come from the primary ontology. Transitive imports are discovered
+ * from any attached closure files for the same prepared ontology.
+ *
+ * @param {PreparedOntologyFile} prepared
+ * @returns {{ directImports: string[], transitiveImports: string[], allImports: string[] }}
+ */
+function getKnownImportTargets(prepared) {
+  const directImports = Array.isArray(prepared?.summary?.imports)
+    ? prepared.summary.imports.filter(Boolean)
+    : [];
+  const allImports = new Set(directImports);
+
+  for (const supplemental of prepared?.supplementalOntologies || []) {
+    for (const importIri of supplemental?.summary?.imports || []) {
+      if (importIri) {
+        allImports.add(importIri);
+      }
+    }
+  }
+
+  const directImportSet = new Set(directImports);
+  const sortedAllImports = Array.from(allImports).sort((left, right) => left.localeCompare(right));
+  const sortedDirectImports = Array.from(directImportSet).sort((left, right) => left.localeCompare(right));
+  const transitiveImports = sortedAllImports.filter((importIri) => !directImportSet.has(importIri));
+
+  return {
+    directImports: sortedDirectImports,
+    transitiveImports,
+    allImports: sortedAllImports
+  };
+}
+
+/**
+ * Returns the attached closure file names that declare one import IRI.
+ *
+ * @param {PreparedOntologyFile} prepared
+ * @param {string} importIri
+ * @returns {string[]}
+ */
+function getImportSourceFileNames(prepared, importIri) {
+  return (prepared?.supplementalOntologies || [])
+    .filter((supplemental) => Array.isArray(supplemental?.summary?.imports) && supplemental.summary.imports.includes(importIri))
+    .map((supplemental) => supplemental.file.name)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+/**
+ * Returns assigned supplemental ontologies for a declared import on a specific prepared file.
+ *
+ * @param {string} fileName
+ * @param {string} importIri
+ * @returns {SupplementalOntologyFile[]}
+ */
+function findSupplementalOntologiesForImport(fileName, importIri) {
+  const prepared = preparedOntologyFiles.find((item) => item.summary.fileName === fileName);
+  if (!prepared) {
+    return [];
+  }
+
+  return (prepared.supplementalOntologies || []).filter((item) => item.importIri === importIri);
+}
+
+/**
+ * Returns a stable attachment id for one supplemental ontology file.
  *
  * @param {string} importIri
- * @returns {SupplementalOntologyFile | null}
+ * @param {File} file
+ * @returns {string}
  */
-function findSupplementalOntologyForImport(importIri) {
-  return supplementalOntologyFiles.find((item) => item.importIri === importIri) || null;
+function getSupplementalAttachmentId(importIri, file) {
+  return [
+    importIri,
+    file.name || '',
+    String(file.size || 0),
+    String(file.lastModified || 0)
+  ].join('::');
 }
 
 /**
@@ -685,7 +765,7 @@ function renderPreflightUi() {
   for (const prepared of preparedOntologyFiles) {
     const summary = prepared.summary;
     const selectedNamespaces = prepared.inspectionScope?.includedNamespaces || [];
-    const imports = Array.isArray(summary.imports) ? summary.imports : [];
+    const { directImports, transitiveImports, allImports } = getKnownImportTargets(prepared);
     const discoveredNamespaces = Array.isArray(summary.discoveredNamespaces)
       ? summary.discoveredNamespaces
       : [];
@@ -705,29 +785,42 @@ function renderPreflightUi() {
     html += '<div class="ocd-preflight-block">';
     html += '<strong>Imports</strong>';
 
-    if (imports.length) {
+    if (allImports.length) {
       html += '<div class="ocd-preflight-import-list">';
-      for (const importIri of imports) {
-        const supplemental = findSupplementalOntologyForImport(importIri);
+      for (const importIri of allImports) {
+        const supplementalFiles = findSupplementalOntologiesForImport(summary.fileName, importIri);
+        const importSources = getImportSourceFileNames(prepared, importIri);
         const inputId = `import-file-${encodeURIComponent(summary.fileName)}-${encodeURIComponent(importIri)}`;
         html += '<div class="ocd-preflight-import-row">';
         html += `<div class="ocd-table-meta ocd-mono">${escapeHtml(importIri)}</div>`;
-        html += `<label class="ocd-label" for="${escapeHtml(inputId)}">Add ontology file for this import</label>`;
-        html += '<input class="ocd-input ocd-input-file" type="file" accept="' + escapeHtml(SUPPLEMENTAL_IMPORT_ACCEPT_ATTR) + '" id="' + escapeHtml(inputId) + '" data-import-iri="' + escapeHtml(importIri) + '" />';
-        if (supplemental) {
-          html += '<div class="ocd-table-meta">';
-          html += 'Using <span class="ocd-mono">' + escapeHtml(supplemental.file.name) + '</span>';
-          if (supplemental.summary?.ontologyIri && supplemental.summary.ontologyIri !== importIri) {
-            html += ' <span class="ocd-muted">(parsed ontology IRI: ' + escapeHtml(supplemental.summary.ontologyIri) + ')</span>';
+        if (transitiveImports.includes(importIri) && importSources.length) {
+          html += '<div class="ocd-table-meta">Also declared by attached closure file(s): ' + escapeHtml(importSources.join(', ')) + '</div>';
+        }
+        html += `<label class="ocd-label" for="${escapeHtml(inputId)}">Add ontology file(s) for this import</label>`;
+        html += '<input class="ocd-input ocd-input-file" type="file" multiple accept="' + escapeHtml(SUPPLEMENTAL_IMPORT_ACCEPT_ATTR) + '" id="' + escapeHtml(inputId) + '" data-scope-file="' + escapeHtml(summary.fileName) + '" data-import-iri="' + escapeHtml(importIri) + '" />';
+        if (supplementalFiles.length) {
+          html += '<div class="ocd-table-meta">Attached closure files:</div>';
+          html += '<div class="ocd-preflight-import-attachment-list">';
+          for (const supplemental of supplementalFiles) {
+            html += '<div class="ocd-preflight-import-attachment">';
+            html += 'Using <span class="ocd-mono">' + escapeHtml(supplemental.file.name) + '</span>';
+            if (supplemental.summary?.ontologyIri && supplemental.summary.ontologyIri !== importIri) {
+              html += ' <span class="ocd-muted">(parsed ontology IRI: ' + escapeHtml(supplemental.summary.ontologyIri) + ')</span>';
+            }
+            html += '<button class="ocd-btn ocd-btn-tertiary ocd-btn-small" type="button" data-scope-file="' + escapeHtml(summary.fileName) + '" data-remove-import-supplemental="' + escapeHtml(supplemental.attachmentId) + '">Remove</button>';
+            html += '</div>';
           }
           html += '</div>';
-          html += '<button class="ocd-btn ocd-btn-tertiary ocd-btn-small" type="button" data-remove-import-supplemental="' + escapeHtml(importIri) + '">Remove attached file</button>';
         }
         html += '</div>';
       }
       html += '</div>';
     } else {
       html += '<div class="ocd-table-meta">None found. Import-linked closure upload controls are hidden until the ontology declares an import.</div>';
+    }
+
+    if (directImports.length && transitiveImports.length) {
+      html += '<div class="ocd-table-meta">Additional import targets discovered from attached closure files are shown alongside the ontology&apos;s direct imports.</div>';
     }
 
     html += '</div>';
@@ -750,16 +843,18 @@ function renderPreflightUi() {
     html += '</div>';
   }
 
-  if (supplementalOntologyFiles.length) {
+  if (countPreparedSupplementalOntologies()) {
     html += '<div class="ocd-preflight-card">';
     html += '<div class="ocd-preflight-header">';
     html += '<h3 class="ocd-preflight-title">Attached import closure files</h3>';
-    html += `<span class="ocd-chip">${escapeHtml(String(supplementalOntologyFiles.length))} file(s)</span>`;
+    html += `<span class="ocd-chip">${escapeHtml(String(countPreparedSupplementalOntologies()))} file(s)</span>`;
     html += '</div>';
     html += '<p class="ocd-muted">These files were attached to declared imports. They will be merged into inspection and rerun evaluation but will not be rewritten during export.</p>';
     html += '<div class="ocd-chip-list">';
-    for (const supplemental of supplementalOntologyFiles) {
-      html += `<span class="ocd-chip ocd-mono">${escapeHtml(supplemental.importIri)} -> ${escapeHtml(supplemental.summary.fileName)}</span>`;
+    for (const prepared of preparedOntologyFiles) {
+      for (const supplemental of prepared.supplementalOntologies || []) {
+        html += `<span class="ocd-chip ocd-mono">${escapeHtml(prepared.summary.fileName)}: ${escapeHtml(supplemental.importIri)} -> ${escapeHtml(supplemental.summary.fileName)}</span>`;
+      }
     }
     html += '</div>';
     html += '</div>';
@@ -962,10 +1057,12 @@ function syncEditSessionForReport(reportObject) {
     return;
   }
 
+  const primaryOntology = cloneParsedOntologyState(source.primaryOntology);
+
   activeEditSession = {
     batchKey,
     selectedFileName: reportObject.fileName || null,
-    primaryOntology: cloneParsedOntologyState(source.primaryOntology),
+    primaryOntology,
     supplementalOntologies: source.supplementalOntologies.map((item) => ({
       ...item,
       parsedOntology: cloneParsedOntologyState(item.parsedOntology)
@@ -976,7 +1073,7 @@ function syncEditSessionForReport(reportObject) {
   };
 
   lastOntologyDetail = reportObject.ontologyIri
-    ? extractResourceDetail(activeEditSession.primaryOntology.store, reportObject.ontologyIri)
+    ? extractResourceDetail(primaryOntology.store, reportObject.ontologyIri)
     : null;
   renderEditSessionUi();
 }
@@ -1418,6 +1515,7 @@ async function rerunEditSessionInspection() {
       lastManifest,
       lastInspectionScope,
       {
+        primaryStore: editedPrimary.store,
         onQueryProgress: (progress) => {
           updateQueryProgress(progress);
           setStatus(
@@ -1601,36 +1699,66 @@ function hasPreparedFilesForCurrentSelection() {
 }
 
 /**
- * Adds or replaces one supplemental ontology assignment for a declared import.
+ * Adds one supplemental ontology assignment for a declared import.
  *
+ * @param {string} fileName
  * @param {string} importIri
  * @param {File} file
  * @returns {Promise<void>}
  */
-async function assignSupplementalOntologyForImport(importIri, file) {
+async function assignSupplementalOntologyForImport(fileName, importIri, file) {
   const text = await file.text();
   const parsedOntology = await createParsedOntologyState(text, file.name);
   const summary = buildPreflightSummaryFromStore(parsedOntology.store, file.name);
+  const attachmentId = getSupplementalAttachmentId(importIri, file);
 
-  supplementalOntologyFiles = supplementalOntologyFiles
-    .filter((item) => item.importIri !== importIri)
-    .concat([{
-      file,
-      importIri,
-      parsedOntology,
-      summary
-    }])
-    .sort((left, right) => left.importIri.localeCompare(right.importIri));
+  preparedOntologyFiles = preparedOntologyFiles.map((prepared) => {
+    if (prepared.summary.fileName !== fileName) {
+      return prepared;
+    }
+
+    const supplementalOntologies = (prepared.supplementalOntologies || [])
+      .filter((item) => item.attachmentId !== attachmentId)
+      .concat([{
+        attachmentId,
+        file,
+        importIri,
+        parsedOntology,
+        summary
+      }])
+      .sort((left, right) => {
+        const importCompare = left.importIri.localeCompare(right.importIri);
+        if (importCompare !== 0) {
+          return importCompare;
+        }
+        return left.file.name.localeCompare(right.file.name);
+      });
+
+    return {
+      ...prepared,
+      supplementalOntologies
+    };
+  });
 }
 
 /**
- * Removes one supplemental ontology assignment by import IRI.
+ * Removes one supplemental ontology assignment by attachment id.
  *
- * @param {string} importIri
+ * @param {string} fileName
+ * @param {string} attachmentId
  * @returns {void}
  */
-function removeSupplementalOntologyForImport(importIri) {
-  supplementalOntologyFiles = supplementalOntologyFiles.filter((item) => item.importIri !== importIri);
+function removeSupplementalOntologyForImport(fileName, attachmentId) {
+  preparedOntologyFiles = preparedOntologyFiles.map((prepared) => {
+    if (prepared.summary.fileName !== fileName) {
+      return prepared;
+    }
+
+    return {
+      ...prepared,
+      supplementalOntologies: (prepared.supplementalOntologies || []).filter((item) => item.attachmentId !== attachmentId)
+    };
+  });
 }
 
 /**
@@ -1654,36 +1782,42 @@ async function analyzeSelectedFiles() {
 
   try {
     const nextPreparedFiles = [];
+    const previousPreparedByFileName = new Map(
+      preparedOntologyFiles.map((prepared) => [prepared.summary.fileName, prepared])
+    );
 
     for (const file of files) {
       const text = await file.text();
       const parsedOntology = await createParsedOntologyState(text, file.name);
       const summary = buildPreflightSummaryFromStore(parsedOntology.store, file.name);
+      const previousPrepared = previousPreparedByFileName.get(file.name);
+      const previousSupplemental = Array.isArray(previousPrepared?.supplementalOntologies)
+        ? previousPrepared.supplementalOntologies
+        : [];
+      const validImports = new Set(summary.imports || []);
+      for (const supplemental of previousSupplemental) {
+        for (const importIri of supplemental?.summary?.imports || []) {
+          if (importIri) {
+            validImports.add(importIri);
+          }
+        }
+      }
       nextPreparedFiles.push({
         file,
         summary,
         inspectionScope: {
           includedNamespaces: deriveDefaultIncludedNamespaces(summary)
         },
-        parsedOntology
+        parsedOntology,
+        supplementalOntologies: previousSupplemental.filter((item) => validImports.has(item.importIri))
       });
     }
 
-    const declaredImports = new Set();
-    for (const prepared of nextPreparedFiles) {
-      for (const importIri of prepared.summary?.imports || []) {
-        if (importIri) {
-          declaredImports.add(importIri);
-        }
-      }
-    }
-
     preparedOntologyFiles = nextPreparedFiles;
-    supplementalOntologyFiles = supplementalOntologyFiles.filter((item) => declaredImports.has(item.importIri));
     preflightCollapsed = false;
     renderPreflightUi();
     updateRunButtonState();
-    setStatus(`Analyzed ${preparedOntologyFiles.length} ontology file(s). ${supplementalOntologyFiles.length} import closure file(s) are currently attached in preflight. Review namespaces and imports, then run batch checks.`);
+    setStatus(`Analyzed ${preparedOntologyFiles.length} ontology file(s). ${countPreparedSupplementalOntologies()} import closure file(s) are currently attached in preflight. Review namespaces and imports, then run batch checks.`);
   } catch (error) {
     console.error('Error analyzing files:', error);
     clearPreflightState();
@@ -1983,7 +2117,7 @@ async function runInspectionFromSelectedFiles() {
     for (const prepared of preparedOntologyFiles) {
       const mergedStore = buildMergedInspectionStore(
         prepared.parsedOntology,
-        supplementalOntologyFiles
+        prepared.supplementalOntologies
       );
       const report = await inspectStore(
         mergedStore,
@@ -1991,6 +2125,7 @@ async function runInspectionFromSelectedFiles() {
         manifest,
         prepared.inspectionScope,
         {
+          primaryStore: prepared.parsedOntology.store,
           onQueryProgress: (progress) => {
             updateQueryProgress(progress);
             setStatus(
@@ -2013,7 +2148,7 @@ async function runInspectionFromSelectedFiles() {
 
       reportSourceByBatchKey.set(getBatchKey(report), {
         primaryOntology: cloneParsedOntologyState(prepared.parsedOntology),
-        supplementalOntologies: supplementalOntologyFiles.map((item) => ({
+        supplementalOntologies: prepared.supplementalOntologies.map((item) => ({
           ...item,
           parsedOntology: cloneParsedOntologyState(item.parsedOntology)
         }))
@@ -2329,21 +2464,24 @@ async function initializeApp() {
         return;
       }
 
+      const fileName = event.target.getAttribute('data-scope-file');
       const importIri = event.target.getAttribute('data-import-iri');
-      if (importIri && event.target.type === 'file') {
-        const file = event.target.files?.[0] || null;
-        if (!file) {
+      if (fileName && importIri && event.target.type === 'file') {
+        const files = Array.from(event.target.files || []);
+        if (!files.length) {
           return;
         }
 
         void (async () => {
           setStatus(`Loading import closure file for ${importIri}...`);
           try {
-            await assignSupplementalOntologyForImport(importIri, file);
+            for (const file of files) {
+              await assignSupplementalOntologyForImport(fileName, importIri, file);
+            }
             reportSourceByBatchKey = new Map();
             resetEditSession();
             renderPreflightUi();
-            setStatus(`Attached ${file.name} for import ${importIri}. Run inspection to evaluate with this closure file.`);
+            setStatus(`Attached ${files.length} closure file(s) for import ${importIri} in ${fileName}. Run inspection to evaluate with this closure set.`);
           } catch (error) {
             console.error('Error loading import closure file:', error);
             setStatus(error instanceof Error ? `Error: ${error.message}` : 'Error loading import closure file.');
@@ -2352,7 +2490,6 @@ async function initializeApp() {
         return;
       }
 
-      const fileName = event.target.getAttribute('data-scope-file');
       const namespace = event.target.getAttribute('data-scope-namespace');
       if (!fileName || !namespace) {
         return;
@@ -2384,16 +2521,17 @@ async function initializeApp() {
         return;
       }
 
-      const importIri = removeButton.getAttribute('data-remove-import-supplemental');
-      if (!importIri) {
+      const attachmentId = removeButton.getAttribute('data-remove-import-supplemental');
+      const fileName = removeButton.getAttribute('data-scope-file');
+      if (!fileName || !attachmentId) {
         return;
       }
 
-      removeSupplementalOntologyForImport(importIri);
+      removeSupplementalOntologyForImport(fileName, attachmentId);
       reportSourceByBatchKey = new Map();
       resetEditSession();
       renderPreflightUi();
-      setStatus(`Removed attached import closure file for ${importIri}.`);
+      setStatus(`Removed one attached import closure file from ${fileName}.`);
     });
   }
 

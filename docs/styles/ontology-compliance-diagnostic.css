@@ -223,7 +223,7 @@
 }
 
 .ocd-app .ocd-textarea {
-  min-height: 84px;
+  min-height: 56px;
   resize: vertical;
 }
 
@@ -684,6 +684,19 @@
   padding: 10px;
 }
 
+.ocd-app .ocd-preflight-import-attachment-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ocd-app .ocd-preflight-import-attachment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .ocd-app .ocd-checkbox-list {
   display: grid;
   gap: 6px;
@@ -767,6 +780,50 @@
 
 .ocd-app .ocd-resource-detail-section + .ocd-resource-detail-section {
   margin-top: 14px;
+}
+
+.ocd-app .ocd-collapsible-section {
+  border: 1px solid var(--ont-border);
+  border-radius: var(--ocd-radius-sm);
+  background: var(--ocd-surface-2);
+  padding: 12px;
+}
+
+.ocd-app .ocd-collapsible-section summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--ont-text);
+  list-style: none;
+}
+
+.ocd-app .ocd-collapsible-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.ocd-app .ocd-collapsible-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ocd-app .ocd-collapsible-summary::before {
+  content: '+';
+  font-weight: 700;
+  color: var(--ont-muted);
+}
+
+.ocd-app .ocd-collapsible-section[open] > .ocd-collapsible-summary {
+  margin-bottom: 12px;
+}
+
+.ocd-app .ocd-collapsible-section[open] > .ocd-collapsible-summary::before {
+  content: '−';
+}
+
+.ocd-app .ocd-collapsible-nested {
+  margin-top: 12px;
+  background: var(--ocd-surface);
 }
 
 .ocd-app .ocd-editor-grid {

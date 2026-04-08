@@ -5,9 +5,17 @@ import { getCriterionDefinition } from './criteria.js';
 import { escapeHtml, getReportStandards } from './shared.js';
 
 import {
+  DCTERMS_ACCESS_RIGHTS_IRI,
+  DCTERMS_DESCRIPTION_IRI,
+  DCTERMS_LICENSE_IRI,
+  DCTERMS_TITLE_IRI,
   OBO_IAO_0000231_IRI,
   OBO_IAO_0000232_IRI,
   OBO_IAO_0100001_IRI,
+  OWL_IMPORTS_IRI,
+  OWL_VERSION_INFO_IRI,
+  OWL_VERSION_IRI,
+  RDF_TYPE_IRI,
   RDFS_COMMENT_IRI
 } from './engine.js';
 
@@ -21,6 +29,17 @@ import {
 
 /** @type {HTMLElement | null} */
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
+
+const ONTOLOGY_METADATA_PREDICATES = new Set([
+  RDF_TYPE_IRI,
+  DCTERMS_TITLE_IRI,
+  DCTERMS_DESCRIPTION_IRI,
+  OWL_VERSION_IRI,
+  OWL_VERSION_INFO_IRI,
+  DCTERMS_LICENSE_IRI,
+  DCTERMS_ACCESS_RIGHTS_IRI,
+  OWL_IMPORTS_IRI
+]);
 
 /**
  * Renders the ontology report card.
@@ -76,8 +95,6 @@ export function renderOntologyReport(
   html += '</div>';
 
   html += '<div class="ocd-detail" style="margin-top:1rem;">';
-  html += '<h3 class="ocd-detail-title">Ontology annotations</h3>';
-  html += '<p class="ocd-muted">These are direct assertions on the ontology subject for the currently selected ontology.</p>';
   html += renderOntologyAnnotations(report.ontologyIri, ontologyDetail);
   html += '</div>';
 
@@ -128,11 +145,12 @@ export function renderOntologyReport(
  * Renders one assertion table.
  *
  * @param {ResourceAssertion[]} assertions
+ * @param {string} [emptyMessage='No direct ontology assertions found.']
  * @returns {string}
  */
-function renderAssertionTable(assertions) {
+function renderAssertionTable(assertions, emptyMessage = 'No direct ontology assertions found.') {
   if (!assertions.length) {
-    return '<p class="ocd-muted">No direct ontology assertions found.</p>';
+    return '<p class="ocd-muted">' + escapeHtml(emptyMessage) + '</p>';
   }
 
   let html = '<table class="ocd-table ocd-table-wide">';
@@ -142,14 +160,21 @@ function renderAssertionTable(assertions) {
   html += '</tr></thead><tbody>';
 
   for (const assertion of assertions) {
+    const showPredicateIri = assertion.predicateLabel !== assertion.predicateIri;
+    const showObjectMeta = assertion.object.displayValue !== assertion.object.value;
+
     html += '<tr class="ocd-table-tr">';
     html += '<td class="ocd-table-td">';
     html += '<div>' + escapeHtml(assertion.predicateLabel) + '</div>';
-    html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(assertion.predicateIri) + '</div>';
+    if (showPredicateIri) {
+      html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(assertion.predicateIri) + '</div>';
+    }
     html += '</td>';
     html += '<td class="ocd-table-td">';
     html += '<div>' + escapeHtml(assertion.object.displayValue) + '</div>';
-    html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(assertion.object.termType) + ': ' + escapeHtml(assertion.object.value) + '</div>';
+    if (showObjectMeta) {
+      html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(assertion.object.termType) + ': ' + escapeHtml(assertion.object.value) + '</div>';
+    }
     html += '</td>';
     html += '</tr>';
   }
@@ -169,10 +194,23 @@ function renderOntologyAnnotations(ontologyIri, ontologyDetail) {
   const outgoingAssertions = Array.isArray(ontologyDetail?.outgoingAssertions)
     ? ontologyDetail.outgoingAssertions
     : [];
+  const filteredAssertions = outgoingAssertions.filter(
+    (assertion) => !ONTOLOGY_METADATA_PREDICATES.has(assertion.predicateIri)
+  );
+  const assertionCount = filteredAssertions.length;
 
-  let html = renderAssertionTable(outgoingAssertions);
-  html += '<div class="ocd-resource-detail-section" style="margin-top:1rem;">';
-  html += '<div class="ocd-detail-section-title">Stage ontology annotation edits</div>';
+  let html = '<details class="ocd-collapsible-section">';
+  html += '<summary class="ocd-collapsible-summary">';
+  html += 'Ontology annotations and edits';
+  html += '<span class="ocd-table-meta">' + escapeHtml(`${assertionCount} additional assertion(s)`) + '</span>';
+  html += '</summary>';
+  html += '<p class="ocd-muted">Ontology metadata already shown above is omitted here. Expand this section when you want to inspect remaining direct assertions or stage ontology-subject edits.</p>';
+  html += renderAssertionTable(
+    filteredAssertions,
+    'No additional ontology assertions beyond the metadata summary are currently shown.'
+  );
+  html += '<details class="ocd-collapsible-section ocd-collapsible-nested" style="margin-top:1rem;">';
+  html += '<summary class="ocd-collapsible-summary">Stage ontology annotation edits</summary>';
   html += '<div class="ocd-editor-grid">';
   html += '<label class="ocd-filter">';
   html += '<span class="ocd-label">Curator note</span>';
@@ -217,7 +255,8 @@ function renderOntologyAnnotations(ontologyIri, ontologyDetail) {
   html += '<div class="ocd-actions" style="margin-top:12px;">';
   html += '<button class="ocd-btn ocd-btn-primary" type="button" data-stage-ontology-edit="' + escapeHtml(ontologyIri) + '">Stage ontology edits</button>';
   html += '</div>';
-  html += '</div>';
+  html += '</details>';
+  html += '</details>';
   return html;
 }
 

@@ -40,6 +40,7 @@ describe('edit-session helpers', () => {
       },
       [{
         file: /** @type {File} */ ({ name: 'closure.ttl' }),
+        importIri: 'http://example.org/imported',
         parsedOntology: {
           store: supplementalStore,
           prefixes: {},

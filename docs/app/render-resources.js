@@ -143,12 +143,15 @@ export function renderCurationTable(
  * @returns {string}
  */
 function renderAssertionSection(title, assertions, direction) {
-  let html = '<div class="ocd-resource-detail-section">';
-  html += '<div class="ocd-detail-section-title">' + escapeHtml(title) + '</div>';
+  let html = '<details class="ocd-resource-detail-section ocd-collapsible-section">';
+  html += '<summary class="ocd-collapsible-summary">';
+  html += escapeHtml(title);
+  html += '<span class="ocd-table-meta">' + escapeHtml(`${assertions.length} assertion(s)`) + '</span>';
+  html += '</summary>';
 
   if (!assertions.length) {
     html += '<div class="ocd-muted">No assertions found.</div>';
-    html += '</div>';
+    html += '</details>';
     return html;
   }
 
@@ -162,23 +165,30 @@ function renderAssertionSection(title, assertions, direction) {
   html += '</tr></thead><tbody>';
 
   for (const assertion of assertions) {
+    const showPredicateIri = assertion.predicateLabel !== assertion.predicateIri;
+    const showObjectMeta = assertion.object.displayValue !== assertion.object.value;
+
     html += '<tr class="ocd-table-tr">';
     if (direction === 'incoming') {
       html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(assertion.subject) + '</td>';
     }
     html += '<td class="ocd-table-td">';
     html += '<div>' + escapeHtml(assertion.predicateLabel) + '</div>';
-    html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(assertion.predicateIri) + '</div>';
+    if (showPredicateIri) {
+      html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(assertion.predicateIri) + '</div>';
+    }
     html += '</td>';
     html += '<td class="ocd-table-td">';
     html += '<div>' + escapeHtml(assertion.object.displayValue) + '</div>';
-    html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(assertion.object.termType) + ': ' + escapeHtml(assertion.object.value) + '</div>';
+    if (showObjectMeta) {
+      html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(assertion.object.termType) + ': ' + escapeHtml(assertion.object.value) + '</div>';
+    }
     html += '</td>';
     html += '</tr>';
   }
 
   html += '</tbody></table>';
-  html += '</div>';
+  html += '</details>';
   return html;
 }
 
@@ -189,8 +199,8 @@ function renderAssertionSection(title, assertions, direction) {
  * @returns {string}
  */
 function renderResourceEditor(row) {
-  let html = '<div class="ocd-resource-detail-section">';
-  html += '<div class="ocd-detail-section-title">Stage resource edits</div>';
+  let html = '<details class="ocd-resource-detail-section ocd-collapsible-section">';
+  html += '<summary class="ocd-collapsible-summary">Stage resource edits</summary>';
   html += '<div class="ocd-editor-grid">';
   html += '<label class="ocd-filter">';
   html += '<span class="ocd-label">Set curation status</span>';
@@ -223,8 +233,8 @@ function renderResourceEditor(row) {
   html += '</label>';
   html += '</div>';
 
-  html += '<div class="ocd-resource-detail-section">';
-  html += '<div class="ocd-detail-section-title">Stage arbitrary relation</div>';
+  html += '<details class="ocd-resource-detail-section ocd-collapsible-section ocd-collapsible-nested">';
+  html += '<summary class="ocd-collapsible-summary">Stage arbitrary relation</summary>';
   html += '<div class="ocd-editor-grid">';
   html += '<label class="ocd-filter">';
   html += '<span class="ocd-label">Predicate IRI</span>';
@@ -250,13 +260,13 @@ function renderResourceEditor(row) {
   html += '<input class="ocd-input ocd-mono" type="text" data-arbitrary-object-datatype="' + escapeHtml(row.resource) + '" placeholder="http://www.w3.org/2001/XMLSchema#string" />';
   html += '</label>';
   html += '</div>';
-  html += '</div>';
+  html += '</details>';
 
   html += '<div class="ocd-actions" style="margin-top:12px;">';
   html += '<button class="ocd-btn ocd-btn-primary" type="button" data-stage-resource-edit="' + escapeHtml(row.resource) + '" data-suggested-status="' + escapeHtml(row.statusIri) + '">Stage resource edits</button>';
   html += '<button class="ocd-btn ocd-btn-secondary" type="button" data-apply-suggested-status="' + escapeHtml(row.resource) + '" data-suggested-status="' + escapeHtml(row.statusIri) + '">Use suggested status</button>';
   html += '</div>';
-  html += '</div>';
+  html += '</details>';
   return html;
 }
 
