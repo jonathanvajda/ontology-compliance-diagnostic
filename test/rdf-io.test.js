@@ -7,6 +7,7 @@ import {
   isSupportedRdfFileName,
   normalizeRdfFormat,
   parseRdfInput,
+  serializeRdfStore,
   RDF_FORMATS
 } from '../docs/app/rdf-io.js';
 
@@ -230,4 +231,123 @@ await run('parseRdfInput rejects malformed JSON-LD and unsupported file types', 
     () => parseRdfInput('hello', 'broken.txt', { runtime: { N3 } }),
     /Unsupported ontology file type/
   );
+});
+
+await run('serializeRdfStore round-trips N3-compatible syntaxes', async () => {
+  const runtime = { N3 };
+  const parsed = await parseRdfInput(
+    '@prefix ex: <http://example.org/> . ex:onto <http://www.w3.org/2000/01/rdf-schema#label> "Example" .',
+    'onto.ttl',
+    { runtime }
+  );
+
+  const cases = [
+    ['onto.ttl', RDF_FORMATS.TURTLE],
+    ['onto.nt', RDF_FORMATS.N_TRIPLES],
+    ['onto.nq', RDF_FORMATS.N_QUADS],
+    ['onto.trig', RDF_FORMATS.TRIG],
+    ['onto.n3', RDF_FORMATS.N3]
+  ];
+
+  for (const [fileName, format] of cases) {
+    const serialized = await serializeRdfStore(parsed.store, format, {
+      runtime,
+      prefixes: parsed.prefixes,
+      baseIri: parsed.baseIri
+    });
+    const reparsed = await parseRdfInput(serialized, fileName, { runtime });
+    assert.equal(reparsed.store.size, 1);
+  }
+});
+
+await run('serializeRdfStore round-trips JSON-LD through the adapter path', async () => {
+  const runtime = {
+    N3,
+    jsonld: {
+      async toRDF(documentValue) {
+        assert.equal(documentValue['@id'], 'http://example.org/onto');
+        return '<http://example.org/onto> <http://www.w3.org/2000/01/rdf-schema#label> "Example" .';
+      },
+      async fromRDF(nquads) {
+        assert.match(nquads, /http:\/\/example.org\/onto/);
+        return { '@id': 'http://example.org/onto' };
+      }
+    }
+  };
+
+  const parsed = await parseRdfInput(
+    JSON.stringify({ '@id': 'http://example.org/onto' }),
+    'onto.jsonld',
+    { runtime }
+  );
+  const serialized = await serializeRdfStore(parsed.store, RDF_FORMATS.JSON_LD, { runtime });
+  const reparsed = await parseRdfInput(serialized, 'onto.jsonld', { runtime });
+
+  assert.equal(reparsed.store.size, 1);
+});
+
+await run('serializeRdfStore round-trips RDF/XML through rdflib adapters', async () => {
+  const runtime = {
+    N3,
+    $rdf: {
+      namedNode(value) {
+        return { termType: 'NamedNode', value };
+      },
+      blankNode(value) {
+        return { termType: 'BlankNode', value };
+      },
+      literal(value, languageOrDatatype) {
+        if (typeof languageOrDatatype === 'string') {
+          return {
+            termType: 'Literal',
+            value,
+            language: languageOrDatatype,
+            datatype: { value: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#langString' }
+          };
+        }
+
+        return {
+          termType: 'Literal',
+          value,
+          language: '',
+          datatype: { value: languageOrDatatype?.value || 'http://www.w3.org/2001/XMLSchema#string' }
+        };
+      },
+      graph() {
+        return {
+          statements: [],
+          add(subject, predicate, object) {
+            this.statements.push({ subject, predicate, object });
+          }
+        };
+      },
+      serialize(_target, graph) {
+        assert.equal(graph.statements.length, 1);
+        return '<rdf:RDF />';
+      },
+      parse(_text, graph, _baseIri, _mimeType, callback) {
+        graph.statements.push({
+          subject: { termType: 'NamedNode', value: 'http://example.org/onto' },
+          predicate: { termType: 'NamedNode', value: 'http://www.w3.org/2000/01/rdf-schema#label' },
+          object: {
+            termType: 'Literal',
+            value: 'Example',
+            datatype: { value: 'http://www.w3.org/2001/XMLSchema#string' },
+            language: ''
+          }
+        });
+        callback(null);
+      }
+    }
+  };
+
+  const parsed = await parseRdfInput(
+    '<rdf:RDF />',
+    'onto.rdf',
+    { runtime }
+  );
+  const serialized = await serializeRdfStore(parsed.store, RDF_FORMATS.RDF_XML, { runtime });
+  const reparsed = await parseRdfInput(serialized, 'onto.rdf', { runtime });
+
+  assert.equal(reparsed.store.size, 1);
 });

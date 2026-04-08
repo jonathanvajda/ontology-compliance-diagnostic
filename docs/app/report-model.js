@@ -1,7 +1,11 @@
 // app/report-model.js
 // @ts-check
 
-import { evaluateAllQueries } from './engine.js';
+import {
+  evaluateAllQueries,
+  evaluateQueriesAgainstStore,
+  OBO_IAO_0000114_IRI
+} from './engine.js';
 import {
   computePerResourceCuration,
   computeOntologyReport
@@ -60,6 +64,24 @@ export function buildInspectionItem(input) {
   const manifest = input?.manifest || null;
 
   const perResource = computePerResourceCuration(results, manifest, resources, inspectionScope);
+  const enrichedPerResource = perResource.map((row) => {
+    const resourceDetail = resourceDetails?.[row.resource];
+    const statusAssertion = Array.isArray(resourceDetail?.outgoingAssertions)
+      ? resourceDetail.outgoingAssertions.find(
+        (assertion) => assertion.predicateIri === OBO_IAO_0000114_IRI
+      )
+      : null;
+
+    return {
+      ...row,
+      ...(statusAssertion
+        ? {
+          currentStatusIri: statusAssertion.object.value,
+          currentStatusLabel: statusAssertion.object.displayValue
+        }
+        : {})
+    };
+  });
   const ontologyReport = computeOntologyReport(
     results,
     manifest,
@@ -75,7 +97,7 @@ export function buildInspectionItem(input) {
     ontologyMetadata,
     inspectionScope,
     ontologyReport,
-    perResource,
+    perResource: enrichedPerResource,
     resourceDetails,
     results
   };
@@ -106,9 +128,40 @@ export async function inspectOntologyText(
     ontologyText,
     fileName || 'ontology.ttl',
     {
+      manifest,
       onQueryProgress: options.onQueryProgress
     }
   );
+
+  return buildInspectionItem({
+    fileName,
+    ontologyIri,
+    inspectedAt: new Date().toISOString(),
+    ontologyMetadata,
+    results,
+    resources,
+    resourceDetails,
+    inspectionScope,
+    manifest
+  });
+}
+
+/**
+ * Inspects an already-loaded RDF store and returns one evaluated report bundle.
+ *
+ * @param {any} store
+ * @param {string} fileName
+ * @param {Manifest | null | undefined} manifest
+ * @param {InspectionScope | null | undefined} [inspectionScope]
+ * @param {InspectFilesOptions} [options]
+ * @returns {Promise<EvaluatedReport>}
+ */
+export async function inspectStore(store, fileName, manifest, inspectionScope, options = {}) {
+  const { results, resources, resourceDetails, ontologyIri, ontologyMetadata } =
+    await evaluateQueriesAgainstStore(store, fileName || 'ontology.ttl', {
+      manifest,
+      onQueryProgress: options.onQueryProgress
+    });
 
   return buildInspectionItem({
     fileName,

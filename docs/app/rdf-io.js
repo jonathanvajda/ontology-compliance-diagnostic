@@ -209,6 +209,177 @@ function getDataFactory(runtime) {
 }
 
 /**
+ * Converts an RDF/JS term to an rdflib term.
+ *
+ * @param {any} term
+ * @param {RuntimeLibraries} [runtime]
+ * @returns {any}
+ */
+export function convertRdfJsTermToRdflib(term, runtime) {
+  const { $rdf } = getRuntimeLibraries(runtime);
+  if (!$rdf) {
+    throw new Error('rdflib not found on window.$rdf. Check that rdflib.min.js is loaded.');
+  }
+  if (!term || typeof term !== 'object') {
+    throw new Error('Invalid RDF/JS term.');
+  }
+
+  switch (term.termType) {
+    case 'NamedNode':
+      return $rdf.namedNode(term.value);
+    case 'BlankNode':
+      return $rdf.blankNode(term.value);
+    case 'Literal':
+      if (term.language) {
+        return $rdf.literal(term.value, term.language);
+      }
+      return $rdf.literal(
+        term.value,
+        convertRdfJsTermToRdflib(term.datatype, runtime)
+      );
+    case 'DefaultGraph':
+      return $rdf.defaultGraph ? $rdf.defaultGraph() : $rdf.namedNode('');
+    default:
+      throw new Error(`Unsupported RDF/JS termType: ${String(term.termType)}`);
+  }
+}
+
+/**
+ * Copies RDF/JS quads into an rdflib graph.
+ *
+ * @param {any} store
+ * @param {any} graph
+ * @param {RuntimeLibraries} [runtime]
+ * @returns {void}
+ */
+function addRdfJsStoreToRdflibGraph(store, graph, runtime) {
+  const quads = store?.getQuads ? store.getQuads(null, null, null, null) : [];
+
+  for (const quad of quads) {
+    graph.add(
+      convertRdfJsTermToRdflib(quad.subject, runtime),
+      convertRdfJsTermToRdflib(quad.predicate, runtime),
+      convertRdfJsTermToRdflib(quad.object, runtime),
+      quad.graph?.termType && quad.graph.termType !== 'DefaultGraph'
+        ? convertRdfJsTermToRdflib(quad.graph, runtime)
+        : undefined
+    );
+  }
+}
+
+/**
+ * Serializes an RDF/JS store with N3.Writer.
+ *
+ * @param {any} store
+ * @param {RdfFormat} format
+ * @param {Record<string, string>} prefixes
+ * @param {string | null} baseIri
+ * @param {RuntimeLibraries} [runtime]
+ * @returns {Promise<string>}
+ */
+function serializeWithN3(store, format, prefixes, baseIri, runtime) {
+  const { N3 } = getRuntimeLibraries(runtime);
+  const Writer = N3?.Writer;
+  if (!Writer) {
+    throw new Error('N3.Writer not found on window.N3. Check that n3.min.js is loaded.');
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const writer = new Writer({
+        format,
+        prefixes: prefixes || {},
+        ...(baseIri ? { baseIRI: baseIri } : {})
+      });
+
+      const quads = store?.getQuads ? store.getQuads(null, null, null, null) : [];
+      writer.addQuads(quads);
+      writer.end((error, result) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(String(result || ''));
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+/**
+ * Serializes an RDF/JS store to JSON-LD by way of N-Quads.
+ *
+ * @param {any} store
+ * @param {Record<string, string>} prefixes
+ * @param {string | null} baseIri
+ * @param {RuntimeLibraries} [runtime]
+ * @returns {Promise<string>}
+ */
+async function serializeWithJsonLd(store, prefixes, baseIri, runtime) {
+  const { jsonld } = getRuntimeLibraries(runtime);
+  if (!jsonld || typeof jsonld.fromRDF !== 'function') {
+    throw new Error('jsonld not found on window.jsonld. Check that jsonld.min.js is loaded.');
+  }
+
+  const nquads = await serializeWithN3(
+    store,
+    RDF_FORMATS.N_QUADS,
+    prefixes,
+    baseIri,
+    runtime
+  );
+
+  const documentValue = await jsonld.fromRDF(nquads, {
+    format: RDF_FORMATS.N_QUADS,
+    ...(baseIri ? { base: baseIri } : {})
+  });
+
+  return `${JSON.stringify(documentValue, null, 2)}\n`;
+}
+
+/**
+ * Serializes an RDF/JS store to RDF/XML using rdflib.
+ *
+ * @param {any} store
+ * @param {string | null} baseIri
+ * @param {RuntimeLibraries} [runtime]
+ * @returns {Promise<string>}
+ */
+async function serializeWithRdfXml(store, baseIri, runtime) {
+  const { $rdf } = getRuntimeLibraries(runtime);
+  if (!$rdf || typeof $rdf.graph !== 'function') {
+    throw new Error('rdflib not found on window.$rdf. Check that rdflib.min.js is loaded.');
+  }
+
+  const graph = $rdf.graph();
+  addRdfJsStoreToRdflibGraph(store, graph, runtime);
+
+  if (typeof $rdf.serialize === 'function') {
+    const result = $rdf.serialize(null, graph, baseIri || '', RDF_FORMATS.RDF_XML);
+    if (typeof result === 'string') {
+      return result;
+    }
+  }
+
+  if (typeof $rdf.Serializer === 'function') {
+    const serializer = $rdf.Serializer(graph);
+    if (typeof serializer.suggestNamespaces === 'function') {
+      serializer.suggestNamespaces({});
+    }
+    if (typeof serializer.setBase === 'function' && baseIri) {
+      serializer.setBase(baseIri);
+    }
+    if (typeof serializer.statementsToXML === 'function') {
+      const statements = Array.isArray(graph.statements) ? graph.statements : [];
+      return serializer.statementsToXML(statements);
+    }
+  }
+
+  throw new Error('RDF/XML serialization is unavailable in the loaded rdflib runtime.');
+}
+
+/**
  * Converts an rdflib term to an RDF/JS term.
  *
  * @param {any} term
@@ -453,10 +624,32 @@ export async function parseRdfInput(text, fileName = 'ontology.ttl', options = {
 /**
  * Serialization hook for later phases.
  *
- * @param {any} _store
- * @param {RdfFormat} _format
+ * @param {any} store
+ * @param {RdfFormat} format
+ * @param {{ prefixes?: Record<string, string>, baseIri?: string | null, runtime?: RuntimeLibraries }} [options]
  * @returns {Promise<string>}
  */
-export async function serializeRdfStore(_store, _format) {
-  throw new Error('serializeRdfStore() is reserved for a later phase.');
+export async function serializeRdfStore(store, format, options = {}) {
+  if (!store || typeof store.getQuads !== 'function') {
+    throw new TypeError('serializeRdfStore() requires an RDF/JS-compatible store.');
+  }
+
+  const normalizedFormat = normalizeRdfFormat(format);
+  if (!normalizedFormat) {
+    throw new Error(`Unsupported RDF serialization format: ${String(format)}`);
+  }
+
+  const prefixes = options.prefixes || {};
+  const baseIri = typeof options.baseIri === 'string' && options.baseIri.trim()
+    ? options.baseIri.trim()
+    : null;
+
+  if (normalizedFormat === RDF_FORMATS.JSON_LD) {
+    return serializeWithJsonLd(store, prefixes, baseIri, options.runtime);
+  }
+  if (normalizedFormat === RDF_FORMATS.RDF_XML) {
+    return serializeWithRdfXml(store, baseIri, options.runtime);
+  }
+
+  return serializeWithN3(store, normalizedFormat, prefixes, baseIri, options.runtime);
 }
