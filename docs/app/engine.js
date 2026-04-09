@@ -245,12 +245,8 @@ export async function loadOntologyIntoStore(ontologyText, fileName = 'ontology.t
  * @returns {Promise<any[]>}
  */
 export async function collectBindingsStream(stream) {
-  if (stream && typeof stream[Symbol.asyncIterator] === 'function') {
-    const rows = [];
-    for await (const row of stream) {
-      rows.push(row);
-    }
-    return rows;
+  if (stream && typeof stream.toArray === 'function') {
+    return stream.toArray();
   }
 
   if (stream && typeof stream.on === 'function') {
@@ -267,6 +263,14 @@ export async function collectBindingsStream(stream) {
         stream.on('error', /** @param {unknown} error */ (error) => reject(error));
       }
     );
+  }
+
+  if (stream && typeof stream[Symbol.asyncIterator] === 'function') {
+    const rows = [];
+    for await (const row of stream) {
+      rows.push(row);
+    }
+    return rows;
   }
 
   throw new Error('Unsupported bindings stream shape returned by Comunica.');
