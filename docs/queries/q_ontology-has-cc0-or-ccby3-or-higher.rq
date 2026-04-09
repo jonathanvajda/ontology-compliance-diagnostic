@@ -2,9 +2,9 @@ PREFIX owl: <http://www.w3.org/2002/07/owl#>
 PREFIX dcterms: <http://purl.org/dc/terms/>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
-SELECT DISTINCT ?ont ?license
+SELECT DISTINCT ?resource ?license
 WHERE {
-  ?ont a owl:Ontology ;
+  ?resource a owl:Ontology ;
        dcterms:license ?license .
 
   BIND(LCASE(REPLACE(STR(?license), "\\s+", " ")) AS ?lic)
@@ -55,4 +55,3 @@ WHERE {
     REGEX(?lic, "creative\\s+commons\\s+zero\\s*1\\.0")
   )
 }
-ORDER BY ?ont ?license

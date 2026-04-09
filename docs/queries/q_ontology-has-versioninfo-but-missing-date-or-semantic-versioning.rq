@@ -2,7 +2,7 @@ PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
 SELECT DISTINCT ?ont ?versionInfo
 WHERE {
-  ?ont a owl:Ontology ;
+  ?resource a owl:Ontology ;
        owl:versionInfo ?versionInfo .
 
   BIND(STR(?versionInfo) AS ?v)
@@ -19,4 +19,3 @@ WHERE {
     )
   )
 }
-ORDER BY ?ont ?versionInfo

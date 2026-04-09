@@ -1,8 +1,8 @@
 PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
-SELECT DISTINCT ?ont ?versionIRI
+SELECT DISTINCT ?resource ?versionIRI
 WHERE {
-  ?ont a owl:Ontology ;
+  ?resource a owl:Ontology ;
        owl:versionIRI ?versionIRI .
 
   BIND(STR(?versionIRI) AS ?v)
@@ -19,4 +19,4 @@ WHERE {
     )
   )
 }
-ORDER BY ?ont ?versionIRI
+ORDER BY ?resource ?versionIRI

@@ -1,7 +1,7 @@
 PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
 SELECT DISTINCT
-  ?ont
+  ?resource
   ?versionIRI
   ?versionInfo
   ?iriKind
@@ -9,7 +9,7 @@ SELECT DISTINCT
   ?iriToken
   ?infoToken
 WHERE {
-  ?ont a owl:Ontology ;
+  ?resource a owl:Ontology ;
        owl:versionIRI ?versionIRI ;
        owl:versionInfo ?versionInfo .
 
@@ -94,4 +94,4 @@ WHERE {
     (?iriKind = "semver" && ?infoKind = "date")
   )
 }
-ORDER BY ?ont ?versionIRI ?versionInfo
+ORDER BY ?resource ?versionIRI ?versionInfo
