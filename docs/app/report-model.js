@@ -162,7 +162,12 @@ export async function inspectOntologyText(
 export async function inspectStore(store, fileName, manifest, inspectionScope, options = {}) {
   const primaryStore = options.primaryStore || store;
   const resultResourceFilter = collectAssertedNamedResources(primaryStore);
-  const resourceInventory = collectLabeledResources(primaryStore);
+  const resourceInventory = Array.from(
+    new Set([
+      ...collectLabeledResources(primaryStore),
+      ...resultResourceFilter
+    ])
+  ).sort((left, right) => left.localeCompare(right));
   const { results, resources, resourceDetails, ontologyIri, ontologyMetadata } =
     await evaluateQueriesAgainstStore(store, fileName || 'ontology.ttl', {
       manifest,
