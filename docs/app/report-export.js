@@ -108,6 +108,8 @@ export function buildFilteredResourcesCsv(perResourceRows) {
   /** @type {Array<Array<unknown>>} */
   const rows = [[
     'resource',
+    'currentStatusIri',
+    'currentStatusLabel',
     'statusIri',
     'statusLabel',
     'failedRequirementsCount',
@@ -124,6 +126,8 @@ export function buildFilteredResourcesCsv(perResourceRows) {
 
     rows.push([
       row.resource || '',
+      row.currentStatusIri || '',
+      row.currentStatusLabel || '',
       row.statusIri || '',
       row.statusLabel || '',
       String(failedRequirements.length),
@@ -389,7 +393,7 @@ export function buildHtmlReport(state) {
   if (!perResourceRows.length) {
     html += '<p>No resources in current view.</p>';
   } else {
-    html += '<table><thead><tr><th>resource</th><th>statusLabel</th><th>failedRequirements</th><th>failedRecommendations</th></tr></thead><tbody>';
+    html += '<table><thead><tr><th>resource</th><th>currentStatus</th><th>suggestedStatus</th><th>failedRequirements</th><th>failedRecommendations</th></tr></thead><tbody>';
 
     for (const row of perResourceRows) {
       const failedRequirements = Array.isArray(row.failedRequirements) ? row.failedRequirements : [];
@@ -399,6 +403,7 @@ export function buildHtmlReport(state) {
 
       html += '<tr>';
       html += `<td class="mono">${escapeHtml(row.resource || '')}</td>`;
+      html += `<td>${escapeHtml(row.currentStatusLabel || 'Not asserted')}</td>`;
       html += `<td>${escapeHtml(row.statusLabel || '')}</td>`;
       html += `<td class="mono">${escapeHtml(failedRequirements.join(', '))}</td>`;
       html += `<td class="mono">${escapeHtml(failedRecommendations.join(', '))}</td>`;

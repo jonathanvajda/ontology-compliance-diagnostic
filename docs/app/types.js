@@ -50,6 +50,31 @@
  * @property {File} file
  * @property {PreflightSummary} summary
  * @property {InspectionScope} inspectionScope
+ * @property {ParsedOntologyState} parsedOntology
+ * @property {SupplementalOntologyFile[]} supplementalOntologies
+ */
+
+/**
+ * Parsed ontology state retained for round-tripping and edit sessions.
+ *
+ * @typedef {Object} ParsedOntologyState
+ * @property {any} store
+ * @property {Record<string, string>} prefixes
+ * @property {'text/turtle' | 'application/n-triples' | 'application/n-quads' | 'application/trig' | 'text/n3' | 'application/ld+json' | 'application/rdf+xml'} sourceFormat
+ * @property {string | null} baseIri
+ * @property {string} fileName
+ * @property {string} originalText
+ */
+
+/**
+ * Supplemental closure ontology input retained for inspection/rerun only.
+ *
+ * @typedef {Object} SupplementalOntologyFile
+ * @property {string} attachmentId
+ * @property {File} file
+ * @property {string} importIri
+ * @property {ParsedOntologyState} parsedOntology
+ * @property {PreflightSummary} summary
  */
 
 /**
@@ -64,9 +89,26 @@
 /**
  * A compact resource detail block extracted from the inspected ontology.
  *
+ * @typedef {Object} ResourceAssertionObject
+ * @property {'NamedNode' | 'Literal' | 'BlankNode'} termType
+ * @property {string} value
+ * @property {string} displayValue
+ * @property {string} [language]
+ * @property {string} [datatypeIri]
+ *
+ * @typedef {Object} ResourceAssertion
+ * @property {string} subject
+ * @property {string} predicateIri
+ * @property {string} predicateLabel
+ * @property {ResourceAssertionObject} object
+ * @property {'outgoing' | 'incoming'} direction
+ *
  * @typedef {Object} ResourceDetail
  * @property {string} resource
  * @property {ResourceDetailField[]} fields
+ * @property {ResourceDetailField[]} recognizedFields
+ * @property {ResourceAssertion[]} outgoingAssertions
+ * @property {ResourceAssertion[]} incomingAssertions
  */
 
 /**
@@ -78,10 +120,10 @@
  * @property {string} ontologyIri
  * @property {OntologyMetadata | null} ontologyMetadata
  * @property {InspectionScope | null} [inspectionScope]
-  * @property {OntologyReport | null} ontologyReport
-  * @property {PerResourceCurationRow[]} perResource
+ * @property {OntologyReport | null} ontologyReport
+ * @property {PerResourceCurationRow[]} perResource
  * @property {Record<string, ResourceDetail>} [resourceDetails]
-  * @property {QueryResultRow[]} results
+ * @property {QueryResultRow[]} results
  */
 
 /**
@@ -203,6 +245,37 @@
  */
 
 /**
+ * Editable RDF object value.
+ *
+ * @typedef {Object} EditableObjectValue
+ * @property {'NamedNode' | 'Literal'} termType
+ * @property {string} value
+ * @property {string} [language]
+ * @property {string} [datatypeIri]
+ */
+
+/**
+ * One staged edit applied to the primary ontology.
+ *
+ * @typedef {Object} StagedResourceEdit
+ * @property {string} id
+ * @property {'set-codesignated-values' | 'add-assertion' | 'remove-assertion'} kind
+ * @property {string} subject
+ * @property {string} predicateIri
+ * @property {EditableObjectValue[]} objects
+ * @property {string} [note]
+ *
+ * @typedef {Object} EditSessionState
+ * @property {string | null} batchKey
+ * @property {string | null} selectedFileName
+ * @property {ParsedOntologyState | null} primaryOntology
+ * @property {SupplementalOntologyFile[]} supplementalOntologies
+ * @property {string[]} selectedResources
+ * @property {StagedResourceEdit[]} stagedEdits
+ * @property {EvaluatedReport | null} rerunReport
+ */
+
+/**
  * Flags used when deriving curation status.
  *
  * @typedef {Object} CurationFlags
@@ -216,6 +289,8 @@
  *
  * @typedef {Object} PerResourceCurationRow
  * @property {string} resource
+ * @property {string} [currentStatusIri]
+ * @property {string} [currentStatusLabel]
  * @property {string} statusIri
  * @property {string} statusLabel
  * @property {string[]} failedRequirements

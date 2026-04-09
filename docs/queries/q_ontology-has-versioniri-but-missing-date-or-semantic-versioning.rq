@@ -1,11 +1,11 @@
 PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
-SELECT DISTINCT ?ont ?versionIRI
+SELECT DISTINCT ?resource ?versionIRI
 WHERE {
-  ?ont a owl:Ontology .
+  ?resource a owl:Ontology .
 
   OPTIONAL {
-    ?ont owl:versionIRI ?versionIRI .
+    ?resource owl:versionIRI ?versionIRI .
   }
 
   FILTER(
@@ -22,4 +22,3 @@ WHERE {
     )
   )
 }
-ORDER BY ?ont ?versionIRI

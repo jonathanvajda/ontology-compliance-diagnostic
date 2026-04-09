@@ -4,11 +4,15 @@
 import {
   loadManifest,
   DEFAULT_MANIFEST_URL,
-  buildPreflightSummary,
-  deriveDefaultIncludedNamespaces
+  buildPreflightSummaryFromStore,
+  deriveDefaultIncludedNamespaces,
+  extractResourceDetail,
+  OWL_DEPRECATED_IRI,
+  SUPPORTED_RDF_FORMATS,
+  XSD_BOOLEAN_IRI
 } from './engine.js';
 import { buildFailuresIndex } from './grader.js';
-import { inspectFiles } from './report-model.js';
+import { inspectStore } from './report-model.js';
 import { saveRun, listRuns, getRun, deleteRun, getLastRunId } from './storage.js';
 import { populateStandardFilter } from './criteria.js';
 import {
@@ -23,6 +27,15 @@ import {
   renderCurationTable,
   toggleResourceDetail
 } from './render-resources.js';
+import { renderEditSession } from './render-edit-session.js';
+import {
+  applyStagedEditsToStore,
+  buildMergedInspectionStore,
+  cloneParsedOntologyState,
+  createParsedOntologyState,
+  createStagedEditId,
+  exportPrimaryOntology
+} from './edit-session.js';
 import { renderStandardDetail } from './render-standards.js';
 import {
   buildBatchSummaryCsv,
@@ -40,11 +53,14 @@ import {
 /** @typedef {import('./types.js').Manifest} Manifest */
 /** @typedef {import('./types.js').OntologyMetadata} OntologyMetadata */
 /** @typedef {import('./types.js').OntologyReport} OntologyReport */
+/** @typedef {import('./types.js').EditSessionState} EditSessionState */
 /** @typedef {import('./types.js').PreparedOntologyFile} PreparedOntologyFile */
 /** @typedef {import('./types.js').PerResourceCurationRow} PerResourceCurationRow */
 /** @typedef {import('./types.js').QueryResultRow} QueryResultRow */
 /** @typedef {import('./types.js').ResourceDetail} ResourceDetail */
 /** @typedef {import('./types.js').SavedRun} SavedRun */
+/** @typedef {import('./types.js').StagedResourceEdit} StagedResourceEdit */
+/** @typedef {import('./types.js').SupplementalOntologyFile} SupplementalOntologyFile */
 /** @typedef {import('./types.js').UiStateSnapshot} UiStateSnapshot */
 
 /**
@@ -90,6 +106,8 @@ const resourceSearchInput = /** @type {HTMLInputElement | null} */ (
 );
 /** @type {HTMLElement | null} */
 const curationTableContainer = document.getElementById('curationTableContainer');
+/** @type {HTMLElement | null} */
+const editSessionContainer = document.getElementById('editSessionContainer');
 /** @type {HTMLElement | null} */
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
 /** @type {HTMLElement | null} */
@@ -149,6 +167,8 @@ let lastOntologyReport = null;
 let lastOntologyMetadata = null;
 /** @type {Record<string, ResourceDetail> | null} */
 let lastResourceDetails = null;
+/** @type {ResourceDetail | null} */
+let lastOntologyDetail = null;
 /** @type {EvaluatedReport[] | null} */
 let lastBatchReports = null;
 /** @type {import('./types.js').InspectionScope | null} */
@@ -163,10 +183,24 @@ let lastSelectedCriterionId = null;
 let lastSelectedStandardRow = null;
 /** @type {PreparedOntologyFile[]} */
 let preparedOntologyFiles = [];
+/** @type {Map<string, { primaryOntology: import('./types.js').ParsedOntologyState, supplementalOntologies: SupplementalOntologyFile[] }>} */
+let reportSourceByBatchKey = new Map();
+/** @type {EditSessionState} */
+let activeEditSession = {
+  batchKey: null,
+  selectedFileName: null,
+  primaryOntology: null,
+  supplementalOntologies: [],
+  selectedResources: [],
+  stagedEdits: [],
+  rerunReport: null
+};
 /** @type {Array<{ fileName: string, completedQueries: number, totalQueries: number }>} */
 let queryProgressEntries = [];
 /** @type {boolean} */
 let preflightCollapsed = false;
+
+const SUPPLEMENTAL_IMPORT_ACCEPT_ATTR = '.ttl,.turtle,.rdf,.owl,.xml,.nt,.ntriples,.nq,.trig,.n3,.jsonld,.json-ld';
 
 /**
  * Sets the status text.
@@ -178,6 +212,42 @@ function setStatus(message) {
   if (statusElement) {
     statusElement.textContent = message;
   }
+}
+
+/**
+ * Returns a fresh edit-session state.
+ *
+ * @returns {EditSessionState}
+ */
+function createEmptyEditSession() {
+  return {
+    batchKey: null,
+    selectedFileName: null,
+    primaryOntology: null,
+    supplementalOntologies: [],
+    selectedResources: [],
+    stagedEdits: [],
+    rerunReport: null
+  };
+}
+
+/**
+ * Renders the edit-session workspace.
+ *
+ * @returns {void}
+ */
+function renderEditSessionUi() {
+  renderEditSession(activeEditSession, editSessionContainer);
+}
+
+/**
+ * Resets the editable session.
+ *
+ * @returns {void}
+ */
+function resetEditSession() {
+  activeEditSession = createEmptyEditSession();
+  renderEditSessionUi();
 }
 
 /**
@@ -434,9 +504,10 @@ function initTheme() {
  */
 function clearRenderedViews() {
   renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
-  renderOntologyReport(null, lastInspectionScope, lastManifest, ontologyReportContainer);
-  renderCurationTable([], lastFailuresIndex, lastResourceDetails, curationTableContainer);
+  renderOntologyReport(null, lastInspectionScope, lastManifest, null, ontologyReportContainer);
+  renderCurationTable([], lastFailuresIndex, lastResourceDetails, lastManifest, new Set(), curationTableContainer);
   updateCurationFiltersVisibility();
+  renderEditSessionUi();
 
   if (standardDetailContainer) {
     standardDetailContainer.innerHTML = '';
@@ -453,6 +524,99 @@ function clearPreflightState() {
   preflightCollapsed = false;
   renderPreflightUi();
   updateRunButtonState();
+}
+
+/**
+ * Returns the total number of attached supplemental ontologies across prepared primary files.
+ *
+ * @returns {number}
+ */
+function countPreparedSupplementalOntologies() {
+  return preparedOntologyFiles.reduce(
+    (count, prepared) => count + (Array.isArray(prepared.supplementalOntologies) ? prepared.supplementalOntologies.length : 0),
+    0
+  );
+}
+
+/**
+ * Returns direct and transitive import IRIs known for one prepared ontology.
+ *
+ * Direct imports come from the primary ontology. Transitive imports are discovered
+ * from any attached closure files for the same prepared ontology.
+ *
+ * @param {PreparedOntologyFile} prepared
+ * @returns {{ directImports: string[], transitiveImports: string[], allImports: string[] }}
+ */
+function getKnownImportTargets(prepared) {
+  const directImports = Array.isArray(prepared?.summary?.imports)
+    ? prepared.summary.imports.filter(Boolean)
+    : [];
+  const allImports = new Set(directImports);
+
+  for (const supplemental of prepared?.supplementalOntologies || []) {
+    for (const importIri of supplemental?.summary?.imports || []) {
+      if (importIri) {
+        allImports.add(importIri);
+      }
+    }
+  }
+
+  const directImportSet = new Set(directImports);
+  const sortedAllImports = Array.from(allImports).sort((left, right) => left.localeCompare(right));
+  const sortedDirectImports = Array.from(directImportSet).sort((left, right) => left.localeCompare(right));
+  const transitiveImports = sortedAllImports.filter((importIri) => !directImportSet.has(importIri));
+
+  return {
+    directImports: sortedDirectImports,
+    transitiveImports,
+    allImports: sortedAllImports
+  };
+}
+
+/**
+ * Returns the attached closure file names that declare one import IRI.
+ *
+ * @param {PreparedOntologyFile} prepared
+ * @param {string} importIri
+ * @returns {string[]}
+ */
+function getImportSourceFileNames(prepared, importIri) {
+  return (prepared?.supplementalOntologies || [])
+    .filter((supplemental) => Array.isArray(supplemental?.summary?.imports) && supplemental.summary.imports.includes(importIri))
+    .map((supplemental) => supplemental.file.name)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+/**
+ * Returns assigned supplemental ontologies for a declared import on a specific prepared file.
+ *
+ * @param {string} fileName
+ * @param {string} importIri
+ * @returns {SupplementalOntologyFile[]}
+ */
+function findSupplementalOntologiesForImport(fileName, importIri) {
+  const prepared = preparedOntologyFiles.find((item) => item.summary.fileName === fileName);
+  if (!prepared) {
+    return [];
+  }
+
+  return (prepared.supplementalOntologies || []).filter((item) => item.importIri === importIri);
+}
+
+/**
+ * Returns a stable attachment id for one supplemental ontology file.
+ *
+ * @param {string} importIri
+ * @param {File} file
+ * @returns {string}
+ */
+function getSupplementalAttachmentId(importIri, file) {
+  return [
+    importIri,
+    file.name || '',
+    String(file.size || 0),
+    String(file.lastModified || 0)
+  ].join('::');
 }
 
 /**
@@ -501,6 +665,7 @@ function clearInspectionDataState() {
   lastFailuresIndex = null;
   lastOntologyMetadata = null;
   lastResourceDetails = null;
+  lastOntologyDetail = null;
   lastOntologyReport = null;
   lastInspectionScope = null;
   updateCurationFiltersVisibility();
@@ -517,6 +682,7 @@ function resetInspectionView() {
   clearInspectionDataState();
   clearRenderedViews();
   clearQueryProgress();
+  resetEditSession();
 }
 
 /**
@@ -558,11 +724,20 @@ function renderActiveInspectionViews() {
     lastOntologyReport,
     lastInspectionScope,
     lastManifest,
+    lastOntologyDetail,
     ontologyReportContainer
   );
-  renderCurationTable(lastPerResource, lastFailuresIndex, lastResourceDetails, curationTableContainer);
+  renderCurationTable(
+    lastPerResource,
+    lastFailuresIndex,
+    lastResourceDetails,
+    lastManifest,
+    new Set(activeEditSession?.selectedResources || []),
+    curationTableContainer
+  );
   updateCurationFiltersVisibility();
   renderResourceFilterSummary();
+  renderEditSessionUi();
 }
 
 /**
@@ -577,7 +752,7 @@ function renderPreflightUi() {
 
   if (!preparedOntologyFiles.length) {
     preflightContainer.innerHTML = `
-      <p class="ocd-muted ocd-inline-preflight-empty">Load files to review ontology metadata, imports, and candidate namespaces before running inspection.</p>
+      <p class="ocd-muted ocd-inline-preflight-empty">Load files to review ontology metadata, declared imports, candidate namespaces, and any import-linked closure files before running inspection.</p>
     `;
     return;
   }
@@ -587,13 +762,13 @@ function renderPreflightUi() {
   html += '<span class="ocd-title">Inspection staging options</span>';
   html += `<span class="ocd-muted">${escapeHtml(`${preparedOntologyFiles.length} file(s) ready`)}</span>`;
   html += '</summary>';
-  html += '<p class="ocd-muted">Choose which namespaces should count as in-scope for resource-level inspection. Ontology-level checks will still run on the ontology itself.</p>';
+  html += '<p class="ocd-muted">Choose which namespaces should count as in-scope for resource-level inspection. When an ontology declares <code>owl:imports</code>, you can also attach a local ontology file for that import here. Ontology-level checks will still run on the ontology itself.</p>';
   html += '<div class="ocd-preflight-list">';
 
   for (const prepared of preparedOntologyFiles) {
     const summary = prepared.summary;
     const selectedNamespaces = prepared.inspectionScope?.includedNamespaces || [];
-    const imports = Array.isArray(summary.imports) ? summary.imports : [];
+    const { directImports, transitiveImports, allImports } = getKnownImportTargets(prepared);
     const discoveredNamespaces = Array.isArray(summary.discoveredNamespaces)
       ? summary.discoveredNamespaces
       : [];
@@ -613,14 +788,42 @@ function renderPreflightUi() {
     html += '<div class="ocd-preflight-block">';
     html += '<strong>Imports</strong>';
 
-    if (imports.length) {
-      html += '<div class="ocd-chip-list">';
-      for (const importIri of imports) {
-        html += `<span class="ocd-chip ocd-mono">${escapeHtml(importIri)}</span>`;
+    if (allImports.length) {
+      html += '<div class="ocd-preflight-import-list">';
+      for (const importIri of allImports) {
+        const supplementalFiles = findSupplementalOntologiesForImport(summary.fileName, importIri);
+        const importSources = getImportSourceFileNames(prepared, importIri);
+        const inputId = `import-file-${encodeURIComponent(summary.fileName)}-${encodeURIComponent(importIri)}`;
+        html += '<div class="ocd-preflight-import-row">';
+        html += `<div class="ocd-table-meta ocd-mono">${escapeHtml(importIri)}</div>`;
+        if (transitiveImports.includes(importIri) && importSources.length) {
+          html += '<div class="ocd-table-meta">Also declared by attached closure file(s): ' + escapeHtml(importSources.join(', ')) + '</div>';
+        }
+        html += `<label class="ocd-label" for="${escapeHtml(inputId)}">Add ontology file(s) for this import</label>`;
+        html += '<input class="ocd-input ocd-input-file" type="file" multiple accept="' + escapeHtml(SUPPLEMENTAL_IMPORT_ACCEPT_ATTR) + '" id="' + escapeHtml(inputId) + '" data-scope-file="' + escapeHtml(summary.fileName) + '" data-import-iri="' + escapeHtml(importIri) + '" />';
+        if (supplementalFiles.length) {
+          html += '<div class="ocd-table-meta">Attached closure files:</div>';
+          html += '<div class="ocd-preflight-import-attachment-list">';
+          for (const supplemental of supplementalFiles) {
+            html += '<div class="ocd-preflight-import-attachment">';
+            html += 'Using <span class="ocd-mono">' + escapeHtml(supplemental.file.name) + '</span>';
+            if (supplemental.summary?.ontologyIri && supplemental.summary.ontologyIri !== importIri) {
+              html += ' <span class="ocd-muted">(parsed ontology IRI: ' + escapeHtml(supplemental.summary.ontologyIri) + ')</span>';
+            }
+            html += '<button class="ocd-btn ocd-btn-tertiary ocd-btn-small" type="button" data-scope-file="' + escapeHtml(summary.fileName) + '" data-remove-import-supplemental="' + escapeHtml(supplemental.attachmentId) + '">Remove</button>';
+            html += '</div>';
+          }
+          html += '</div>';
+        }
+        html += '</div>';
       }
       html += '</div>';
     } else {
-      html += '<div class="ocd-table-meta">None found</div>';
+      html += '<div class="ocd-table-meta">None found. Import-linked closure upload controls are hidden until the ontology declares an import.</div>';
+    }
+
+    if (directImports.length && transitiveImports.length) {
+      html += '<div class="ocd-table-meta">Additional import targets discovered from attached closure files are shown alongside the ontology&apos;s direct imports.</div>';
     }
 
     html += '</div>';
@@ -639,6 +842,23 @@ function renderPreflightUi() {
 
     html += '</div>';
     html += '</div>';
+    html += '</div>';
+    html += '</div>';
+  }
+
+  if (countPreparedSupplementalOntologies()) {
+    html += '<div class="ocd-preflight-card">';
+    html += '<div class="ocd-preflight-header">';
+    html += '<h3 class="ocd-preflight-title">Attached import closure files</h3>';
+    html += `<span class="ocd-chip">${escapeHtml(String(countPreparedSupplementalOntologies()))} file(s)</span>`;
+    html += '</div>';
+    html += '<p class="ocd-muted">These files were attached to declared imports. They will be merged into inspection and rerun evaluation but will not be rewritten during export.</p>';
+    html += '<div class="ocd-chip-list">';
+    for (const prepared of preparedOntologyFiles) {
+      for (const supplemental of prepared.supplementalOntologies || []) {
+        html += `<span class="ocd-chip ocd-mono">${escapeHtml(prepared.summary.fileName)}: ${escapeHtml(supplemental.importIri)} -> ${escapeHtml(supplemental.summary.fileName)}</span>`;
+      }
+    }
     html += '</div>';
     html += '</div>';
   }
@@ -738,6 +958,9 @@ function applyInspectionItemToState(reportObject, manifest, preserveBatchReports
   lastOntologyMetadata = reportObject.ontologyMetadata || null;
   lastResourceDetails = reportObject.resourceDetails || {};
   lastOntologyReport = reportObject.ontologyReport || null;
+  lastOntologyDetail = reportObject.ontologyIri
+    ? (lastResourceDetails?.[reportObject.ontologyIri] || extractResourceDetailFromEditOrReport(reportObject.ontologyIri))
+    : null;
   lastManifest = manifest || lastManifest;
   if (!preserveBatchReports) {
     lastBatchReports = null;
@@ -754,6 +977,23 @@ function applyInspectionItemToState(reportObject, manifest, preserveBatchReports
       : [reportObject],
     lastManifest
   );
+}
+
+/**
+ * Returns ontology detail from the current editable session when available.
+ *
+ * @param {string} ontologyIri
+ * @returns {ResourceDetail | null}
+ */
+function extractResourceDetailFromEditOrReport(ontologyIri) {
+  if (activeEditSession?.primaryOntology?.store && ontologyIri) {
+    try {
+      return extractResourceDetail(activeEditSession.primaryOntology.store, ontologyIri);
+    } catch (_error) {
+      return null;
+    }
+  }
+  return null;
 }
 
 /**
@@ -799,6 +1039,602 @@ function restoreSelectedCriterion(criterionId) {
 }
 
 /**
+ * Loads editable source state for the selected report when the live source ontology is available.
+ *
+ * @param {EvaluatedReport} reportObject
+ * @returns {void}
+ */
+function syncEditSessionForReport(reportObject) {
+  const batchKey = selectedBatchKey || getBatchKey(reportObject);
+  if (
+    activeEditSession?.batchKey === batchKey &&
+    activeEditSession?.primaryOntology
+  ) {
+    renderEditSessionUi();
+    return;
+  }
+
+  const source = reportSourceByBatchKey.get(batchKey);
+  if (!source) {
+    resetEditSession();
+    return;
+  }
+
+  const primaryOntology = cloneParsedOntologyState(source.primaryOntology);
+
+  activeEditSession = {
+    batchKey,
+    selectedFileName: reportObject.fileName || null,
+    primaryOntology,
+    supplementalOntologies: source.supplementalOntologies.map((item) => ({
+      ...item,
+      parsedOntology: cloneParsedOntologyState(item.parsedOntology)
+    })),
+    selectedResources: [],
+    stagedEdits: [],
+    rerunReport: null
+  };
+
+  lastOntologyDetail = reportObject.ontologyIri
+    ? extractResourceDetail(primaryOntology.store, reportObject.ontologyIri)
+    : null;
+  renderEditSessionUi();
+}
+
+/**
+ * Re-renders views that reflect edit-session state.
+ *
+ * @returns {void}
+ */
+function refreshEditAwareViews() {
+  renderActiveInspectionViews();
+  refreshDownloadOptions();
+}
+
+/**
+ * Replaces or appends one staged edit.
+ *
+ * @param {StagedResourceEdit} nextEdit
+ * @returns {void}
+ */
+function upsertStagedEdit(nextEdit) {
+  const currentEdits = Array.isArray(activeEditSession?.stagedEdits)
+    ? activeEditSession.stagedEdits
+    : [];
+  const nextEdits = currentEdits.filter((edit) => !(
+    edit.kind === nextEdit.kind &&
+    edit.subject === nextEdit.subject &&
+    edit.predicateIri === nextEdit.predicateIri
+  ));
+
+  nextEdits.push(nextEdit);
+  activeEditSession.stagedEdits = nextEdits;
+}
+
+/**
+ * Stages one predicate replacement.
+ *
+ * @param {string} subjectIri
+ * @param {string} predicateIri
+ * @param {import('./types.js').EditableObjectValue[]} objects
+ * @returns {void}
+ */
+function stageReplacement(subjectIri, predicateIri, objects) {
+  upsertStagedEdit({
+    id: createStagedEditId(),
+    kind: 'set-codesignated-values',
+    subject: subjectIri,
+    predicateIri,
+    objects
+  });
+}
+
+/**
+ * Stages one added assertion.
+ *
+ * @param {string} subjectIri
+ * @param {string} predicateIri
+ * @param {import('./types.js').EditableObjectValue} object
+ * @returns {void}
+ */
+function stageAssertion(subjectIri, predicateIri, object) {
+  upsertStagedEdit({
+    id: createStagedEditId(),
+    kind: 'add-assertion',
+    subject: subjectIri,
+    predicateIri,
+    objects: [object]
+  });
+}
+
+/**
+ * Updates selected failed resources in the edit session.
+ *
+ * @param {string} resourceIri
+ * @param {boolean} isSelected
+ * @returns {void}
+ */
+function setResourceSelected(resourceIri, isSelected) {
+  const next = new Set(activeEditSession?.selectedResources || []);
+  if (isSelected) {
+    next.add(resourceIri);
+  } else {
+    next.delete(resourceIri);
+  }
+  activeEditSession.selectedResources = Array.from(next).sort((left, right) => left.localeCompare(right));
+  refreshEditAwareViews();
+}
+
+/**
+ * Removes one staged edit by id.
+ *
+ * @param {string} editId
+ * @returns {void}
+ */
+function removeStagedEdit(editId) {
+  activeEditSession.stagedEdits = (activeEditSession?.stagedEdits || []).filter(
+    (edit) => edit.id !== editId
+  );
+  refreshEditAwareViews();
+}
+
+/**
+ * Stages the current bulk edit form.
+ *
+ * @returns {void}
+ */
+function stageBulkEdit() {
+  const selectedResources = Array.isArray(activeEditSession?.selectedResources)
+    ? activeEditSession.selectedResources
+    : [];
+
+  if (!selectedResources.length) {
+    window.alert('Select one or more failed resources first.');
+    return;
+  }
+
+  const statusValue = /** @type {HTMLSelectElement | null} */ (
+    document.getElementById('bulkEditStatusSelect')
+  )?.value || '';
+  const curatorNote = /** @type {HTMLTextAreaElement | null} */ (
+    document.getElementById('bulkCuratorNoteInput')
+  )?.value?.trim() || '';
+  const obsolescenceReason = /** @type {HTMLTextAreaElement | null} */ (
+    document.getElementById('bulkObsolescenceReasonInput')
+  )?.value?.trim() || '';
+  const termReplacedBy = /** @type {HTMLInputElement | null} */ (
+    document.getElementById('bulkTermReplacedByInput')
+  )?.value?.trim() || '';
+  const commentValue = /** @type {HTMLTextAreaElement | null} */ (
+    document.getElementById('bulkCommentInput')
+  )?.value?.trim() || '';
+
+  if (!statusValue && !curatorNote && !obsolescenceReason && !termReplacedBy && !commentValue) {
+    window.alert('Enter at least one bulk change before staging it.');
+    return;
+  }
+
+  for (const resourceIri of selectedResources) {
+    if (statusValue) {
+      stageReplacement(resourceIri, 'http://purl.obolibrary.org/obo/IAO_0000114', [{
+        termType: 'NamedNode',
+        value: statusValue
+      }]);
+    }
+    if (curatorNote) {
+      stageReplacement(resourceIri, 'http://purl.obolibrary.org/obo/IAO_0000232', [{
+        termType: 'Literal',
+        value: curatorNote
+      }]);
+    }
+    if (obsolescenceReason) {
+      stageReplacement(resourceIri, 'http://purl.obolibrary.org/obo/IAO_0000231', [{
+        termType: 'Literal',
+        value: obsolescenceReason
+      }]);
+    }
+    if (termReplacedBy) {
+      stageReplacement(resourceIri, 'http://purl.obolibrary.org/obo/IAO_0100001', [{
+        termType: 'NamedNode',
+        value: termReplacedBy
+      }]);
+    }
+    if (commentValue) {
+      stageReplacement(resourceIri, 'http://www.w3.org/2000/01/rdf-schema#comment', [{
+        termType: 'Literal',
+        value: commentValue
+      }]);
+    }
+  }
+
+  setStatus(`Staged bulk edits for ${selectedResources.length} selected resource(s).`);
+  refreshEditAwareViews();
+}
+
+/**
+ * Stages each selected resource's currently suggested curation status.
+ *
+ * @returns {void}
+ */
+function stageSuggestedStatusesForSelection() {
+  const selectedResources = Array.isArray(activeEditSession?.selectedResources)
+    ? activeEditSession.selectedResources
+    : [];
+
+  if (!selectedResources.length) {
+    window.alert('Select one or more failed resources first.');
+    return;
+  }
+
+  const rows = Array.isArray(lastPerResourceFull) ? lastPerResourceFull : [];
+  let stagedCount = 0;
+
+  for (const resourceIri of selectedResources) {
+    const row = rows.find((item) => item.resource === resourceIri);
+    if (!row?.statusIri) {
+      continue;
+    }
+
+    stageReplacement(resourceIri, 'http://purl.obolibrary.org/obo/IAO_0000114', [{
+      termType: 'NamedNode',
+      value: row.statusIri
+    }]);
+    stagedCount += 1;
+  }
+
+  if (!stagedCount) {
+    window.alert('No suggested statuses were available for the selected resources.');
+    return;
+  }
+
+  setStatus(`Staged suggested statuses for ${stagedCount} selected resource(s).`);
+  refreshEditAwareViews();
+}
+
+/**
+ * Stages edits from one expanded resource panel.
+ *
+ * @param {string} resourceIri
+ * @returns {void}
+ */
+function stageResourcePanelEdits(resourceIri) {
+  const statusSelect = curationTableContainer?.querySelector(
+    `[data-resource-status-select="${cssEscapeAttr(resourceIri)}"]`
+  );
+  const deprecateToggle = /** @type {HTMLInputElement | null} */ (
+    curationTableContainer?.querySelector(
+      `[data-resource-deprecate-toggle="${cssEscapeAttr(resourceIri)}"]`
+    )
+  );
+  const noteInputs = Array.from(
+    curationTableContainer?.querySelectorAll(
+      `[data-resource-note="${cssEscapeAttr(resourceIri)}"]`
+    ) || []
+  );
+  const arbitraryPredicate = /** @type {HTMLInputElement | null} */ (
+    curationTableContainer?.querySelector(
+      `[data-arbitrary-predicate="${cssEscapeAttr(resourceIri)}"]`
+    )
+  );
+  const arbitraryObjectType = /** @type {HTMLSelectElement | null} */ (
+    curationTableContainer?.querySelector(
+      `[data-arbitrary-object-type="${cssEscapeAttr(resourceIri)}"]`
+    )
+  );
+  const arbitraryObjectValue = /** @type {HTMLInputElement | null} */ (
+    curationTableContainer?.querySelector(
+      `[data-arbitrary-object-value="${cssEscapeAttr(resourceIri)}"]`
+    )
+  );
+  const arbitraryObjectLanguage = /** @type {HTMLInputElement | null} */ (
+    curationTableContainer?.querySelector(
+      `[data-arbitrary-object-language="${cssEscapeAttr(resourceIri)}"]`
+    )
+  );
+  const arbitraryObjectDatatype = /** @type {HTMLInputElement | null} */ (
+    curationTableContainer?.querySelector(
+      `[data-arbitrary-object-datatype="${cssEscapeAttr(resourceIri)}"]`
+    )
+  );
+
+  let stagedCount = 0;
+  if (statusSelect instanceof HTMLSelectElement && statusSelect.value) {
+    stageReplacement(resourceIri, 'http://purl.obolibrary.org/obo/IAO_0000114', [{
+      termType: 'NamedNode',
+      value: statusSelect.value
+    }]);
+    stagedCount += 1;
+  }
+
+  for (const input of noteInputs) {
+    if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) {
+      continue;
+    }
+
+    const predicateIri = input.getAttribute('data-predicate-iri') || '';
+    const value = String(input.value || '').trim();
+    const isDeprecationOnlyField =
+      predicateIri === 'http://purl.obolibrary.org/obo/IAO_0000231' ||
+      predicateIri === 'http://purl.obolibrary.org/obo/IAO_0100001';
+
+    if (
+      isDeprecationOnlyField &&
+      !(deprecateToggle instanceof HTMLInputElement && deprecateToggle.checked)
+    ) {
+      continue;
+    }
+
+    if (!predicateIri || !value) {
+      continue;
+    }
+
+    stageReplacement(resourceIri, predicateIri, [{
+      termType: predicateIri === 'http://purl.obolibrary.org/obo/IAO_0100001' ? 'NamedNode' : 'Literal',
+      value
+    }]);
+    stagedCount += 1;
+  }
+
+  if (deprecateToggle instanceof HTMLInputElement && deprecateToggle.checked) {
+    stageReplacement(resourceIri, OWL_DEPRECATED_IRI, [{
+      termType: 'Literal',
+      value: 'true',
+      datatypeIri: XSD_BOOLEAN_IRI
+    }]);
+    stagedCount += 1;
+  }
+
+  if (
+    arbitraryPredicate instanceof HTMLInputElement &&
+    arbitraryObjectType instanceof HTMLSelectElement &&
+    arbitraryObjectValue instanceof HTMLInputElement
+  ) {
+    const predicateIri = String(arbitraryPredicate.value || '').trim();
+    const objectValue = String(arbitraryObjectValue.value || '').trim();
+    if (predicateIri && objectValue) {
+      stageAssertion(resourceIri, predicateIri, {
+        termType: arbitraryObjectType.value === 'Literal' ? 'Literal' : 'NamedNode',
+        value: objectValue,
+        ...(arbitraryObjectLanguage?.value?.trim() ? { language: arbitraryObjectLanguage.value.trim() } : {}),
+        ...(arbitraryObjectDatatype?.value?.trim() ? { datatypeIri: arbitraryObjectDatatype.value.trim() } : {})
+      });
+      stagedCount += 1;
+    }
+  }
+
+  if (!stagedCount) {
+    window.alert('No resource edits were entered to stage.');
+    return;
+  }
+
+  setStatus(`Staged ${stagedCount} edit(s) for ${resourceIri}.`);
+  refreshEditAwareViews();
+}
+
+/**
+ * Stages ontology-subject edits from the ontology report card.
+ *
+ * @param {string} ontologyIri
+ * @returns {void}
+ */
+function stageOntologyEdits(ontologyIri) {
+  const noteInputs = Array.from(
+    ontologyReportContainer?.querySelectorAll(
+      `[data-ontology-note="${cssEscapeAttr(ontologyIri)}"]`
+    ) || []
+  );
+  let stagedCount = 0;
+
+  for (const input of noteInputs) {
+    if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) {
+      continue;
+    }
+
+    const predicateIri = input.getAttribute('data-predicate-iri') || '';
+    const value = String(input.value || '').trim();
+    if (!predicateIri || !value) {
+      continue;
+    }
+
+    stageReplacement(ontologyIri, predicateIri, [{
+      termType: predicateIri === 'http://purl.obolibrary.org/obo/IAO_0100001' ? 'NamedNode' : 'Literal',
+      value
+    }]);
+    stagedCount += 1;
+  }
+
+  const arbitraryPredicate = /** @type {HTMLInputElement | null} */ (
+    ontologyReportContainer?.querySelector(
+      `[data-ontology-arbitrary-predicate="${cssEscapeAttr(ontologyIri)}"]`
+    )
+  );
+  const arbitraryObjectType = /** @type {HTMLSelectElement | null} */ (
+    ontologyReportContainer?.querySelector(
+      `[data-ontology-arbitrary-object-type="${cssEscapeAttr(ontologyIri)}"]`
+    )
+  );
+  const arbitraryObjectValue = /** @type {HTMLInputElement | null} */ (
+    ontologyReportContainer?.querySelector(
+      `[data-ontology-arbitrary-object-value="${cssEscapeAttr(ontologyIri)}"]`
+    )
+  );
+  const arbitraryObjectLanguage = /** @type {HTMLInputElement | null} */ (
+    ontologyReportContainer?.querySelector(
+      `[data-ontology-arbitrary-object-language="${cssEscapeAttr(ontologyIri)}"]`
+    )
+  );
+  const arbitraryObjectDatatype = /** @type {HTMLInputElement | null} */ (
+    ontologyReportContainer?.querySelector(
+      `[data-ontology-arbitrary-object-datatype="${cssEscapeAttr(ontologyIri)}"]`
+    )
+  );
+
+  if (
+    arbitraryPredicate instanceof HTMLInputElement &&
+    arbitraryObjectType instanceof HTMLSelectElement &&
+    arbitraryObjectValue instanceof HTMLInputElement
+  ) {
+    const predicateIri = String(arbitraryPredicate.value || '').trim();
+    const objectValue = String(arbitraryObjectValue.value || '').trim();
+    if (predicateIri && objectValue) {
+      stageAssertion(ontologyIri, predicateIri, {
+        termType: arbitraryObjectType.value === 'Literal' ? 'Literal' : 'NamedNode',
+        value: objectValue,
+        ...(arbitraryObjectLanguage?.value?.trim() ? { language: arbitraryObjectLanguage.value.trim() } : {}),
+        ...(arbitraryObjectDatatype?.value?.trim() ? { datatypeIri: arbitraryObjectDatatype.value.trim() } : {})
+      });
+      stagedCount += 1;
+    }
+  }
+
+  if (!stagedCount) {
+    window.alert('No ontology edits were entered to stage.');
+    return;
+  }
+
+  setStatus(`Staged ${stagedCount} ontology edit(s).`);
+  refreshEditAwareViews();
+}
+
+/**
+ * Builds the edited primary ontology state.
+ *
+ * @returns {import('./types.js').ParsedOntologyState | null}
+ */
+function buildEditedPrimaryOntology() {
+  if (!activeEditSession?.primaryOntology) {
+    return null;
+  }
+
+  return {
+    ...cloneParsedOntologyState(activeEditSession.primaryOntology),
+    store: applyStagedEditsToStore(
+      activeEditSession.primaryOntology.store,
+      activeEditSession.stagedEdits
+    )
+  };
+}
+
+/**
+ * Reruns inspection for the staged editable session.
+ *
+ * @returns {Promise<void>}
+ */
+async function rerunEditSessionInspection() {
+  if (!activeEditSession?.primaryOntology || !lastManifest) {
+    window.alert('Run an inspection from loaded ontology files before rerunning edits.');
+    return;
+  }
+
+  const editedPrimary = buildEditedPrimaryOntology();
+  if (!editedPrimary) {
+    return;
+  }
+
+  setStatus('Re-running inspection for staged edits...');
+  try {
+    const mergedStore = buildMergedInspectionStore(
+      editedPrimary,
+      activeEditSession.supplementalOntologies
+    );
+    const report = await inspectStore(
+      mergedStore,
+      activeEditSession.selectedFileName || editedPrimary.fileName,
+      lastManifest,
+      lastInspectionScope,
+      {
+        primaryStore: editedPrimary.store,
+        onQueryProgress: (progress) => {
+          updateQueryProgress(progress);
+          setStatus(
+            `Re-running inspection for ${progress.fileName}: ${progress.completedQueries} of ${progress.totalQueries} queries complete.`
+          );
+        }
+      }
+    );
+
+    activeEditSession.rerunReport = report;
+    applyInspectionItemToState(report, lastManifest, true);
+    lastOntologyDetail = report.ontologyIri
+      ? extractResourceDetail(editedPrimary.store, report.ontologyIri)
+      : null;
+    renderActiveInspectionViews();
+    setStatus('Completed rerun for staged edits.');
+  } catch (error) {
+    console.error('Error rerunning staged edits:', error);
+    setStatus(error instanceof Error ? error.message : 'Error rerunning staged edits.');
+  }
+}
+
+/**
+ * Returns a file extension for one RDF format.
+ *
+ * @param {string} format
+ * @returns {string}
+ */
+function getFileExtensionForFormat(format) {
+  switch (format) {
+    case SUPPORTED_RDF_FORMATS.TURTLE:
+      return '.ttl';
+    case SUPPORTED_RDF_FORMATS.N_TRIPLES:
+      return '.nt';
+    case SUPPORTED_RDF_FORMATS.N_QUADS:
+      return '.nq';
+    case SUPPORTED_RDF_FORMATS.TRIG:
+      return '.trig';
+    case SUPPORTED_RDF_FORMATS.N3:
+      return '.n3';
+    case SUPPORTED_RDF_FORMATS.JSON_LD:
+      return '.jsonld';
+    case SUPPORTED_RDF_FORMATS.RDF_XML:
+      return '.rdf';
+    default:
+      return '.ttl';
+  }
+}
+
+/**
+ * Returns a MIME type for one RDF format.
+ *
+ * @param {string} format
+ * @returns {string}
+ */
+function getMimeTypeForFormat(format) {
+  return `${format};charset=utf-8`;
+}
+
+/**
+ * Exports the edited primary ontology.
+ *
+ * @returns {Promise<void>}
+ */
+async function exportEditedOntology() {
+  const editedPrimary = buildEditedPrimaryOntology();
+  if (!editedPrimary) {
+    window.alert('No editable primary ontology is available for export.');
+    return;
+  }
+
+  const exportFormatSelect = /** @type {HTMLSelectElement | null} */ (
+    document.getElementById('editExportFormatSelect')
+  );
+  const targetFormat = exportFormatSelect?.value || editedPrimary.sourceFormat;
+
+  try {
+    const serialized = await exportPrimaryOntology(editedPrimary, /** @type {any} */ (targetFormat));
+    const fileStem = safeFilePart(
+      editedPrimary.fileName.replace(/\.[^.]+$/, '') || 'ontology'
+    ) || 'ontology';
+    const fileName = `${fileStem}_edited_${getTimestampForFileName()}${getFileExtensionForFormat(targetFormat)}`;
+    downloadTextFile(serialized, fileName, getMimeTypeForFormat(targetFormat));
+    setStatus(`Exported edited ontology as ${fileName}.`);
+  } catch (error) {
+    console.error('Error exporting edited ontology:', error);
+    setStatus(error instanceof Error ? error.message : 'Error exporting edited ontology.');
+  }
+}
+
+/**
  * Loads the selected batch item into the active detail panes.
  *
  * @param {EvaluatedReport} reportObject
@@ -806,6 +1642,7 @@ function restoreSelectedCriterion(criterionId) {
  */
 function loadBatchSelection(reportObject) {
   applyInspectionItemToState(reportObject, lastManifest, true);
+  syncEditSessionForReport(reportObject);
   applyResourceFilters();
 }
 
@@ -890,6 +1727,69 @@ function hasPreparedFilesForCurrentSelection() {
 }
 
 /**
+ * Adds one supplemental ontology assignment for a declared import.
+ *
+ * @param {string} fileName
+ * @param {string} importIri
+ * @param {File} file
+ * @returns {Promise<void>}
+ */
+async function assignSupplementalOntologyForImport(fileName, importIri, file) {
+  const text = await file.text();
+  const parsedOntology = await createParsedOntologyState(text, file.name);
+  const summary = buildPreflightSummaryFromStore(parsedOntology.store, file.name);
+  const attachmentId = getSupplementalAttachmentId(importIri, file);
+
+  preparedOntologyFiles = preparedOntologyFiles.map((prepared) => {
+    if (prepared.summary.fileName !== fileName) {
+      return prepared;
+    }
+
+    const supplementalOntologies = (prepared.supplementalOntologies || [])
+      .filter((item) => item.attachmentId !== attachmentId)
+      .concat([{
+        attachmentId,
+        file,
+        importIri,
+        parsedOntology,
+        summary
+      }])
+      .sort((left, right) => {
+        const importCompare = left.importIri.localeCompare(right.importIri);
+        if (importCompare !== 0) {
+          return importCompare;
+        }
+        return left.file.name.localeCompare(right.file.name);
+      });
+
+    return {
+      ...prepared,
+      supplementalOntologies
+    };
+  });
+}
+
+/**
+ * Removes one supplemental ontology assignment by attachment id.
+ *
+ * @param {string} fileName
+ * @param {string} attachmentId
+ * @returns {void}
+ */
+function removeSupplementalOntologyForImport(fileName, attachmentId) {
+  preparedOntologyFiles = preparedOntologyFiles.map((prepared) => {
+    if (prepared.summary.fileName !== fileName) {
+      return prepared;
+    }
+
+    return {
+      ...prepared,
+      supplementalOntologies: (prepared.supplementalOntologies || []).filter((item) => item.attachmentId !== attachmentId)
+    };
+  });
+}
+
+/**
  * Analyzes selected files and populates preflight state.
  *
  * @returns {Promise<void>}
@@ -910,16 +1810,34 @@ async function analyzeSelectedFiles() {
 
   try {
     const nextPreparedFiles = [];
+    const previousPreparedByFileName = new Map(
+      preparedOntologyFiles.map((prepared) => [prepared.summary.fileName, prepared])
+    );
 
     for (const file of files) {
       const text = await file.text();
-      const summary = await buildPreflightSummary(text, file.name);
+      const parsedOntology = await createParsedOntologyState(text, file.name);
+      const summary = buildPreflightSummaryFromStore(parsedOntology.store, file.name);
+      const previousPrepared = previousPreparedByFileName.get(file.name);
+      const previousSupplemental = Array.isArray(previousPrepared?.supplementalOntologies)
+        ? previousPrepared.supplementalOntologies
+        : [];
+      const validImports = new Set(summary.imports || []);
+      for (const supplemental of previousSupplemental) {
+        for (const importIri of supplemental?.summary?.imports || []) {
+          if (importIri) {
+            validImports.add(importIri);
+          }
+        }
+      }
       nextPreparedFiles.push({
         file,
         summary,
         inspectionScope: {
           includedNamespaces: deriveDefaultIncludedNamespaces(summary)
-        }
+        },
+        parsedOntology,
+        supplementalOntologies: previousSupplemental.filter((item) => validImports.has(item.importIri))
       });
     }
 
@@ -927,7 +1845,7 @@ async function analyzeSelectedFiles() {
     preflightCollapsed = false;
     renderPreflightUi();
     updateRunButtonState();
-    setStatus(`Analyzed ${preparedOntologyFiles.length} ontology file(s). Review namespaces, then run batch checks.`);
+    setStatus(`Analyzed ${preparedOntologyFiles.length} ontology file(s). ${countPreparedSupplementalOntologies()} import closure file(s) are currently attached in preflight. Review namespaces and imports, then run batch checks.`);
   } catch (error) {
     console.error('Error analyzing files:', error);
     clearPreflightState();
@@ -1136,6 +2054,8 @@ async function hydrateRun(run) {
   }
 
   await ensureManifestLoaded();
+  reportSourceByBatchKey = new Map();
+  resetEditSession();
   applyUiStateSnapshot(run.uiState);
   clearStandardSelection();
 
@@ -1219,22 +2139,49 @@ async function runInspectionFromSelectedFiles() {
   try {
     const manifest = await ensureManifestLoaded();
     initializeQueryProgress(files, Array.isArray(manifest?.queries) ? manifest.queries.length : 0);
-    const inspectionScopesByFileName = new Map(
-      preparedOntologyFiles.map((prepared) => [
+    /** @type {EvaluatedReport[]} */
+    const reportsWithScope = [];
+
+    for (const prepared of preparedOntologyFiles) {
+      const mergedStore = buildMergedInspectionStore(
+        prepared.parsedOntology,
+        prepared.supplementalOntologies
+      );
+      const report = await inspectStore(
+        mergedStore,
         prepared.file.name,
-        prepared.inspectionScope
-      ])
-    );
-    const reportsWithScope = await inspectFiles(files, manifest, inspectionScopesByFileName, {
-      onQueryProgress: (progress) => {
-        updateQueryProgress(progress);
-        setStatus(
-          `Running inspection for ${progress.fileName}: ${progress.completedQueries} of ${progress.totalQueries} queries complete.`
-        );
-      }
-    });
+        manifest,
+        prepared.inspectionScope,
+        {
+          primaryStore: prepared.parsedOntology.store,
+          onQueryProgress: (progress) => {
+            updateQueryProgress(progress);
+            setStatus(
+              `Running inspection for ${progress.fileName}: ${progress.completedQueries} of ${progress.totalQueries} queries complete.`
+            );
+          }
+        }
+      );
+      reportsWithScope.push(report);
+    }
     lastManifest = manifest;
     appendBatchReports(reportsWithScope);
+    reportSourceByBatchKey = new Map(reportSourceByBatchKey);
+    for (let index = 0; index < reportsWithScope.length; index += 1) {
+      const report = reportsWithScope[index];
+      const prepared = preparedOntologyFiles[index];
+      if (!report || !prepared) {
+        continue;
+      }
+
+      reportSourceByBatchKey.set(getBatchKey(report), {
+        primaryOntology: cloneParsedOntologyState(prepared.parsedOntology),
+        supplementalOntologies: prepared.supplementalOntologies.map((item) => ({
+          ...item,
+          parsedOntology: cloneParsedOntologyState(item.parsedOntology)
+        }))
+      });
+    }
     clearInspectionDataState();
     clearStandardSelection();
     renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
@@ -1289,6 +2236,30 @@ async function initializeApp() {
         return;
       }
 
+      const stageResourceButton = event.target.closest('button[data-stage-resource-edit]');
+      if (stageResourceButton instanceof HTMLButtonElement) {
+        const resourceIri = stageResourceButton.getAttribute('data-stage-resource-edit');
+        if (resourceIri) {
+          stageResourcePanelEdits(resourceIri);
+        }
+        return;
+      }
+
+      const useSuggestedStatusButton = event.target.closest('button[data-apply-suggested-status]');
+      if (useSuggestedStatusButton instanceof HTMLButtonElement) {
+        const resourceIri = useSuggestedStatusButton.getAttribute('data-apply-suggested-status');
+        const suggestedStatus = useSuggestedStatusButton.getAttribute('data-suggested-status') || '';
+        if (resourceIri) {
+          const select = curationTableContainer.querySelector(
+            `[data-resource-status-select="${cssEscapeAttr(resourceIri)}"]`
+          );
+          if (select instanceof HTMLSelectElement) {
+            select.value = suggestedStatus;
+          }
+        }
+        return;
+      }
+
       const button = event.target.closest('button[data-toggle-resource-detail]');
       if (!(button instanceof HTMLButtonElement)) {
         return;
@@ -1303,14 +2274,38 @@ async function initializeApp() {
         resourceIri,
         lastFailuresIndex,
         lastResourceDetails,
+        lastManifest,
+        lastPerResource,
         curationTableContainer
       );
+    });
+
+    curationTableContainer.addEventListener('change', (event) => {
+      if (!(event.target instanceof HTMLInputElement)) {
+        return;
+      }
+
+      const resourceIri = event.target.getAttribute('data-select-resource');
+      if (!resourceIri) {
+        return;
+      }
+
+      setResourceSelected(resourceIri, event.target.checked);
     });
   }
 
   if (ontologyReportContainer) {
     ontologyReportContainer.addEventListener('click', (event) => {
       if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      const stageOntologyButton = event.target.closest('button[data-stage-ontology-edit]');
+      if (stageOntologyButton instanceof HTMLButtonElement) {
+        const ontologyIri = stageOntologyButton.getAttribute('data-stage-ontology-edit');
+        if (ontologyIri) {
+          stageOntologyEdits(ontologyIri);
+        }
         return;
       }
 
@@ -1432,11 +2427,62 @@ async function initializeApp() {
     clearFiltersButton.addEventListener('click', clearResourceFilters);
   }
 
+  if (editSessionContainer) {
+    editSessionContainer.addEventListener('click', (event) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      if (event.target.closest('[data-stage-bulk-edit]')) {
+        stageBulkEdit();
+        return;
+      }
+
+      if (event.target.closest('[data-stage-selected-suggested-status]')) {
+        stageSuggestedStatusesForSelection();
+        return;
+      }
+
+      if (event.target.closest('[data-clear-selected-resources]')) {
+        activeEditSession.selectedResources = [];
+        refreshEditAwareViews();
+        return;
+      }
+
+      if (event.target.closest('[data-clear-staged-edits]')) {
+        activeEditSession.stagedEdits = [];
+        activeEditSession.rerunReport = null;
+        refreshEditAwareViews();
+        return;
+      }
+
+      const removeButton = event.target.closest('[data-remove-staged-edit]');
+      if (removeButton instanceof HTMLButtonElement) {
+        const editId = removeButton.getAttribute('data-remove-staged-edit');
+        if (editId) {
+          removeStagedEdit(editId);
+        }
+        return;
+      }
+
+      if (event.target.closest('[data-rerun-edits]')) {
+        void rerunEditSessionInspection();
+        return;
+      }
+
+      if (event.target.closest('[data-export-edited-ontology]')) {
+        void exportEditedOntology();
+      }
+    });
+  }
+
   if (filesInput) {
     filesInput.addEventListener('change', () => {
       clearPreflightState();
       clearQueryProgress();
       preflightCollapsed = false;
+      reportSourceByBatchKey = new Map();
+      resetEditSession();
       setStatus('Selected files changed. Analyze files to review scope before running checks.');
     });
   }
@@ -1448,6 +2494,31 @@ async function initializeApp() {
       }
 
       const fileName = event.target.getAttribute('data-scope-file');
+      const importIri = event.target.getAttribute('data-import-iri');
+      if (fileName && importIri && event.target.type === 'file') {
+        const files = Array.from(event.target.files || []);
+        if (!files.length) {
+          return;
+        }
+
+        void (async () => {
+          setStatus(`Loading import closure file for ${importIri}...`);
+          try {
+            for (const file of files) {
+              await assignSupplementalOntologyForImport(fileName, importIri, file);
+            }
+            reportSourceByBatchKey = new Map();
+            resetEditSession();
+            renderPreflightUi();
+            setStatus(`Attached ${files.length} closure file(s) for import ${importIri} in ${fileName}. Run inspection to evaluate with this closure set.`);
+          } catch (error) {
+            console.error('Error loading import closure file:', error);
+            setStatus(error instanceof Error ? `Error: ${error.message}` : 'Error loading import closure file.');
+          }
+        })();
+        return;
+      }
+
       const namespace = event.target.getAttribute('data-scope-namespace');
       if (!fileName || !namespace) {
         return;
@@ -1467,6 +2538,29 @@ async function initializeApp() {
 
       prepared.inspectionScope.includedNamespaces = Array.from(current).sort();
       renderPreflightUi();
+    });
+
+    preflightContainer.addEventListener('click', (event) => {
+      if (!(event.target instanceof Element)) {
+        return;
+      }
+
+      const removeButton = event.target.closest('[data-remove-import-supplemental]');
+      if (!(removeButton instanceof HTMLButtonElement)) {
+        return;
+      }
+
+      const attachmentId = removeButton.getAttribute('data-remove-import-supplemental');
+      const fileName = removeButton.getAttribute('data-scope-file');
+      if (!fileName || !attachmentId) {
+        return;
+      }
+
+      removeSupplementalOntologyForImport(fileName, attachmentId);
+      reportSourceByBatchKey = new Map();
+      resetEditSession();
+      renderPreflightUi();
+      setStatus(`Removed one attached import closure file from ${fileName}.`);
     });
   }
 

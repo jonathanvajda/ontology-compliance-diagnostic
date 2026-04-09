@@ -4,14 +4,42 @@
 import { getCriterionDefinition } from './criteria.js';
 import { escapeHtml, getReportStandards } from './shared.js';
 
+import {
+  DCTERMS_ACCESS_RIGHTS_IRI,
+  DCTERMS_DESCRIPTION_IRI,
+  DCTERMS_LICENSE_IRI,
+  DCTERMS_TITLE_IRI,
+  OBO_IAO_0000231_IRI,
+  OBO_IAO_0000232_IRI,
+  OBO_IAO_0100001_IRI,
+  OWL_IMPORTS_IRI,
+  OWL_VERSION_INFO_IRI,
+  OWL_VERSION_IRI,
+  RDF_TYPE_IRI,
+  RDFS_COMMENT_IRI
+} from './engine.js';
+
 /** @typedef {import('./types.js').Manifest} Manifest */
 /** @typedef {import('./types.js').InspectionScope} InspectionScope */
 /** @typedef {import('./types.js').OntologyMetadata} OntologyMetadata */
 /** @typedef {import('./types.js').OntologyReport} OntologyReport */
 /** @typedef {import('./types.js').OntologyReportStandardRow} OntologyReportStandardRow */
+/** @typedef {import('./types.js').ResourceAssertion} ResourceAssertion */
+/** @typedef {import('./types.js').ResourceDetail} ResourceDetail */
 
 /** @type {HTMLElement | null} */
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
+
+const ONTOLOGY_METADATA_PREDICATES = new Set([
+  RDF_TYPE_IRI,
+  DCTERMS_TITLE_IRI,
+  DCTERMS_DESCRIPTION_IRI,
+  OWL_VERSION_IRI,
+  OWL_VERSION_INFO_IRI,
+  DCTERMS_LICENSE_IRI,
+  DCTERMS_ACCESS_RIGHTS_IRI,
+  OWL_IMPORTS_IRI
+]);
 
 /**
  * Renders the ontology report card.
@@ -19,6 +47,7 @@ const ontologyReportContainer = document.getElementById('ontologyReportContainer
  * @param {OntologyReport | null | undefined} report
  * @param {InspectionScope | null | undefined} [inspectionScope=null]
  * @param {Manifest | null | undefined} [manifest=null]
+ * @param {ResourceDetail | null | undefined} [ontologyDetail=null]
  * @param {HTMLElement | null | undefined} [container=ontologyReportContainer]
  * @returns {void}
  */
@@ -26,6 +55,7 @@ export function renderOntologyReport(
   report,
   inspectionScope = null,
   manifest = null,
+  ontologyDetail = null,
   container = ontologyReportContainer
 ) {
   if (!container) {
@@ -62,6 +92,10 @@ export function renderOntologyReport(
     tripleCount: 0,
     labeledResourceCount: 0
   });
+  html += '</div>';
+
+  html += '<div class="ocd-detail" style="margin-top:1rem;">';
+  html += renderOntologyAnnotations(report.ontologyIri, ontologyDetail);
   html += '</div>';
 
   const includedNamespaces = Array.isArray(inspectionScope?.includedNamespaces)
@@ -105,6 +139,125 @@ export function renderOntologyReport(
   html += '</div>';
 
   container.innerHTML = html;
+}
+
+/**
+ * Renders one assertion table.
+ *
+ * @param {ResourceAssertion[]} assertions
+ * @param {string} [emptyMessage='No direct ontology assertions found.']
+ * @returns {string}
+ */
+function renderAssertionTable(assertions, emptyMessage = 'No direct ontology assertions found.') {
+  if (!assertions.length) {
+    return '<p class="ocd-muted">' + escapeHtml(emptyMessage) + '</p>';
+  }
+
+  let html = '<table class="ocd-table ocd-table-wide">';
+  html += '<thead class="ocd-table-head"><tr>';
+  html += '<th class="ocd-table-th">Predicate</th>';
+  html += '<th class="ocd-table-th">Object</th>';
+  html += '</tr></thead><tbody>';
+
+  for (const assertion of assertions) {
+    const showPredicateIri = assertion.predicateLabel !== assertion.predicateIri;
+    const showObjectMeta = assertion.object.displayValue !== assertion.object.value;
+
+    html += '<tr class="ocd-table-tr">';
+    html += '<td class="ocd-table-td">';
+    html += '<div>' + escapeHtml(assertion.predicateLabel) + '</div>';
+    if (showPredicateIri) {
+      html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(assertion.predicateIri) + '</div>';
+    }
+    html += '</td>';
+    html += '<td class="ocd-table-td">';
+    html += '<div>' + escapeHtml(assertion.object.displayValue) + '</div>';
+    if (showObjectMeta) {
+      html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(assertion.object.termType) + ': ' + escapeHtml(assertion.object.value) + '</div>';
+    }
+    html += '</td>';
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  return html;
+}
+
+/**
+ * Renders ontology annotation details and editor controls.
+ *
+ * @param {string} ontologyIri
+ * @param {ResourceDetail | null | undefined} ontologyDetail
+ * @returns {string}
+ */
+function renderOntologyAnnotations(ontologyIri, ontologyDetail) {
+  const outgoingAssertions = Array.isArray(ontologyDetail?.outgoingAssertions)
+    ? ontologyDetail.outgoingAssertions
+    : [];
+  const filteredAssertions = outgoingAssertions.filter(
+    (assertion) => !ONTOLOGY_METADATA_PREDICATES.has(assertion.predicateIri)
+  );
+  const assertionCount = filteredAssertions.length;
+
+  let html = '<details class="ocd-collapsible-section">';
+  html += '<summary class="ocd-collapsible-summary">';
+  html += 'Ontology annotations and edits';
+  html += '<span class="ocd-table-meta">' + escapeHtml(`${assertionCount} additional assertion(s)`) + '</span>';
+  html += '</summary>';
+  html += '<p class="ocd-muted">Ontology metadata already shown above is omitted here. Expand this section when you want to inspect remaining direct assertions or stage ontology-subject edits.</p>';
+  html += renderAssertionTable(
+    filteredAssertions,
+    'No additional ontology assertions beyond the metadata summary are currently shown.'
+  );
+  html += '<details class="ocd-collapsible-section ocd-collapsible-nested" style="margin-top:1rem;">';
+  html += '<summary class="ocd-collapsible-summary">Stage ontology annotation edits</summary>';
+  html += '<div class="ocd-editor-grid">';
+  html += '<label class="ocd-filter">';
+  html += '<span class="ocd-label">Curator note</span>';
+  html += '<textarea class="ocd-input ocd-textarea" rows="2" data-ontology-note="' + escapeHtml(ontologyIri) + '" data-predicate-iri="' + escapeHtml(OBO_IAO_0000232_IRI) + '"></textarea>';
+  html += '</label>';
+  html += '<label class="ocd-filter">';
+  html += '<span class="ocd-label">Has obsolescence reason</span>';
+  html += '<textarea class="ocd-input ocd-textarea" rows="2" data-ontology-note="' + escapeHtml(ontologyIri) + '" data-predicate-iri="' + escapeHtml(OBO_IAO_0000231_IRI) + '"></textarea>';
+  html += '</label>';
+  html += '<label class="ocd-filter">';
+  html += '<span class="ocd-label">Term replaced by</span>';
+  html += '<input class="ocd-input ocd-mono" type="text" data-ontology-note="' + escapeHtml(ontologyIri) + '" data-predicate-iri="' + escapeHtml(OBO_IAO_0100001_IRI) + '" placeholder="IRI" />';
+  html += '</label>';
+  html += '<label class="ocd-filter">';
+  html += '<span class="ocd-label">Comment</span>';
+  html += '<textarea class="ocd-input ocd-textarea" rows="2" data-ontology-note="' + escapeHtml(ontologyIri) + '" data-predicate-iri="' + escapeHtml(RDFS_COMMENT_IRI) + '"></textarea>';
+  html += '</label>';
+  html += '<label class="ocd-filter">';
+  html += '<span class="ocd-label">Arbitrary predicate IRI</span>';
+  html += '<input class="ocd-input ocd-mono" type="text" data-ontology-arbitrary-predicate="' + escapeHtml(ontologyIri) + '" placeholder="http://example.org/predicate" />';
+  html += '</label>';
+  html += '<label class="ocd-filter">';
+  html += '<span class="ocd-label">Object type</span>';
+  html += '<select class="ocd-input ocd-select" data-ontology-arbitrary-object-type="' + escapeHtml(ontologyIri) + '">';
+  html += '<option value="NamedNode">IRI</option>';
+  html += '<option value="Literal">Literal</option>';
+  html += '</select>';
+  html += '</label>';
+  html += '<label class="ocd-filter">';
+  html += '<span class="ocd-label">Object value</span>';
+  html += '<input class="ocd-input" type="text" data-ontology-arbitrary-object-value="' + escapeHtml(ontologyIri) + '" />';
+  html += '</label>';
+  html += '<label class="ocd-filter">';
+  html += '<span class="ocd-label">Literal language</span>';
+  html += '<input class="ocd-input" type="text" data-ontology-arbitrary-object-language="' + escapeHtml(ontologyIri) + '" placeholder="en" />';
+  html += '</label>';
+  html += '<label class="ocd-filter">';
+  html += '<span class="ocd-label">Literal datatype IRI</span>';
+  html += '<input class="ocd-input ocd-mono" type="text" data-ontology-arbitrary-object-datatype="' + escapeHtml(ontologyIri) + '" placeholder="http://www.w3.org/2001/XMLSchema#string" />';
+  html += '</label>';
+  html += '</div>';
+  html += '<div class="ocd-actions" style="margin-top:12px;">';
+  html += '<button class="ocd-btn ocd-btn-primary" type="button" data-stage-ontology-edit="' + escapeHtml(ontologyIri) + '">Stage ontology edits</button>';
+  html += '</div>';
+  html += '</details>';
+  html += '</details>';
+  return html;
 }
 
 /**
@@ -259,9 +412,7 @@ function renderStandardsTable(standards, scopeCategory, manifest) {
   html += '<th class="ocd-table-th">Criterion</th>';
   html += '<th class="ocd-table-th">Type</th>';
   html += '<th class="ocd-table-th">Status</th>';
-  html += '<th class="ocd-table-th">' +
-    escapeHtml(scopeCategory === 'ontology' ? 'Ontology failures' : 'Failed resources') +
-    '</th>';
+  html += '<th class="ocd-table-th">Count</th>';
   html += '</tr></thead><tbody>';
 
   for (const standard of standards) {
@@ -279,8 +430,7 @@ function renderStandardsTable(standards, scopeCategory, manifest) {
       escapeHtml(standard.scopeCategory) +
       '">';
     html += '<td class="ocd-table-td">';
-    html += '<div>' + escapeHtml(criterion?.label || standard.id) + '</div>';
-    html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(standard.id) + '</div>';
+    html += '<div class="ocd-table-title-cell">' + escapeHtml(criterion?.label || standard.id) + '</div>';
     if (criterion?.guidance) {
       html += '<div class="ocd-table-meta">' + escapeHtml(criterion.guidance) + '</div>';
     }
