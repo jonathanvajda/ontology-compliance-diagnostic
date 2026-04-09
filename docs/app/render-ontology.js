@@ -412,9 +412,7 @@ function renderStandardsTable(standards, scopeCategory, manifest) {
   html += '<th class="ocd-table-th">Criterion</th>';
   html += '<th class="ocd-table-th">Type</th>';
   html += '<th class="ocd-table-th">Status</th>';
-  html += '<th class="ocd-table-th">' +
-    escapeHtml(scopeCategory === 'ontology' ? 'Ontology failures' : 'Failed resources') +
-    '</th>';
+  html += '<th class="ocd-table-th">Count</th>';
   html += '</tr></thead><tbody>';
 
   for (const standard of standards) {
@@ -432,8 +430,7 @@ function renderStandardsTable(standards, scopeCategory, manifest) {
       escapeHtml(standard.scopeCategory) +
       '">';
     html += '<td class="ocd-table-td">';
-    html += '<div>' + escapeHtml(criterion?.label || standard.id) + '</div>';
-    html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(standard.id) + '</div>';
+    html += '<div class="ocd-table-title-cell">' + escapeHtml(criterion?.label || standard.id) + '</div>';
     if (criterion?.guidance) {
       html += '<div class="ocd-table-meta">' + escapeHtml(criterion.guidance) + '</div>';
     }

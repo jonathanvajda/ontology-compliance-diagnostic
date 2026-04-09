@@ -203,52 +203,54 @@
 
     <div id="standardDetailContainer" class="ocd-modal" aria-hidden="true"></div>
 
-    <div id="curationFiltersContainer" class="ocd-section ocd-card" hidden>
-      <h2 class="ocd-title">Resource filters</h2>
+    <div class="ocd-section ocd-card ocd-curation-workspace">
+      <div id="curationFiltersContainer" hidden>
+        <h2 class="ocd-title">Resource filters</h2>
 
-      <div id="curationFilters" class="ocd-filters">
-        <div class="ocd-filter">
-          <label class="ocd-label" for="statusFilter">Curation status</label>
-          <select id="statusFilter" class="ocd-input ocd-select">
-            <option value="">All</option>
-            <option value="uncurated">uncurated</option>
-            <option value="metadata incomplete">metadata incomplete</option>
-            <option value="metadata complete">metadata complete</option>
-            <option value="pending final vetting">pending final vetting</option>
-            <option value="requires discussion">requires discussion</option>
-            <option value="ready for release">ready for release</option>
-          </select>
+        <div id="curationFilters" class="ocd-filters">
+          <div class="ocd-filter">
+            <label class="ocd-label" for="statusFilter">Curation status</label>
+            <select id="statusFilter" class="ocd-input ocd-select">
+              <option value="">All</option>
+              <option value="uncurated">uncurated</option>
+              <option value="metadata incomplete">metadata incomplete</option>
+              <option value="metadata complete">metadata complete</option>
+              <option value="pending final vetting">pending final vetting</option>
+              <option value="requires discussion">requires discussion</option>
+              <option value="ready for release">ready for release</option>
+            </select>
+          </div>
+
+          <div class="ocd-filter">
+            <label class="ocd-label" for="standardFilter">Fails requirement / recommendation</label>
+            <select id="standardFilter" class="ocd-input ocd-select">
+              <option value="">Any</option>
+            </select>
+          </div>
+
+          <div class="ocd-filter">
+            <label class="ocd-label" for="resourceSearch">Resource IRI contains:</label>
+            <input
+              id="resourceSearch"
+              class="ocd-input"
+              type="text"
+              placeholder="e.g., obo:IAO_"
+              autocomplete="off"
+            />
+          </div>
+
+          <div class="ocd-filter ocd-filter-actions">
+            <button id="clearFiltersBtn" class="ocd-btn ocd-btn-secondary" type="button">
+              Clear filters
+            </button>
+          </div>
         </div>
 
-        <div class="ocd-filter">
-          <label class="ocd-label" for="standardFilter">Fails requirement / recommendation</label>
-          <select id="standardFilter" class="ocd-input ocd-select">
-            <option value="">Any</option>
-          </select>
-        </div>
-
-        <div class="ocd-filter">
-          <label class="ocd-label" for="resourceSearch">Resource IRI contains:</label>
-          <input
-            id="resourceSearch"
-            class="ocd-input"
-            type="text"
-            placeholder="e.g., obo:IAO_"
-            autocomplete="off"
-          />
-        </div>
-
-        <div class="ocd-filter ocd-filter-actions">
-          <button id="clearFiltersBtn" class="ocd-btn ocd-btn-secondary" type="button">
-            Clear filters
-          </button>
-        </div>
+        <div id="curationFiltersSummary" class="ocd-status" aria-live="polite"></div>
       </div>
 
-      <div id="curationFiltersSummary" class="ocd-status" aria-live="polite"></div>
+      <div id="curationTableContainer"></div>
     </div>
-
-    <div id="curationTableContainer" class="ocd-section ocd-card"></div>
 
     <div id="editSessionContainer" class="ocd-section ocd-card"></div>
   </div>

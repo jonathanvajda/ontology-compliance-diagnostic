@@ -1,6 +1,7 @@
 // app/render-resources.js
 // @ts-check
 
+import { getCriterionDefinition } from './criteria.js';
 import {
   CURATION_STATUS_IRIS,
   CURATION_STATUS_LABELS
@@ -9,11 +10,12 @@ import {
   OBO_IAO_0000231_IRI,
   OBO_IAO_0000232_IRI,
   OBO_IAO_0100001_IRI,
-  RDFS_COMMENT_IRI
+  OWL_DEPRECATED_IRI
 } from './engine.js';
 import { cssEscapeAttr, escapeHtml } from './shared.js';
 
 /** @typedef {import('./types.js').FailureIndex} FailureIndex */
+/** @typedef {import('./types.js').Manifest} Manifest */
 /** @typedef {import('./types.js').PerResourceCurationRow} PerResourceCurationRow */
 /** @typedef {import('./types.js').ResourceAssertion} ResourceAssertion */
 /** @typedef {import('./types.js').ResourceDetail} ResourceDetail */
@@ -36,6 +38,7 @@ const STATUS_OPTIONS = Object.freeze([
  * @param {PerResourceCurationRow[] | null | undefined} perResourceRows
  * @param {FailureIndex | null | undefined} failuresIndex
  * @param {Record<string, ResourceDetail> | null | undefined} resourceDetailsByIri
+ * @param {Manifest | null | undefined} [manifest]
  * @param {Set<string> | null | undefined} [selectedResources]
  * @param {HTMLElement | null | undefined} [container=curationTableContainer]
  * @returns {void}
@@ -44,6 +47,7 @@ export function renderCurationTable(
   perResourceRows,
   failuresIndex,
   resourceDetailsByIri,
+  manifest = null,
   selectedResources = null,
   container = curationTableContainer
 ) {
@@ -79,14 +83,6 @@ export function renderCurationTable(
   html += '</tr></thead><tbody>';
 
   for (const row of perResourceRows) {
-    const failedRequirements = Array.isArray(row.failedRequirements)
-      ? row.failedRequirements.join(', ')
-      : '-';
-
-    const failedRecommendations = Array.isArray(row.failedRecommendations)
-      ? row.failedRecommendations.join(', ')
-      : '-';
-
     const statusBadgeClass = statusBadgeClasses[row.statusLabel] || 'ocd-badge';
     const currentStatusClass = statusBadgeClasses[row.currentStatusLabel || ''] || 'ocd-badge';
     const isSelected = selectedResources instanceof Set && selectedResources.has(row.resource);
@@ -101,18 +97,18 @@ export function renderCurationTable(
       (hasFailures ? '' : ' disabled') +
       ' />';
     html += '</td>';
-    html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(row.resource) + '</td>';
-    html += '<td class="ocd-table-td ocd-mono">';
+    html += '<td class="ocd-table-td ocd-resource-column"><div class="ocd-resource-iri ocd-mono">' + escapeHtml(row.resource) + '</div></td>';
+    html += '<td class="ocd-table-td">';
     if (row.currentStatusLabel) {
       html += '<span class="' + currentStatusClass + '">' + escapeHtml(row.currentStatusLabel) + '</span>';
     } else {
       html += '<span class="ocd-muted">Not asserted</span>';
     }
     html += '</td>';
-    html += '<td class="ocd-table-td ocd-mono"><span class="' + statusBadgeClass + '">' + escapeHtml(row.statusLabel) + '</span></td>';
-    html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(failedRequirements || '-') + '</td>';
-    html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(failedRecommendations || '-') + '</td>';
-    html += '<td class="ocd-table-td ocd-mono">';
+    html += '<td class="ocd-table-td"><span class="' + statusBadgeClass + '">' + escapeHtml(row.statusLabel) + '</span></td>';
+    html += '<td class="ocd-table-td ocd-criteria-column">' + renderCriterionChipList(row.failedRequirements, manifest) + '</td>';
+    html += '<td class="ocd-table-td ocd-criteria-column">' + renderCriterionChipList(row.failedRecommendations, manifest) + '</td>';
+    html += '<td class="ocd-table-td">';
     html += '<button class="ocd-btn ocd-btn-tertiary ocd-btn-small" type="button" data-toggle-resource-detail="' +
       escapeHtml(row.resource) +
       '">View</button>';
@@ -124,7 +120,7 @@ export function renderCurationTable(
       '" style="display:none;">';
     html += '<td class="ocd-table-td" colspan="999">';
     html += '<div class="ocd-resource-detail">' +
-      renderResourceDetailHtml(row, failuresIndex, resourceDetailsByIri) +
+      renderResourceDetailHtml(row, failuresIndex, resourceDetailsByIri, manifest) +
       '</div>';
     html += '</td>';
     html += '</tr>';
@@ -135,17 +131,56 @@ export function renderCurationTable(
 }
 
 /**
- * Renders one assertion table.
+ * Returns one display label for a criterion.
  *
- * @param {string} title
- * @param {ResourceAssertion[]} assertions
- * @param {'outgoing' | 'incoming'} direction
+ * @param {Manifest | null | undefined} manifest
+ * @param {string} criterionId
  * @returns {string}
  */
-function renderAssertionSection(title, assertions, direction) {
+function getCriterionDisplayLabel(manifest, criterionId) {
+  return getCriterionDefinition(manifest, criterionId)?.label || criterionId;
+}
+
+/**
+ * Renders one compact chip list for failed criteria.
+ *
+ * @param {string[] | null | undefined} criterionIds
+ * @param {Manifest | null | undefined} manifest
+ * @returns {string}
+ */
+function renderCriterionChipList(criterionIds, manifest) {
+  if (!Array.isArray(criterionIds) || !criterionIds.length) {
+    return '<span class="ocd-muted">-</span>';
+  }
+
+  let html = '<div class="ocd-chip-list ocd-chip-list-compact">';
+  for (const criterionId of criterionIds) {
+    html += '<span class="ocd-chip ocd-chip-criterion" title="' + escapeHtml(criterionId) + '">' +
+      escapeHtml(getCriterionDisplayLabel(manifest, criterionId)) +
+      '</span>';
+  }
+  html += '</div>';
+  return html;
+}
+
+/**
+ * Renders one merged assertion table.
+ *
+ * @param {ResourceDetail | null | undefined} resourceDetail
+ * @returns {string}
+ */
+function renderAssertionSection(resourceDetail) {
+  const outgoingAssertions = Array.isArray(resourceDetail?.outgoingAssertions)
+    ? resourceDetail.outgoingAssertions
+    : [];
+  const incomingAssertions = Array.isArray(resourceDetail?.incomingAssertions)
+    ? resourceDetail.incomingAssertions
+    : [];
+  const assertions = [...outgoingAssertions, ...incomingAssertions];
+
   let html = '<details class="ocd-resource-detail-section ocd-collapsible-section">';
   html += '<summary class="ocd-collapsible-summary">';
-  html += escapeHtml(title);
+  html += '<span>Assertions</span>';
   html += '<span class="ocd-table-meta">' + escapeHtml(`${assertions.length} assertion(s)`) + '</span>';
   html += '</summary>';
 
@@ -157,21 +192,25 @@ function renderAssertionSection(title, assertions, direction) {
 
   html += '<table class="ocd-table ocd-table-wide">';
   html += '<thead class="ocd-table-head"><tr>';
-  if (direction === 'incoming') {
-    html += '<th class="ocd-table-th">Subject</th>';
-  }
+  html += '<th class="ocd-table-th">Direction</th>';
   html += '<th class="ocd-table-th">Predicate</th>';
-  html += '<th class="ocd-table-th">Object</th>';
+  html += '<th class="ocd-table-th">Connected node / value</th>';
   html += '</tr></thead><tbody>';
 
   for (const assertion of assertions) {
     const showPredicateIri = assertion.predicateLabel !== assertion.predicateIri;
-    const showObjectMeta = assertion.object.displayValue !== assertion.object.value;
+    const isIncoming = assertion.direction === 'incoming';
+    const connectedValue = isIncoming ? assertion.subject : assertion.object.displayValue;
+    const connectedMeta = isIncoming
+      ? ''
+      : assertion.object.displayValue !== assertion.object.value
+        ? `${assertion.object.termType}: ${assertion.object.value}`
+        : '';
 
     html += '<tr class="ocd-table-tr">';
-    if (direction === 'incoming') {
-      html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(assertion.subject) + '</td>';
-    }
+    html += '<td class="ocd-table-td"><span class="ocd-chip ocd-chip-subtle">' +
+      escapeHtml(isIncoming ? 'Incoming' : 'Outgoing') +
+      '</span></td>';
     html += '<td class="ocd-table-td">';
     html += '<div>' + escapeHtml(assertion.predicateLabel) + '</div>';
     if (showPredicateIri) {
@@ -179,9 +218,9 @@ function renderAssertionSection(title, assertions, direction) {
     }
     html += '</td>';
     html += '<td class="ocd-table-td">';
-    html += '<div>' + escapeHtml(assertion.object.displayValue) + '</div>';
-    if (showObjectMeta) {
-      html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(assertion.object.termType) + ': ' + escapeHtml(assertion.object.value) + '</div>';
+    html += '<div class="' + (isIncoming ? 'ocd-mono' : '') + '">' + escapeHtml(connectedValue) + '</div>';
+    if (connectedMeta) {
+      html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(connectedMeta) + '</div>';
     }
     html += '</td>';
     html += '</tr>';
@@ -200,10 +239,14 @@ function renderAssertionSection(title, assertions, direction) {
  */
 function renderResourceEditor(row) {
   let html = '<details class="ocd-resource-detail-section ocd-collapsible-section">';
-  html += '<summary class="ocd-collapsible-summary">Stage resource edits</summary>';
+  html += '<summary class="ocd-collapsible-summary ocd-resource-editor-summary">';
+  html += '<span>Stage resource edits</span>';
+  html += '<span class="ocd-summary-chip">Edit</span>';
+  html += '</summary>';
   html += '<div class="ocd-editor-grid">';
   html += '<label class="ocd-filter">';
-  html += '<span class="ocd-label">Set curation status</span>';
+  html += '<span class="ocd-label">Curation status</span>';
+  html += '<div class="ocd-inline-field-actions">';
   html += '<select class="ocd-input ocd-select" data-resource-status-select="' + escapeHtml(row.resource) + '">';
   html += '<option value="" selected>Keep current values</option>';
 
@@ -214,23 +257,29 @@ function renderResourceEditor(row) {
   }
 
   html += '</select>';
+  html += '<button class="ocd-btn ocd-btn-secondary ocd-btn-small" type="button" data-apply-suggested-status="' + escapeHtml(row.resource) + '" data-suggested-status="' + escapeHtml(row.statusIri) + '">Use suggested</button>';
+  html += '</div>';
   html += '</label>';
   html += '<label class="ocd-filter">';
   html += '<span class="ocd-label">Curator note</span>';
   html += '<textarea class="ocd-input ocd-textarea" rows="2" data-resource-note="' + escapeHtml(row.resource) + '" data-predicate-iri="' + escapeHtml(OBO_IAO_0000232_IRI) + '"></textarea>';
   html += '</label>';
+  html += '<div class="ocd-filter ocd-filter-span-2">';
+  html += '<label class="ocd-checkbox">';
+  html += '<input type="checkbox" data-resource-deprecate-toggle="' + escapeHtml(row.resource) + '" data-deprecated-predicate-iri="' + escapeHtml(OWL_DEPRECATED_IRI) + '" />';
+  html += '<span><strong>Deprecate?</strong> Stage <span class="ocd-mono">owl:deprecated true</span> and optional replacement details.</span>';
+  html += '</label>';
+  html += '<div class="ocd-resource-deprecate-fields">';
   html += '<label class="ocd-filter">';
-  html += '<span class="ocd-label">Has obsolescence reason</span>';
+  html += '<span class="ocd-label">Obsolescence reason</span>';
   html += '<textarea class="ocd-input ocd-textarea" rows="2" data-resource-note="' + escapeHtml(row.resource) + '" data-predicate-iri="' + escapeHtml(OBO_IAO_0000231_IRI) + '"></textarea>';
   html += '</label>';
   html += '<label class="ocd-filter">';
   html += '<span class="ocd-label">Term replaced by</span>';
-  html += '<input class="ocd-input" type="text" data-resource-note="' + escapeHtml(row.resource) + '" data-predicate-iri="' + escapeHtml(OBO_IAO_0100001_IRI) + '" placeholder="IRI" />';
+  html += '<input class="ocd-input ocd-mono" type="text" data-resource-note="' + escapeHtml(row.resource) + '" data-predicate-iri="' + escapeHtml(OBO_IAO_0100001_IRI) + '" placeholder="IRI" />';
   html += '</label>';
-  html += '<label class="ocd-filter">';
-  html += '<span class="ocd-label">Comment</span>';
-  html += '<textarea class="ocd-input ocd-textarea" rows="2" data-resource-note="' + escapeHtml(row.resource) + '" data-predicate-iri="' + escapeHtml(RDFS_COMMENT_IRI) + '"></textarea>';
-  html += '</label>';
+  html += '</div>';
+  html += '</div>';
   html += '</div>';
 
   html += '<details class="ocd-resource-detail-section ocd-collapsible-section ocd-collapsible-nested">';
@@ -264,7 +313,6 @@ function renderResourceEditor(row) {
 
   html += '<div class="ocd-actions" style="margin-top:12px;">';
   html += '<button class="ocd-btn ocd-btn-primary" type="button" data-stage-resource-edit="' + escapeHtml(row.resource) + '" data-suggested-status="' + escapeHtml(row.statusIri) + '">Stage resource edits</button>';
-  html += '<button class="ocd-btn ocd-btn-secondary" type="button" data-apply-suggested-status="' + escapeHtml(row.resource) + '" data-suggested-status="' + escapeHtml(row.statusIri) + '">Use suggested status</button>';
   html += '</div>';
   html += '</details>';
   return html;
@@ -276,9 +324,10 @@ function renderResourceEditor(row) {
  * @param {PerResourceCurationRow} row
  * @param {FailureIndex | null | undefined} failuresIndex
  * @param {Record<string, ResourceDetail> | null | undefined} resourceDetailsByIri
+ * @param {Manifest | null | undefined} [manifest]
  * @returns {string}
  */
-export function renderResourceDetailHtml(row, failuresIndex, resourceDetailsByIri) {
+export function renderResourceDetailHtml(row, failuresIndex, resourceDetailsByIri, manifest = null) {
   let html = '';
   const resourceIri = row.resource;
   const resourceDetail = resourceDetailsByIri?.[resourceIri] || null;
@@ -311,17 +360,7 @@ export function renderResourceDetailHtml(row, failuresIndex, resourceDetailsByIr
     html += '</div>';
   }
 
-  html += renderAssertionSection(
-    'All outgoing assertions',
-    Array.isArray(resourceDetail?.outgoingAssertions) ? resourceDetail.outgoingAssertions : [],
-    'outgoing'
-  );
-
-  html += renderAssertionSection(
-    'Incoming assertions',
-    Array.isArray(resourceDetail?.incomingAssertions) ? resourceDetail.incomingAssertions : [],
-    'incoming'
-  );
+  html += renderAssertionSection(resourceDetail);
 
   html += '<div class="ocd-resource-detail-section">';
   html += '<div class="ocd-detail-section-title">Failing checks</div>';
@@ -331,13 +370,16 @@ export function renderResourceDetailHtml(row, failuresIndex, resourceDetailsByIr
   } else {
     html += '<table class="ocd-table ocd-table-wide" style="margin-top:10px;">';
     html += '<thead class="ocd-table-head"><tr>';
-    html += '<th class="ocd-table-th">Standardization Code</th>';
+    html += '<th class="ocd-table-th">Standard</th>';
     html += '<th class="ocd-table-th">Failing query IDs</th>';
     html += '</tr></thead><tbody>';
 
     for (const [criterionId, queryIdSet] of byCriterion.entries()) {
       html += '<tr class="ocd-table-tr">';
-      html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(criterionId) + '</td>';
+      html += '<td class="ocd-table-td">';
+      html += '<div>' + escapeHtml(getCriterionDisplayLabel(manifest, criterionId)) + '</div>';
+      html += '<div class="ocd-table-meta ocd-mono">' + escapeHtml(criterionId) + '</div>';
+      html += '</td>';
       html += '<td class="ocd-table-td ocd-mono">' + escapeHtml(Array.from(queryIdSet).join(', ')) + '</td>';
       html += '</tr>';
     }
@@ -361,6 +403,7 @@ export function renderResourceDetailHtml(row, failuresIndex, resourceDetailsByIr
  * @param {string} resourceIri
  * @param {FailureIndex | null | undefined} failuresIndex
  * @param {Record<string, ResourceDetail> | null | undefined} resourceDetailsByIri
+ * @param {Manifest | null | undefined} [manifest]
  * @param {PerResourceCurationRow[] | null | undefined} [perResourceRows]
  * @param {HTMLElement | null | undefined} [container=curationTableContainer]
  * @returns {void}
@@ -369,6 +412,7 @@ export function toggleResourceDetail(
   resourceIri,
   failuresIndex,
   resourceDetailsByIri,
+  manifest = null,
   perResourceRows = null,
   container = curationTableContainer
 ) {
@@ -405,5 +449,5 @@ export function toggleResourceDetail(
     return;
   }
 
-  panel.innerHTML = renderResourceDetailHtml(row, failuresIndex, resourceDetailsByIri);
+  panel.innerHTML = renderResourceDetailHtml(row, failuresIndex, resourceDetailsByIri, manifest);
 }

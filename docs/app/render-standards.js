@@ -132,30 +132,31 @@ export function renderStandardDetail(
   html += '  </div>';
 
   html += '  <div class="ocd-detail-section">';
-  html += '    <div class="ocd-detail-section-title">Criterion</div>';
-  html += `    <div class="ocd-detail-meta ocd-mono">${escapeHtml(selectedStandard.id)}</div>`;
-  html +=
-    '    <div class="ocd-detail-meta">Status: <strong>' +
-    escapeHtml(selectedStandard.status) +
-    '</strong> (' +
-    escapeHtml(selectedStandard.type) +
-    ')</div>';
-  html +=
-    '    <div class="ocd-detail-meta">Remediation effort: <strong>' +
-    escapeHtml(criterion?.remediationEffort || 'case-by-case') +
-    '</strong></div>';
-  html +=
-    '    <div class="ocd-detail-meta">Failing resources: <strong>' +
-    escapeHtml(resources.length) +
-    '</strong></div>';
+  html += '    <table class="ocd-table ocd-table-wide ocd-detail-facts-table">';
+  html += '      <tbody>';
+  html += '        <tr>';
+  html += '          <th class="ocd-table-th ocd-detail-facts-label">Criterion</th>';
+  html += `          <td class="ocd-table-td ocd-mono">${escapeHtml(selectedStandard.id)}</td>`;
+  html += '        </tr>';
+  html += '        <tr>';
+  html += '          <th class="ocd-table-th ocd-detail-facts-label">Status</th>';
+  html += `          <td class="ocd-table-td">${escapeHtml(selectedStandard.status)}</td>`;
+  html += '        </tr>';
+  html += '        <tr>';
+  html += '          <th class="ocd-table-th ocd-detail-facts-label">Remediation effort</th>';
+  html += `          <td class="ocd-table-td">${escapeHtml(criterion?.remediationEffort || 'case-by-case')}</td>`;
+  html += '        </tr>';
+  html += '        <tr>';
+  html += '          <th class="ocd-table-th ocd-detail-facts-label">Failing resources</th>';
+  html += `          <td class="ocd-table-td">${escapeHtml(String(resources.length))}</td>`;
+  html += '        </tr>';
+  html += '        <tr>';
+  html += '          <th class="ocd-table-th ocd-detail-facts-label">Brief guidance</th>';
+  html += `          <td class="ocd-table-td">${escapeHtml(criterion?.guidance || 'No brief guidance is available.')}</td>`;
+  html += '        </tr>';
+  html += '      </tbody>';
+  html += '    </table>';
   html += '  </div>';
-
-  if (criterion?.guidance) {
-    html += '  <div class="ocd-detail-section">';
-    html += '    <div class="ocd-detail-section-title">Brief guidance</div>';
-    html += `    <p>${escapeHtml(criterion.guidance)}</p>`;
-    html += '  </div>';
-  }
 
   if (relatedQueries.length || queryIds.length) {
     html += '  <div class="ocd-detail-section">';
@@ -189,7 +190,7 @@ export function renderStandardDetail(
   if (!entries.length) {
     html += '  <p>No failing resources found in details.</p>';
   } else {
-    html += '  <table class="ocd-table">';
+    html += '  <table class="ocd-table ocd-table-wide">';
     html += '    <thead class="ocd-table-head">';
     html += '      <tr>';
     html += '        <th class="ocd-table-th">Resource IRI</th>';

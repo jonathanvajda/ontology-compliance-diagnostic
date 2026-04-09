@@ -7,7 +7,9 @@ import {
   buildPreflightSummaryFromStore,
   deriveDefaultIncludedNamespaces,
   extractResourceDetail,
-  SUPPORTED_RDF_FORMATS
+  OWL_DEPRECATED_IRI,
+  SUPPORTED_RDF_FORMATS,
+  XSD_BOOLEAN_IRI
 } from './engine.js';
 import { buildFailuresIndex } from './grader.js';
 import { inspectStore } from './report-model.js';
@@ -503,7 +505,7 @@ function initTheme() {
 function clearRenderedViews() {
   renderDashboard(lastBatchReports, selectedBatchKey, dashboardContainer);
   renderOntologyReport(null, lastInspectionScope, lastManifest, null, ontologyReportContainer);
-  renderCurationTable([], lastFailuresIndex, lastResourceDetails, new Set(), curationTableContainer);
+  renderCurationTable([], lastFailuresIndex, lastResourceDetails, lastManifest, new Set(), curationTableContainer);
   updateCurationFiltersVisibility();
   renderEditSessionUi();
 
@@ -729,6 +731,7 @@ function renderActiveInspectionViews() {
     lastPerResource,
     lastFailuresIndex,
     lastResourceDetails,
+    lastManifest,
     new Set(activeEditSession?.selectedResources || []),
     curationTableContainer
   );
@@ -1298,6 +1301,11 @@ function stageResourcePanelEdits(resourceIri) {
   const statusSelect = curationTableContainer?.querySelector(
     `[data-resource-status-select="${cssEscapeAttr(resourceIri)}"]`
   );
+  const deprecateToggle = /** @type {HTMLInputElement | null} */ (
+    curationTableContainer?.querySelector(
+      `[data-resource-deprecate-toggle="${cssEscapeAttr(resourceIri)}"]`
+    )
+  );
   const noteInputs = Array.from(
     curationTableContainer?.querySelectorAll(
       `[data-resource-note="${cssEscapeAttr(resourceIri)}"]`
@@ -1345,6 +1353,17 @@ function stageResourcePanelEdits(resourceIri) {
 
     const predicateIri = input.getAttribute('data-predicate-iri') || '';
     const value = String(input.value || '').trim();
+    const isDeprecationOnlyField =
+      predicateIri === 'http://purl.obolibrary.org/obo/IAO_0000231' ||
+      predicateIri === 'http://purl.obolibrary.org/obo/IAO_0100001';
+
+    if (
+      isDeprecationOnlyField &&
+      !(deprecateToggle instanceof HTMLInputElement && deprecateToggle.checked)
+    ) {
+      continue;
+    }
+
     if (!predicateIri || !value) {
       continue;
     }
@@ -1352,6 +1371,15 @@ function stageResourcePanelEdits(resourceIri) {
     stageReplacement(resourceIri, predicateIri, [{
       termType: predicateIri === 'http://purl.obolibrary.org/obo/IAO_0100001' ? 'NamedNode' : 'Literal',
       value
+    }]);
+    stagedCount += 1;
+  }
+
+  if (deprecateToggle instanceof HTMLInputElement && deprecateToggle.checked) {
+    stageReplacement(resourceIri, OWL_DEPRECATED_IRI, [{
+      termType: 'Literal',
+      value: 'true',
+      datatypeIri: XSD_BOOLEAN_IRI
     }]);
     stagedCount += 1;
   }
@@ -2246,6 +2274,7 @@ async function initializeApp() {
         resourceIri,
         lastFailuresIndex,
         lastResourceDetails,
+        lastManifest,
         lastPerResource,
         curationTableContainer
       );

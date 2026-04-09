@@ -129,7 +129,7 @@ export function renderEditSession(editSession, container = editSessionContainer)
   html += '</div>';
   html += '</div>';
 
-  html += '<div class="ocd-edit-session-card">';
+  html += '<div class="ocd-edit-session-card ocd-edit-session-card-staged">';
   html += '<strong>Staged changes</strong>';
   if (!stagedEdits.length) {
     html += '<p class="ocd-muted" style="margin-top:12px;">No staged edits yet.</p>';
@@ -152,7 +152,9 @@ export function renderEditSession(editSession, container = editSessionContainer)
   html += '</div>';
   html += '</div>';
 
-  html += '<div class="ocd-edit-session-card">';
+  html += '</div>';
+
+  html += '<div class="ocd-edit-session-card ocd-edit-session-card-actions">';
   html += '<strong>Rerun and export</strong>';
   if (rerunReport?.ontologyReport) {
     html += '<div class="ocd-table-meta" style="margin-top:12px;">Latest rerun ontology status: <strong>' + escapeHtml(rerunReport.ontologyReport.statusLabel || '') + '</strong></div>';
@@ -175,8 +177,6 @@ export function renderEditSession(editSession, container = editSessionContainer)
   html += '<button class="ocd-btn ocd-btn-primary" type="button" data-rerun-edits>Rerun full inspection</button>';
   html += '<button class="ocd-btn ocd-btn-secondary" type="button" data-export-edited-ontology>Export edited ontology</button>';
   html += '</div>';
-  html += '</div>';
-
   html += '</div>';
   container.innerHTML = html;
 }
