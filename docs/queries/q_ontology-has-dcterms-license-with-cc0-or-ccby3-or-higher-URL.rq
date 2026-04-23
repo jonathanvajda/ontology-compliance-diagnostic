@@ -2,9 +2,9 @@ PREFIX owl: <http://www.w3.org/2002/07/owl#>
 PREFIX dcterms: <http://purl.org/dc/terms/>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
-SELECT DISTINCT ?ont ?license
+SELECT DISTINCT ?resource ?license
 WHERE {
-  ?ont a owl:Ontology ;
+  ?resource a owl:Ontology ;
        dcterms:license ?license .
 
   BIND(LCASE(STR(?license)) AS ?lic)
@@ -28,4 +28,4 @@ WHERE {
     )
   )
 }
-ORDER BY ?ont ?license
+ORDER BY ?resource ?license

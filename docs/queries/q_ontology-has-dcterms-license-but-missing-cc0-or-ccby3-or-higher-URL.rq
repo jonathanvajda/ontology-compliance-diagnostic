@@ -1,9 +1,9 @@
 PREFIX owl: <http://www.w3.org/2002/07/owl#>
 PREFIX dcterms: <http://purl.org/dc/terms/>
 
-SELECT ?ont ?license
+SELECT ?resource ?license
 WHERE {
-  ?ont a owl:Ontology ;
+  ?resource a owl:Ontology ;
        dcterms:license ?license .
 
   FILTER(
@@ -14,4 +14,3 @@ WHERE {
     )
   )
 }
-ORDER BY ?ont ?license

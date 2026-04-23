@@ -37,6 +37,11 @@ import {
  * @typedef {Object} EvaluateAllQueriesOptions
  * @property {string} [manifestUrl]
  * @property {string} [queryBasePath]
+ * @property {Manifest | null | undefined} [manifest]
+ * @property {string[] | Set<string> | null | undefined} [resultResourceFilter]
+ * @property {string[] | null | undefined} [resourceInventory]
+ * @property {any} [resourceDetailsStore]
+ * @property {any} [ontologyMetadataStore]
  * @property {(progress: { fileName: string, queryId: string, completedQueries: number, totalQueries: number }) => void} [onQueryProgress]
  */
 
@@ -68,6 +73,7 @@ export const OWL_ONTOLOGY_IRI = 'http://www.w3.org/2002/07/owl#Ontology';
 export const OWL_IMPORTS_IRI = 'http://www.w3.org/2002/07/owl#imports';
 export const OWL_VERSION_IRI = 'http://www.w3.org/2002/07/owl#versionIRI';
 export const OWL_VERSION_INFO_IRI = 'http://www.w3.org/2002/07/owl#versionInfo';
+export const OWL_DEPRECATED_IRI = 'http://www.w3.org/2002/07/owl#deprecated';
 export const DCTERMS_TITLE_IRI = 'http://purl.org/dc/terms/title';
 export const DCTERMS_DESCRIPTION_IRI = 'http://purl.org/dc/terms/description';
 export const DCTERMS_LICENSE_IRI = 'http://purl.org/dc/terms/license';
@@ -90,12 +96,15 @@ export const SKOS_DEFINITION_IRI = 'http://www.w3.org/2004/02/skos/core#definiti
 export const SKOS_ALT_LABEL_IRI = 'http://www.w3.org/2004/02/skos/core#altLabel';
 export const SKOS_EXAMPLE_IRI = 'http://www.w3.org/2004/02/skos/core#example';
 export const SKOS_SCOPE_NOTE_IRI = 'http://www.w3.org/2004/02/skos/core#scopeNote';
+export const XSD_BOOLEAN_IRI = 'http://www.w3.org/2001/XMLSchema#boolean';
 export const OBO_IAO_0000115_IRI = 'http://purl.obolibrary.org/obo/IAO_0000115';
 export const OBO_IAO_0000118_IRI = 'http://purl.obolibrary.org/obo/IAO_0000118';
 export const OBO_IAO_0000112_IRI = 'http://purl.obolibrary.org/obo/IAO_0000112';
 export const OBO_IAO_0000119_IRI = 'http://purl.obolibrary.org/obo/IAO_0000119';
 export const OBO_IAO_0000114_IRI = 'http://purl.obolibrary.org/obo/IAO_0000114';
+export const OBO_IAO_0000231_IRI = 'http://purl.obolibrary.org/obo/IAO_0000231';
 export const OBO_IAO_0000232_IRI = 'http://purl.obolibrary.org/obo/IAO_0000232';
+export const OBO_IAO_0100001_IRI = 'http://purl.obolibrary.org/obo/IAO_0100001';
 export const CCO_ACRONYM_IRI = 'http://www.ontologyrepository.com/CommonCoreOntologies/ont00001753';
 export const CCO_CURATED_IN_ONTOLOGY_IRI = 'http://www.ontologyrepository.com/CommonCoreOntologies/ont00001760';
 
@@ -116,7 +125,9 @@ const RESOURCE_DETAIL_PREDICATES = Object.freeze([
   { id: 'isDefinedBy', predicateIri: RDFS_IS_DEFINED_BY_IRI, label: 'Is defined by' },
   { id: 'curatedInOntology', predicateIri: CCO_CURATED_IN_ONTOLOGY_IRI, label: 'Is curated in ontology' },
   { id: 'curationStatus', predicateIri: OBO_IAO_0000114_IRI, label: 'Has curation status' },
+  { id: 'obsolescenceReason', predicateIri: OBO_IAO_0000231_IRI, label: 'Has obsolescence reason' },
   { id: 'curatorNote', predicateIri: OBO_IAO_0000232_IRI, label: 'Curator note' },
+  { id: 'termReplacedBy', predicateIri: OBO_IAO_0100001_IRI, label: 'Term replaced by' },
   { id: 'subClassOf', predicateIri: RDFS_SUBCLASS_OF_IRI, label: 'SubClassOf' },
   { id: 'subPropertyOf', predicateIri: RDFS_SUBPROPERTY_OF_IRI, label: 'SubPropertyOf' },
   { id: 'inverseOf', predicateIri: OWL_INVERSE_OF_IRI, label: 'Inverse property' },
@@ -133,6 +144,14 @@ const KNOWN_IRI_LABELS = Object.freeze({
   [OWL_DATATYPE_PROPERTY_IRI]: 'owl:DatatypeProperty',
   [OWL_ANNOTATION_PROPERTY_IRI]: 'owl:AnnotationProperty'
 });
+
+/** @type {Readonly<Record<string, string>>} */
+const RESOURCE_DETAIL_LABELS_BY_PREDICATE = Object.freeze(
+  RESOURCE_DETAIL_PREDICATES.reduce((accumulator, descriptor) => {
+    accumulator[descriptor.predicateIri] = descriptor.label;
+    return accumulator;
+  }, /** @type {Record<string, string>} */ ({}))
+);
 
 export const SUPPORTED_RDF_FORMATS = RDF_FORMATS;
 export const SUPPORTED_RDF_EXTENSIONS = RDF_EXTENSIONS;
@@ -226,12 +245,8 @@ export async function loadOntologyIntoStore(ontologyText, fileName = 'ontology.t
  * @returns {Promise<any[]>}
  */
 export async function collectBindingsStream(stream) {
-  if (stream && typeof stream[Symbol.asyncIterator] === 'function') {
-    const rows = [];
-    for await (const row of stream) {
-      rows.push(row);
-    }
-    return rows;
+  if (stream && typeof stream.toArray === 'function') {
+    return stream.toArray();
   }
 
   if (stream && typeof stream.on === 'function') {
@@ -248,6 +263,14 @@ export async function collectBindingsStream(stream) {
         stream.on('error', /** @param {unknown} error */ (error) => reject(error));
       }
     );
+  }
+
+  if (stream && typeof stream[Symbol.asyncIterator] === 'function') {
+    const rows = [];
+    for await (const row of stream) {
+      rows.push(row);
+    }
+    return rows;
   }
 
   throw new Error('Unsupported bindings stream shape returned by Comunica.');
@@ -536,6 +559,164 @@ export function getNormalizedObjectValues(store, subjectIri, predicateIri) {
 }
 
 /**
+ * Returns a readable label for one predicate IRI.
+ *
+ * @param {string} predicateIri
+ * @returns {string}
+ */
+export function getPredicateLabel(predicateIri) {
+  return RESOURCE_DETAIL_LABELS_BY_PREDICATE[predicateIri] || predicateIri;
+}
+
+/**
+ * Returns a display value for one literal term.
+ *
+ * @param {any} term
+ * @returns {string}
+ */
+function getLiteralDisplayValue(term) {
+  const value = String(term?.value || '');
+  const language = String(term?.language || '');
+  const datatypeIri = String(term?.datatype?.value || '');
+
+  if (language) {
+    return `"${value}"@${language}`;
+  }
+  if (datatypeIri && datatypeIri !== 'http://www.w3.org/2001/XMLSchema#string') {
+    return `"${value}"^^${datatypeIri}`;
+  }
+  return value;
+}
+
+/**
+ * Returns a display value for one named node.
+ *
+ * @param {any} store
+ * @param {string} iri
+ * @param {string} predicateIri
+ * @returns {string}
+ */
+function getNamedNodeDisplayValue(store, iri, predicateIri) {
+  if (!iri) {
+    return '';
+  }
+  if (predicateIri === OBO_IAO_0000114_IRI) {
+    return getCurationStatusLabel(iri);
+  }
+
+  const label = getFirstObjectValue(store, iri, RDFS_LABEL_IRI);
+  return label || KNOWN_IRI_LABELS[iri] || iri;
+}
+
+/**
+ * Converts one RDF/JS term to a stable assertion-object view model.
+ *
+ * @param {any} store
+ * @param {string} predicateIri
+ * @param {any} term
+ * @returns {import('./types.js').ResourceAssertionObject}
+ */
+function toAssertionObject(store, predicateIri, term) {
+  const termType = String(term?.termType || 'Literal');
+  if (termType === 'NamedNode') {
+    const value = String(term?.value || '');
+    return {
+      termType: 'NamedNode',
+      value,
+      displayValue: getNamedNodeDisplayValue(store, value, predicateIri)
+    };
+  }
+  if (termType === 'BlankNode') {
+    const value = String(term?.value || '');
+    return {
+      termType: 'BlankNode',
+      value,
+      displayValue: `_:${value}`
+    };
+  }
+
+  const value = String(term?.value || '');
+  return {
+    termType: 'Literal',
+    value,
+    displayValue: getLiteralDisplayValue(term),
+    ...(term?.language ? { language: String(term.language) } : {}),
+    ...(term?.datatype?.value ? { datatypeIri: String(term.datatype.value) } : {})
+  };
+}
+
+/**
+ * Sorts assertion rows in a stable display order.
+ *
+ * @param {import('./types.js').ResourceAssertion[]} assertions
+ * @returns {import('./types.js').ResourceAssertion[]}
+ */
+function sortAssertions(assertions) {
+  return assertions.sort((left, right) => {
+    const predicateCompare = String(left.predicateLabel).localeCompare(String(right.predicateLabel));
+    if (predicateCompare !== 0) {
+      return predicateCompare;
+    }
+    return String(left.object.displayValue).localeCompare(String(right.object.displayValue));
+  });
+}
+
+/**
+ * Extracts all outgoing assertions for one resource.
+ *
+ * @param {any} store
+ * @param {string} resourceIri
+ * @returns {import('./types.js').ResourceAssertion[]}
+ */
+export function extractOutgoingAssertions(store, resourceIri) {
+  const quads = store?.getQuads ? store.getQuads(resourceIri, null, null, null) : [];
+  /** @type {import('./types.js').ResourceAssertion[]} */
+  const assertions = [];
+
+  for (const quad of quads) {
+    assertions.push({
+      subject: resourceIri,
+      predicateIri: String(quad?.predicate?.value || ''),
+      predicateLabel: getPredicateLabel(String(quad?.predicate?.value || '')),
+      object: toAssertionObject(store, String(quad?.predicate?.value || ''), quad?.object),
+      direction: 'outgoing'
+    });
+  }
+
+  return sortAssertions(assertions);
+}
+
+/**
+ * Extracts all incoming assertions for one resource.
+ *
+ * @param {any} store
+ * @param {string} resourceIri
+ * @returns {import('./types.js').ResourceAssertion[]}
+ */
+export function extractIncomingAssertions(store, resourceIri) {
+  const quads = store?.getQuads ? store.getQuads(null, null, resourceIri, null) : [];
+  /** @type {import('./types.js').ResourceAssertion[]} */
+  const assertions = [];
+
+  for (const quad of quads) {
+    const subject = String(quad?.subject?.value || '');
+    assertions.push({
+      subject,
+      predicateIri: String(quad?.predicate?.value || ''),
+      predicateLabel: getPredicateLabel(String(quad?.predicate?.value || '')),
+      object: {
+        termType: 'NamedNode',
+        value: resourceIri,
+        displayValue: getNamedNodeDisplayValue(store, resourceIri, String(quad?.predicate?.value || ''))
+      },
+      direction: 'incoming'
+    });
+  }
+
+  return sortAssertions(assertions);
+}
+
+/**
  * Extracts compact resource details for one resource IRI.
  *
  * @param {any} store
@@ -561,7 +742,10 @@ export function extractResourceDetail(store, resourceIri) {
 
   return {
     resource: resourceIri,
-    fields
+    fields,
+    recognizedFields: fields,
+    outgoingAssertions: extractOutgoingAssertions(store, resourceIri),
+    incomingAssertions: extractIncomingAssertions(store, resourceIri)
   };
 }
 
@@ -610,6 +794,25 @@ export function collectLabeledResources(store) {
   }
 
   return Array.from(labeled);
+}
+
+/**
+ * Returns named resources directly asserted as subjects in the supplied store.
+ *
+ * @param {any} store
+ * @returns {string[]}
+ */
+export function collectAssertedNamedResources(store) {
+  const resources = new Set();
+  const quads = store?.getQuads ? store.getQuads(null, null, null, null) : [];
+
+  for (const quad of quads) {
+    if (quad?.subject?.termType === 'NamedNode' && quad.subject.value) {
+      resources.add(quad.subject.value);
+    }
+  }
+
+  return Array.from(resources).sort((left, right) => left.localeCompare(right));
 }
 
 /**
@@ -712,14 +915,13 @@ export function deriveDefaultIncludedNamespaces(summary) {
 }
 
 /**
- * Builds a lightweight preflight summary from ontology text.
+ * Builds a lightweight preflight summary from an already-loaded store.
  *
- * @param {string} ontologyText
+ * @param {any} store
  * @param {string} [fileName='ontology.ttl']
- * @returns {Promise<PreflightSummary>}
+ * @returns {PreflightSummary}
  */
-export async function buildPreflightSummary(ontologyText, fileName = 'ontology.ttl') {
-  const store = await loadOntologyIntoStore(ontologyText, fileName);
+export function buildPreflightSummaryFromStore(store, fileName = 'ontology.ttl') {
   const metadata = extractOntologyMetadata(store, fileName);
   const discoveredNamespaces = extractNamespacesFromStore(store);
 
@@ -731,6 +933,18 @@ export async function buildPreflightSummary(ontologyText, fileName = 'ontology.t
     discoveredNamespaces,
     resourceCountEstimate: metadata.labeledResourceCount || 0
   };
+}
+
+/**
+ * Builds a lightweight preflight summary from ontology text.
+ *
+ * @param {string} ontologyText
+ * @param {string} [fileName='ontology.ttl']
+ * @returns {Promise<PreflightSummary>}
+ */
+export async function buildPreflightSummary(ontologyText, fileName = 'ontology.ttl') {
+  const store = await loadOntologyIntoStore(ontologyText, fileName);
+  return buildPreflightSummaryFromStore(store, fileName);
 }
 
 /**
@@ -861,26 +1075,37 @@ export async function evaluateSingleQuery(store, queryDefinition, queryText) {
 }
 
 /**
- * Evaluates all manifest queries against an ontology text input.
+ * Evaluates all manifest queries against an already-loaded RDF store.
  *
- * @param {string} ontologyText
+ * @param {any} store
  * @param {string} [fileName='ontology.ttl']
- * @param {EvaluateAllQueriesOptions} [options]
+ * @param {EvaluateAllQueriesOptions & { manifest?: Manifest | null | undefined }} [options]
  * @returns {Promise<EvaluateAllQueriesOutput>}
  */
-export async function evaluateAllQueries(
-  ontologyText,
+export async function evaluateQueriesAgainstStore(
+  store,
   fileName = 'ontology.ttl',
   options = {}
 ) {
+  if (!store || typeof store.getQuads !== 'function') {
+    throw new TypeError('evaluateQueriesAgainstStore() requires an RDF/JS-compatible store.');
+  }
+
   const manifestUrl = options.manifestUrl || DEFAULT_MANIFEST_URL;
   const queryBasePath = options.queryBasePath || DEFAULT_QUERY_BASE_PATH;
-
-  const store = await loadOntologyIntoStore(ontologyText, fileName);
-  const manifest = await loadManifest(manifestUrl);
-  const ontologyMetadata = extractOntologyMetadata(store, fileName);
+  const manifest = options.manifest || await loadManifest(manifestUrl);
+  const ontologyMetadataStore = options.ontologyMetadataStore || store;
+  const resourceDetailsStore = options.resourceDetailsStore || store;
+  const ontologyMetadata = extractOntologyMetadata(ontologyMetadataStore, fileName);
   const totalQueries = Array.isArray(manifest.queries) ? manifest.queries.length : 0;
-  const resources = collectLabeledResources(store);
+  const resources = Array.isArray(options.resourceInventory)
+    ? Array.from(new Set(options.resourceInventory.filter(Boolean))).sort((left, right) => left.localeCompare(right))
+    : collectLabeledResources(resourceDetailsStore);
+  const resultResourceFilter = options.resultResourceFilter instanceof Set
+    ? options.resultResourceFilter
+    : Array.isArray(options.resultResourceFilter)
+      ? new Set(options.resultResourceFilter.filter(Boolean))
+      : null;
 
   /** @type {QueryResultRow[]} */
   const allResults = [];
@@ -892,7 +1117,8 @@ export async function evaluateAllQueries(
       const queryText = await loadQueryText(queryDefinition, queryBasePath);
       const rows = await evaluateSingleQuery(store, queryDefinition, queryText);
       console.timeEnd(queryDefinition.id);
-      allResults.push(...rows);
+      const filteredRows = filterResultsByResourceSet(rows, resultResourceFilter);
+      allResults.push(...filteredRows);
     } catch (error) {
       console.error(`Error evaluating query ${queryDefinition.id}:`, error);
     } finally {
@@ -908,7 +1134,7 @@ export async function evaluateAllQueries(
     }
   }
 
-  const resourceDetails = extractResourceDetails(store, resources, allResults);
+  const resourceDetails = extractResourceDetails(resourceDetailsStore, resources, allResults);
 
   return {
     results: allResults,
@@ -917,4 +1143,53 @@ export async function evaluateAllQueries(
     ontologyIri: ontologyMetadata.ontologyIri,
     ontologyMetadata
   };
+}
+
+/**
+ * Returns true when the query scope should be filtered by resource ownership.
+ *
+ * @param {string | null | undefined} scope
+ * @returns {boolean}
+ */
+function isResourceScopedQueryScope(scope) {
+  return scope === 'resource' || scope === 'TBox';
+}
+
+/**
+ * Filters resource/TBox query rows to a supplied owned-resource set.
+ *
+ * Ontology-scoped rows are preserved unchanged.
+ *
+ * @param {QueryResultRow[]} rows
+ * @param {Set<string> | null | undefined} ownedResources
+ * @returns {QueryResultRow[]}
+ */
+export function filterResultsByResourceSet(rows, ownedResources) {
+  if (!(ownedResources instanceof Set)) {
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    if (!row || !isResourceScopedQueryScope(row.scope)) {
+      return true;
+    }
+    return !!row.resource && ownedResources.has(row.resource);
+  });
+}
+
+/**
+ * Evaluates all manifest queries against an ontology text input.
+ *
+ * @param {string} ontologyText
+ * @param {string} [fileName='ontology.ttl']
+ * @param {EvaluateAllQueriesOptions} [options]
+ * @returns {Promise<EvaluateAllQueriesOutput>}
+ */
+export async function evaluateAllQueries(
+  ontologyText,
+  fileName = 'ontology.ttl',
+  options = {}
+) {
+  const store = await loadOntologyIntoStore(ontologyText, fileName);
+  return evaluateQueriesAgainstStore(store, fileName, options);
 }

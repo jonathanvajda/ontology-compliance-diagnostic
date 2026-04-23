@@ -96,13 +96,15 @@ describe('report/export regression coverage', () => {
       buildFilteredResourcesCsv([
         {
           resource: 'http://example.org/A',
+          currentStatusIri: 'http://purl.obolibrary.org/obo/IAO_0000124',
+          currentStatusLabel: 'uncurated',
           statusIri: 'http://purl.obolibrary.org/obo/IAO_0000123',
           statusLabel: 'metadata incomplete',
           failedRequirements: ['STD:REQ'],
           failedRecommendations: ['STD:REC']
         }
       ])
-    ).toContain('failedRequirementsCount,failedRecommendationsCount');
+    ).toContain('currentStatusIri,currentStatusLabel,statusIri,statusLabel');
 
     expect(
       buildBatchSummaryCsv([
@@ -209,6 +211,8 @@ describe('report/export regression coverage', () => {
       perResourceRows: [
         {
           resource: 'http://example.org/A',
+          currentStatusIri: 'status:0',
+          currentStatusLabel: 'uncurated',
           statusIri: 'status:1',
           statusLabel: 'metadata incomplete',
           failedRequirements: ['STD:REQ'],
@@ -234,5 +238,6 @@ describe('report/export regression coverage', () => {
     expect(html).toContain('Preferred label');
     expect(html).toContain('Add one preferred label.');
     expect(html).toContain('http://example.org/A');
+    expect(html).toContain('uncurated');
   });
 });
