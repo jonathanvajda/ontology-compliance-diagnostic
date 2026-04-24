@@ -70,6 +70,123 @@ describe('report/export regression coverage', () => {
     ]);
   });
 
+  test('buildExternalDependenciesSeedText writes ontology slim seed rows', async () => {
+    const {
+      buildExternalDependenciesSeedText,
+      buildImportSnippetText,
+      deriveImportCandidates
+    } = await import('../docs/app/measures-export.js');
+
+    expect(buildExternalDependenciesSeedText([
+      {
+        iri: 'http://example.org/import/B',
+        label: 'Imported B',
+        curatedIn: 'http://example.org/import/ontology',
+        reasons: ['object']
+      }
+    ])).toBe('http://example.org/import/B # Imported B # # http://example.org/import/ontology\n');
+
+    expect(buildExternalDependenciesSeedText([
+      {
+        iri: 'http://example.org/import/B',
+        label: 'Imported B',
+        curatedIn: 'http://example.org/import/z',
+        reasons: ['object']
+      },
+      {
+        iri: 'http://example.org/import/A',
+        label: 'Imported A',
+        curatedIn: 'http://example.org/import/a',
+        reasons: ['object']
+      }
+    ], 'curated_in')).toBe(
+      'http://example.org/import/A # Imported A # # http://example.org/import/a\n' +
+      'http://example.org/import/B # Imported B # # http://example.org/import/z\n'
+    );
+
+    expect(buildImportSnippetText('http://example.org/onto', ['http://example.org/import/one'], 'ttl'))
+      .toBe('owl:imports <http://example.org/import/one> .');
+    expect(buildImportSnippetText('http://example.org/onto', ['http://example.org/import/one'], 'rdfxml'))
+      .toBe('<owl:imports rdf:resource="http://example.org/import/one"/>');
+    expect(buildImportSnippetText('http://example.org/onto', ['http://example.org/import/one'], 'ntriples'))
+      .toBe('<http://example.org/onto> <http://www.w3.org/2002/07/owl#imports> <http://example.org/import/one> .');
+    expect(buildImportSnippetText('http://example.org/onto', ['http://example.org/import/one', 'http://example.org/import/two'], 'jsonld'))
+      .toContain('"http://www.w3.org/2002/07/owl#imports"');
+
+    expect(deriveImportCandidates([
+      {
+        iri: 'http://example.org/import/B',
+        label: 'Imported B',
+        curatedIn: 'http://example.org/import/ontology-b',
+        reasons: ['object']
+      },
+      {
+        iri: 'http://example.org/import/A',
+        label: 'Imported A',
+        curatedIn: 'http://example.org/import/ontology-a',
+        reasons: ['object']
+      }
+    ], ['http://example.org/import/ontology-b'])).toEqual({
+      allCandidates: [
+        'http://example.org/import/ontology-a',
+        'http://example.org/import/ontology-b'
+      ],
+      missingCandidates: [
+        'http://example.org/import/ontology-a'
+      ]
+    });
+  });
+
+  test('measures export builders serialize basic formats', async () => {
+    const {
+      buildAllMeasuresCsv,
+      buildAllMeasuresHtml,
+      buildAllMeasuresJson,
+      buildAllMeasuresTsv,
+      buildAllMeasuresYaml,
+      buildMeasuresCsv,
+      buildMeasuresHtml,
+      buildMeasuresJson,
+      buildMeasuresTsv,
+      buildMeasuresYaml
+    } = await import('../docs/app/measures-export.js');
+
+    const metrics = [
+      {
+        metric: 'class_count',
+        metricValue: 3,
+        metricType: 'single_value',
+        explanation: 'Number of classes in the ontology.'
+      },
+      {
+        metric: 'datatypes_builtin',
+        metricValue: ['BOOLEAN'],
+        metricType: 'list_value',
+        explanation: 'Datatypes used from the built-in datatype map.'
+      }
+    ];
+
+    expect(buildMeasuresCsv(metrics)).toContain('metric,metric_value,metric_type,explanation');
+    expect(buildMeasuresTsv(metrics)).toContain('metric\tmetric_value\tmetric_type\texplanation');
+    expect(buildMeasuresJson(metrics)).toContain('"metric": "class_count"');
+    expect(buildMeasuresYaml(metrics)).toContain('metrics:');
+    expect(buildMeasuresHtml('Example measures', metrics)).toContain('<h1>Example measures</h1>');
+
+    const analyses = [
+      {
+        fileName: 'example.owl',
+        ontologyIri: 'http://example.org/onto',
+        metrics
+      }
+    ];
+
+    expect(buildAllMeasuresCsv(analyses)).toContain('fileName,ontologyIri,metric,metric_value,metric_type,explanation');
+    expect(buildAllMeasuresTsv(analyses)).toContain('fileName\tontologyIri\tmetric\tmetric_value\tmetric_type\texplanation');
+    expect(buildAllMeasuresJson(analyses)).toContain('"fileName": "example.owl"');
+    expect(buildAllMeasuresYaml(analyses)).toContain('analyses:');
+    expect(buildAllMeasuresHtml('All measures', analyses)).toContain('<h1>All measures</h1>');
+  });
+
   test('buildResultsCsv, buildFilteredResourcesCsv, and buildBatchSummaryCsv serialize stable columns', async () => {
     const {
       buildBatchSummaryCsv,

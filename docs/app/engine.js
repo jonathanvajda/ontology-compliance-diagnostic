@@ -93,6 +93,7 @@ export const RDFS_DOMAIN_IRI = 'http://www.w3.org/2000/01/rdf-schema#domain';
 export const RDFS_RANGE_IRI = 'http://www.w3.org/2000/01/rdf-schema#range';
 export const RDFS_IS_DEFINED_BY_IRI = 'http://www.w3.org/2000/01/rdf-schema#isDefinedBy';
 export const SKOS_DEFINITION_IRI = 'http://www.w3.org/2004/02/skos/core#definition';
+export const SKOS_PREF_LABEL_IRI = 'http://www.w3.org/2004/02/skos/core#prefLabel';
 export const SKOS_ALT_LABEL_IRI = 'http://www.w3.org/2004/02/skos/core#altLabel';
 export const SKOS_EXAMPLE_IRI = 'http://www.w3.org/2004/02/skos/core#example';
 export const SKOS_SCOPE_NOTE_IRI = 'http://www.w3.org/2004/02/skos/core#scopeNote';
@@ -107,6 +108,41 @@ export const OBO_IAO_0000232_IRI = 'http://purl.obolibrary.org/obo/IAO_0000232';
 export const OBO_IAO_0100001_IRI = 'http://purl.obolibrary.org/obo/IAO_0100001';
 export const CCO_ACRONYM_IRI = 'http://www.ontologyrepository.com/CommonCoreOntologies/ont00001753';
 export const CCO_CURATED_IN_ONTOLOGY_IRI = 'http://www.ontologyrepository.com/CommonCoreOntologies/ont00001760';
+
+const CCEO_CURATED_IN_ONTOLOGY_LOCAL_NAME = 'is_curated_in_ontology';
+
+/** @type {ReadonlyArray<{ namespace: string, curatedIn: string }>} */
+const KNOWN_VOCABULARY_CURATED_IN_FALLBACKS = Object.freeze([
+  {
+    namespace: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+    curatedIn: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
+  },
+  {
+    namespace: 'http://www.w3.org/2000/01/rdf-schema#',
+    curatedIn: 'http://www.w3.org/2000/01/rdf-schema#'
+  },
+  {
+    namespace: 'http://www.w3.org/2002/07/owl#',
+    curatedIn: 'http://www.w3.org/2002/07/owl#'
+  },
+  {
+    namespace: 'http://www.w3.org/2004/02/skos/core#',
+    curatedIn: 'http://www.w3.org/2004/02/skos/core#'
+  },
+  {
+    namespace: 'http://purl.org/dc/elements/1.1/',
+    curatedIn: 'http://purl.org/dc/elements/1.1/'
+  },
+  {
+    namespace: 'http://purl.org/dc/terms/',
+    curatedIn: 'http://purl.org/dc/terms/'
+  }
+]);
+
+/** @type {ReadonlySet<string>} */
+const BUILT_IN_DEPENDENCY_IRI_EXCLUSIONS = Object.freeze(new Set([
+  'http://www.w3.org/1999/02/22-rdf-syntax-ns#nil'
+]));
 
 /** @type {ReadonlyArray<{ id: string, predicateIri: string, label: string }>} */
 const RESOURCE_DETAIL_PREDICATES = Object.freeze([
@@ -842,6 +878,180 @@ export function extractOntologyMetadata(store, fileName) {
     tripleCount: quads.length,
     labeledResourceCount: labeledResources.length
   };
+}
+
+/**
+ * Returns the first display literal for one resource from the preferred predicate list.
+ *
+ * @param {any} store
+ * @param {string} subjectIri
+ * @param {string[]} predicateIris
+ * @returns {string | null}
+ */
+function getFirstPreferredLiteralValue(store, subjectIri, predicateIris) {
+  for (const predicateIri of predicateIris) {
+    const quads = store?.getQuads ? store.getQuads(subjectIri, predicateIri, null, null) : [];
+    const literalQuad = quads.find((/** @type {any} */ quad) => quad?.object?.termType === 'Literal' && quad.object.value);
+    if (literalQuad?.object?.value) {
+      return String(literalQuad.object.value);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Returns the first named-node object for one resource from the preferred predicate list.
+ *
+ * @param {any} store
+ * @param {string} subjectIri
+ * @param {string[]} predicateIris
+ * @returns {string | null}
+ */
+function getFirstPreferredNamedNodeValue(store, subjectIri, predicateIris) {
+  for (const predicateIri of predicateIris) {
+    const quads = store?.getQuads ? store.getQuads(subjectIri, predicateIri, null, null) : [];
+    const namedNodeQuad = quads.find((/** @type {any} */ quad) => quad?.object?.termType === 'NamedNode' && quad.object.value);
+    if (namedNodeQuad?.object?.value) {
+      return String(namedNodeQuad.object.value);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Finds one CCEO-style curation predicate by local name without binding the app
+ * to one namespace spelling.
+ *
+ * @param {any} store
+ * @returns {string[]}
+ */
+function getCceoCuratedInOntologyPredicateIris(store) {
+  const predicateIris = new Set();
+  const quads = store?.getQuads ? store.getQuads(null, null, null, null) : [];
+
+  for (const quad of quads) {
+    const predicateIri = String(quad?.predicate?.value || '');
+    if (predicateIri.endsWith(`#${CCEO_CURATED_IN_ONTOLOGY_LOCAL_NAME}`) ||
+      predicateIri.endsWith(`/${CCEO_CURATED_IN_ONTOLOGY_LOCAL_NAME}`)
+    ) {
+      predicateIris.add(predicateIri);
+    }
+  }
+
+  return Array.from(predicateIris).sort((left, right) => left.localeCompare(right));
+}
+
+/**
+ * Returns the best available ontology-curation value for a dependency IRI.
+ *
+ * @param {any} lookupStore
+ * @param {string} iri
+ * @param {string[]} [cceoFallbackPredicates=[]]
+ * @returns {string}
+ */
+function getDependencyCuratedInValue(lookupStore, iri, cceoFallbackPredicates = []) {
+  const curatedIn = getFirstPreferredNamedNodeValue(lookupStore, iri, [
+    CCO_CURATED_IN_ONTOLOGY_IRI,
+    RDFS_IS_DEFINED_BY_IRI,
+    ...cceoFallbackPredicates
+  ]);
+
+  if (curatedIn) {
+    return curatedIn;
+  }
+
+  const knownVocabularyMatch = KNOWN_VOCABULARY_CURATED_IN_FALLBACKS.find(
+    (entry) => iri.startsWith(entry.namespace)
+  );
+  return knownVocabularyMatch?.curatedIn || '';
+}
+
+/**
+ * Returns true when one IRI looks like it is local to the ontology under study.
+ *
+ * @param {string} iri
+ * @param {string | null} ontologyNamespace
+ * @returns {boolean}
+ */
+function isInOntologyNamespace(iri, ontologyNamespace) {
+  return !!ontologyNamespace && iri.startsWith(ontologyNamespace);
+}
+
+/**
+ * Extracts candidate external IRI dependencies used by a primary ontology.
+ *
+ * The extraction intentionally favors recall over precision:
+ * - every named predicate in the primary ontology is a candidate;
+ * - every named object in the primary ontology is a candidate;
+ * - named subjects outside the ontology namespace are also candidates.
+ *
+ * The lookup store may include import closure data and is used only for labels
+ * and curation-source annotations.
+ *
+ * @param {any} primaryStore
+ * @param {any} [lookupStore=primaryStore]
+ * @returns {import('./types.js').ExternalIriDependency[]}
+ */
+export function extractExternalIriDependencies(primaryStore, lookupStore = primaryStore) {
+  if (!primaryStore || typeof primaryStore.getQuads !== 'function') {
+    return [];
+  }
+
+  const ontologyIri = guessOntologyIri(primaryStore);
+  const ontologyNamespace = getNamespaceFromIri(ontologyIri);
+  const quads = primaryStore.getQuads(null, null, null, null);
+  const dependencies = new Map();
+
+  /**
+   * @param {string} iri
+   * @param {string} reason
+   * @returns {void}
+   */
+  function addDependency(iri, reason) {
+    if (!iri || iri === ontologyIri || BUILT_IN_DEPENDENCY_IRI_EXCLUSIONS.has(iri)) {
+      return;
+    }
+
+    const existing = dependencies.get(iri) || { iri, reasons: new Set() };
+    existing.reasons.add(reason);
+    dependencies.set(iri, existing);
+  }
+
+  for (const quad of quads) {
+    if (quad?.predicate?.termType === 'NamedNode') {
+      addDependency(String(quad.predicate.value || ''), 'predicate');
+    }
+
+    if (quad?.object?.termType === 'NamedNode') {
+      addDependency(String(quad.object.value || ''), 'object');
+    }
+
+    if (
+      quad?.subject?.termType === 'NamedNode' &&
+      !isInOntologyNamespace(String(quad.subject.value || ''), ontologyNamespace)
+    ) {
+      addDependency(String(quad.subject.value || ''), 'external-subject');
+    }
+  }
+
+  const cceoFallbackPredicates = getCceoCuratedInOntologyPredicateIris(lookupStore);
+
+  return Array.from(dependencies.values())
+    .map((entry) => {
+      const label = getFirstPreferredLiteralValue(lookupStore, entry.iri, [
+        RDFS_LABEL_IRI,
+        SKOS_PREF_LABEL_IRI
+      ]) || '';
+      return {
+        iri: entry.iri,
+        label,
+        curatedIn: getDependencyCuratedInValue(lookupStore, entry.iri, cceoFallbackPredicates),
+        reasons: Array.from(entry.reasons).sort((left, right) => left.localeCompare(right))
+      };
+    })
+    .sort((left, right) => left.iri.localeCompare(right.iri));
 }
 
 /**

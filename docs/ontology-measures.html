@@ -5,25 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="icon" type="image/png" href="./images/block-logo.png" />
 
-  <title>Ontology Conformance Diagnostic</title>
-  <meta name="description" content="Ontology Conformance Diagnostic is a web application for inspecting an ontology against standards-oriented quality assurance checks, typically SPARQL or SHACL based, and generating ontology-level and resource-level diagnostic reports, curation-status suggestions, and downloadable exports." />
+  <title>Ontology Measures</title>
+  <meta name="description" content="Ontology Measures is a browser-based workbench for lightweight ontology analytics such as external IRI dependency discovery, import-aware enrichment, and future ROBOT-style structural measures." />
   <meta name="author" content="Jonathan Vajda" />
   <meta name="dcterms.creator" content="Jonathan Vajda" />
   <meta name="dcterms.rightsHolder" content="Jonathan Vajda" />
   <meta name="license" content="GNU General Public License version 3.0" />
   <link rel="license" href="https://www.gnu.org/licenses/gpl-3.0.en.html" />
   <meta name="dcterms.license" content="https://www.gnu.org/licenses/gpl-3.0.en.html" />
-  <meta name="version" content="0.2.0" />
+  <meta name="version" content="0.1.0" />
   <link rel="shortcut icon" href="./favicon.ico" />
 
-  <!-- Public CSS -->
   <link rel="stylesheet" href="./styles/skeleton.css" />
 
-  <!-- App Global CSS -->
   <script>
     (function () {
       const APPBASE_CSS_SOURCES = [
-        /*"./styles/app-base.css", local dev copy first */
         "https://jonathanvajda.github.io/OntoEagle/styles/app-base.css",
         "https://jonathanvajda.github.io/table-nova/styles/app-base.css",
       ];
@@ -33,24 +30,20 @@
           const link = document.createElement("link");
           link.rel = "stylesheet";
           link.href = href;
-
           link.onload = () => resolve(href);
           link.onerror = () => reject(new Error("CSS failed: " + href));
-
           document.head.appendChild(link);
         });
       }
 
       function showFailure(msg) {
         console.error(msg);
-        // Optional user-visible banner
         const style = document.createElement("style");
         style.textContent =
           ".asset-fail-banner{position:fixed;left:0;right:0;top:0;z-index:9999;" +
           "padding:.5rem .75rem;font:14px system-ui;background:#ffe8e8;color:#400;" +
           "border-bottom:1px solid rgba(0,0,0,.2)}";
         document.head.appendChild(style);
-
         const div = document.createElement("div");
         div.className = "asset-fail-banner";
         div.textContent = msg;
@@ -68,7 +61,6 @@
   <script>
     (function () {
       const HEADER_CSS_SOURCES = [
-        /*"./styles/site-header.css",  local dev copy first */
         "https://jonathanvajda.github.io/OntoEagle/styles/site-header.css",
         "https://jonathanvajda.github.io/table-nova/styles/site-header.css",
       ];
@@ -78,24 +70,20 @@
           const link = document.createElement("link");
           link.rel = "stylesheet";
           link.href = href;
-
           link.onload = () => resolve(href);
           link.onerror = () => reject(new Error("CSS failed: " + href));
-
           document.head.appendChild(link);
         });
       }
 
       function showFailure(msg) {
         console.error(msg);
-        // Optional user-visible banner
         const style = document.createElement("style");
         style.textContent =
           ".asset-fail-banner{position:fixed;left:0;right:0;top:0;z-index:9999;" +
           "padding:.5rem .75rem;font:14px system-ui;background:#ffe8e8;color:#400;" +
           "border-bottom:1px solid rgba(0,0,0,.2)}";
         document.head.appendChild(style);
-
         const div = document.createElement("div");
         div.className = "asset-fail-banner";
         div.textContent = msg;
@@ -111,20 +99,27 @@
     })();
   </script>
 
-  <!-- App Local CSS -->
   <link rel="stylesheet" href="./styles/ontology-compliance-diagnostic.css" />
 </head>
 
-<body data-page-id="ontology-compliance-diagnostic">
-
+<body data-page-id="ontology-measures">
   <header id="siteHeader" class="sitehdr-root table-nova-header" role="banner" aria-label="Site header"></header>
 
   <div class="ocd-app ocd-theme-light" id="appRoot">
     <div class="ocd-section ocd-card">
       <div class="ocd-toolbar">
         <div class="ocd-toolbar-left">
-          <label class="ocd-label" for="ontologyFiles">Ontology files</label>
+          <div class="ocd-actions">
+            <h1 class="ocd-title">Ontology Measures</h1>
+            <button id="openMeasuresRoadmapBtn" class="ocd-icon-button" type="button" aria-label="Open ROBOT measure roadmap">?</button>
+          </div>
+          <p>
+            Load one or more ontology files, optionally attach local closure files for declared imports, and run
+            external IRI dependency discovery. This page is intended as the first scaffold for ROBOT-style ontology
+            measures that we can compute locally in the browser.
+          </p>
 
+          <label class="ocd-label" for="ontologyFiles">Ontology files</label>
           <input
             class="ocd-input ocd-input-file"
             type="file"
@@ -133,172 +128,72 @@
             multiple
           />
 
-          <p>
-            Select one or more ontology files to inspect. Turtle, RDF/XML, JSON-LD, and other supported RDF serializations are parsed locally in your browser. Select options and then run the conformance diagnostic scan.<br />
-            The dashboard accumulates ontology runs, and selecting a row opens the ontology metadata, ontology checks, and element checks below.
-          </p>
-
           <div class="ocd-actions">
-            <button id="loadFilesForInspectionBtn" class="ocd-btn ocd-btn-primary" type="button">Load files</button>
-            <button id="runInspectionBtn" class="ocd-btn ocd-btn-secondary" type="button">Run Inspection</button>
+            <button id="loadFilesForMeasuresBtn" class="ocd-btn ocd-btn-primary" type="button">Load files</button>
+            <button id="runMeasuresBtn" class="ocd-btn ocd-btn-secondary" type="button">Run measures</button>
           </div>
-
-          <p class="ocd-help">
-            Tip: For keyboard users, standard rows are focusable — press Enter/Space to open details.
-          </p>
         </div>
 
         <div class="ocd-toolbar-right">
-          <div class="ocd-actions" role="group" aria-label="Related tools">
-            <a class="ocd-btn ocd-btn-tertiary" href="./ontology-measures.html">Ontology Measures</a>
+          <div class="ocd-actions" role="group" aria-label="Export all analyses">
+            <label class="ocd-label" for="exportAllMeasuresFormat">Export all</label>
+            <select id="exportAllMeasuresFormat" class="ocd-select">
+              <option value="csv">CSV</option>
+              <option value="tsv">TSV</option>
+              <option value="json">JSON</option>
+              <option value="yaml">YAML</option>
+              <option value="html">HTML</option>
+            </select>
+            <button id="exportAllMeasuresBtn" class="ocd-btn ocd-btn-tertiary" type="button">Download</button>
           </div>
-
-          <div class="ocd-export" role="group" aria-label="Download exports">
-            <label for="downloadActionSelect" class="ocd-label">Download</label>
-
-            <select id="downloadActionSelect" class="ocd-select">
-              <option value="">Choose export…</option>
-
-              <optgroup label="Current run">
-                <option value="resultsCsv">Results CSV</option>
-                <option value="ontologyYaml">Ontology Report YAML</option>
-                <option value="htmlReport">HTML Report</option>
-                <option value="filteredResourcesCsv">Filtered Resources CSV</option>
-                <option value="standardDetailCsv">Standard Detail CSV</option>
-              </optgroup>
-
-              <optgroup label="Batch run">
-                <option value="batchSummaryCsv">Batch Summary CSV</option>
-              </optgroup>
-            </select>
-
-            <button
-              id="downloadSelectedBtn"
-              class="ocd-btn ocd-btn-tertiary"
-              type="button"
-              disabled
-            >
-              Download
-            </button>
-            </div>
-            
-            <br />
-          <div class="ocd-session" role="group" aria-label="Saved runs">
-            <select id="savedRunsSelect" class="ocd-input ocd-select" aria-label="Saved runs">
-              <option value="">Saved runs…</option>
-            </select>
-            <br />
-            <button id="loadSavedRunBtn" class="ocd-btn ocd-btn-tertiary" type="button">Load</button>
-            <button id="deleteSavedRunBtn" class="ocd-btn ocd-btn-tertiary" type="button">Delete</button>
-            <button id="printReportBtn" class="ocd-btn ocd-btn-tertiary" type="button" disabled>Print</button>
+          <div class="ocd-actions" role="group" aria-label="Related tools">
+            <a class="ocd-btn ocd-btn-tertiary" href="./index.html">Conformance Diagnostic</a>
           </div>
         </div>
       </div>
 
       <div id="preflightContainer" class="ocd-inline-preflight"></div>
-
       <div id="status" class="ocd-status" aria-live="polite"></div>
-      <div id="queryCounter" class="ocd-status" aria-live="polite"></div>
     </div>
 
-    <div id="dashboardContainer" class="ocd-section ocd-card"></div>
-
-    <div id="ontologyReportContainer" class="ocd-section ocd-card"></div>
-
-    <div id="standardDetailContainer" class="ocd-modal" aria-hidden="true"></div>
-    <div class="ocd-section ocd-card ocd-curation-workspace">
-      <div id="curationFiltersContainer" hidden>
-        <h2 class="ocd-title">Resource filters</h2>
-
-        <div id="curationFilters" class="ocd-filters">
-          <div class="ocd-filter">
-            <label class="ocd-label" for="statusFilter">Curation status</label>
-            <select id="statusFilter" class="ocd-input ocd-select">
-              <option value="">All</option>
-              <option value="uncurated">uncurated</option>
-              <option value="metadata incomplete">metadata incomplete</option>
-              <option value="metadata complete">metadata complete</option>
-              <option value="pending final vetting">pending final vetting</option>
-              <option value="requires discussion">requires discussion</option>
-              <option value="ready for release">ready for release</option>
-            </select>
-          </div>
-
-          <div class="ocd-filter">
-            <label class="ocd-label" for="standardFilter">Fails requirement / recommendation</label>
-            <select id="standardFilter" class="ocd-input ocd-select">
-              <option value="">Any</option>
-            </select>
-          </div>
-
-          <div class="ocd-filter">
-            <label class="ocd-label" for="resourceSearch">Resource IRI contains:</label>
-            <input
-              id="resourceSearch"
-              class="ocd-input"
-              type="text"
-              placeholder="e.g., obo:IAO_"
-              autocomplete="off"
-            />
-          </div>
-
-          <div class="ocd-filter ocd-filter-actions">
-            <button id="clearFiltersBtn" class="ocd-btn ocd-btn-secondary" type="button">
-              Clear filters
-            </button>
-          </div>
-        </div>
-
-        <div id="curationFiltersSummary" class="ocd-status" aria-live="polite"></div>
-      </div>
-
-      <div id="curationTableContainer"></div>
-    </div>
-
-    <div id="editSessionContainer" class="ocd-section ocd-card"></div>
+    <div id="measuresResultsContainer" class="ocd-section"></div>
+    <div id="measuresRoadmapContainer" class="ocd-modal" aria-hidden="true"></div>
+    <div id="importSnippetModal" class="ocd-modal" aria-hidden="true"></div>
 
     <div class="ocd-section ocd-card ocd-related-tools-band">
       <div class="ocd-toolbar">
         <div class="ocd-toolbar-left">
           <h2 class="ocd-title">Related Tools</h2>
-          <p class="ocd-muted">Switch to ontology measures when you want structural counts, dependency exports, and ROBOT-adjacent browser metrics.</p>
+          <p class="ocd-muted">Jump back to the conformance diagnostic when you want standards-oriented checks, curation guidance, and editable inspection runs.</p>
         </div>
         <div class="ocd-toolbar-right">
           <div class="ocd-actions" role="group" aria-label="Related tools">
-            <a class="ocd-btn ocd-btn-tertiary" href="./ontology-measures.html">Open Ontology Measures</a>
+            <a class="ocd-btn ocd-btn-tertiary" href="./index.html">Open Conformance Diagnostic</a>
           </div>
         </div>
       </div>
     </div>
   </div>
+
   <footer class="ocd-site-footer">
     <details class="ocd-site-footer-notice" open>
       <summary><strong>Important User Data Notice</strong></summary>
       <p>
-        By design, the ontology files and reports you work with here stay <i>local</i> to your device.
-        Saved runs use your browser's local storage, and exports created from the Download menu or the Print button
-        are generated on your machine. This site does not upload or store your ontology data on a server.
-      </p>
-      <p>
-        Because saved runs are browser-local, you should still export the reports you want to keep or share.
-        If you are interested in optional cloud storage in the future, contact Jonathan Vajda
-        (jonathan.vajda [at] gmail.com).
+        By design, the ontology files and exports you work with here stay <i>local</i> to your device.
+        This page does not upload or store your ontology data on a server.
       </p>
     </details>
     <p class="ocd-site-footer-meta"><small>Copyright 2026, Jonathan Vajda</small></p>
   </footer>
 
-  <!-- Vendor JS -->
   <script src="./app/n3.min.js"></script>
   <script src="./app/jsonld.min.js"></script>
   <script src="./app/rdflib.min.js"></script>
   <script src="./app/comunica-browser.js"></script>
 
-  <!-- Header JS -->
   <script>
     (function () {
       const JS_SOURCES = [
-        /*"./app/site-header.js",  local dev copy first */
         "https://jonathanvajda.github.io/OntoEagle/app/site-header.js",
         "https://jonathanvajda.github.io/table-nova/app/site-header.js",
       ];
@@ -308,10 +203,8 @@
           const s = document.createElement("script");
           s.src = src;
           s.defer = true;
-
           s.onload = () => resolve(src);
           s.onerror = () => reject(new Error("JS failed: " + src));
-
           document.head.appendChild(s);
         });
       }
@@ -335,7 +228,6 @@
       })();
     })();
   </script>
-  <script type="module" src="./app/main.js"></script>
-  
+  <script type="module" src="./app/measures-main.js"></script>
 </body>
 </html>

@@ -3,7 +3,6 @@
 
 import { CURATION_STATUS_IRIS } from './grader.js';
 import {
-  OBO_IAO_0000114_IRI,
   OBO_IAO_0000231_IRI,
   OBO_IAO_0000232_IRI,
   OBO_IAO_0100001_IRI,
@@ -19,6 +18,8 @@ import {
 /** @typedef {import('./types.js').ParsedOntologyState} ParsedOntologyState */
 /** @typedef {import('./types.js').StagedResourceEdit} StagedResourceEdit */
 /** @typedef {import('./types.js').SupplementalOntologyFile} SupplementalOntologyFile */
+/** @typedef {{ Store?: any, DataFactory?: any }} N3Runtime */
+/** @typedef {Window & typeof globalThis & { N3?: N3Runtime }} RuntimeWithN3 */
 
 export const EDITABLE_NOTE_PREDICATES = Object.freeze([
   OBO_IAO_0000232_IRI,
@@ -58,7 +59,9 @@ export async function createParsedOntologyState(text, fileName) {
  * @returns {any}
  */
 function getStoreConstructor() {
-  const runtimeWindow = typeof window !== 'undefined' ? window : globalThis;
+  const runtimeWindow = /** @type {RuntimeWithN3} */ (
+    typeof window !== 'undefined' ? window : globalThis
+  );
   const Store = runtimeWindow?.N3?.Store;
   if (!Store) {
     throw new Error('N3.Store not found on window.N3. Check that n3.min.js is loaded.');
@@ -72,7 +75,9 @@ function getStoreConstructor() {
  * @returns {any}
  */
 function getDataFactory() {
-  const runtimeWindow = typeof window !== 'undefined' ? window : globalThis;
+  const runtimeWindow = /** @type {RuntimeWithN3} */ (
+    typeof window !== 'undefined' ? window : globalThis
+  );
   const dataFactory = runtimeWindow?.N3?.DataFactory;
   if (!dataFactory) {
     throw new Error('N3.DataFactory not found on window.N3. Check that n3.min.js is loaded.');
@@ -224,7 +229,7 @@ export function addAssertion(store, subjectIri, predicateIri, object) {
   const objectTerm = editableObjectValueToTerm(object);
   const existing = store.getQuads(subjectIri, predicateIri, null, null);
 
-  if (existing.some((quad) => termsEqual(quad?.object, objectTerm))) {
+  if (existing.some((/** @type {any} */ quad) => termsEqual(quad?.object, objectTerm))) {
     return;
   }
 
@@ -250,7 +255,7 @@ export function addAssertion(store, subjectIri, predicateIri, object) {
 export function removeAssertions(store, subjectIri, predicateIri, objects) {
   const removableTerms = (Array.isArray(objects) ? objects : []).map(editableObjectValueToTerm);
   const existing = store.getQuads(subjectIri, predicateIri, null, null);
-  const matches = existing.filter((quad) =>
+  const matches = existing.filter((/** @type {any} */ quad) =>
     removableTerms.some((term) => termsEqual(term, quad?.object))
   );
 

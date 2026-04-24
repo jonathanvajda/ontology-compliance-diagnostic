@@ -99,6 +99,10 @@
   margin-bottom: var(--ocd-space-4);
 }
 
+body[data-page-id="ontology-measures"] .ocd-app .ocd-section {
+  max-width: 75%;
+}
+
 .ocd-app .ocd-title {
   margin: 0 0 var(--ocd-space-2) 0;
   font-size: 18px;
@@ -207,6 +211,40 @@
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+}
+
+.ocd-app .ocd-link-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ont-link);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.ocd-app .ocd-link-button:focus-visible,
+.ocd-app .ocd-icon-button:focus-visible {
+  outline: none;
+  box-shadow: var(--ocd-focus-ring);
+}
+
+.ocd-app .ocd-icon-button {
+  appearance: none;
+  border: 1px solid var(--ont-border);
+  background: var(--ocd-surface);
+  color: var(--ont-text);
+  min-width: 40px;
+  height: 28px;
+  margin-left: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.ocd-app .ocd-icon-button:hover {
+  background: var(--ocd-surface-2);
 }
 
 /* =========================
@@ -425,6 +463,8 @@
   vertical-align: top;
   font-size: 13px;
   line-height: 1.35;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 .ocd-app .ocd-table-th {
@@ -561,6 +601,10 @@
   margin-bottom: 6px;
 }
 
+.ocd-app .ocd-detail-section-note {
+  margin: 8px 0 0 0;
+}
+
 .ocd-app .ocd-detail-list {
   margin: 0;
   padding-left: 18px;
@@ -587,24 +631,55 @@
   overflow-y: auto;
   margin: 0;
   position: relative;
+  padding: 24px 28px 28px;
+  box-sizing: border-box;
+}
+
+.ocd-app .ocd-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ocd-space-3);
+  margin-bottom: var(--ocd-space-3);
+}
+
+.ocd-app .ocd-modal-header > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ocd-app .ocd-modal-dialog .ocd-title {
+  font-size: 24px;
+  line-height: 1.15;
+  margin-bottom: 8px;
+}
+
+.ocd-app .ocd-modal-dialog .ocd-muted {
+  margin-top: 0;
 }
 
 .ocd-app .ocd-modal-close {
   appearance: none;
   border: 1px solid var(--ont-border);
-  background: var(--ocd-surface);
+  background: var(--ocd-surface-2);
   color: var(--ont-text);
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
-  font-size: 24px;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1;
   cursor: pointer;
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  padding: 0;
 }
 
 .ocd-app .ocd-modal-close:hover {
-  background: var(--ocd-surface-2);
+  background: color-mix(in srgb, var(--ont-accent) 14%, var(--ocd-surface-2));
 }
 
 .ocd-app .ocd-modal-close:focus-visible {
@@ -910,6 +985,88 @@
   flex: 1 1 220px;
 }
 
+.ocd-app .ocd-candidate-list {
+  display: grid;
+  gap: 10px;
+}
+
+.ocd-app .ocd-candidate-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--ont-border);
+  border-radius: var(--ocd-radius-sm);
+  background: var(--ocd-surface-2);
+  padding: 12px;
+}
+
+.ocd-app .ocd-candidate-main {
+  min-width: 0;
+}
+
+.ocd-app .ocd-candidate-main .ocd-mono {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ocd-app .ocd-candidate-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ocd-app .ocd-snippet-textarea {
+  width: 100%;
+  min-height: 180px;
+  max-width: 100%;
+  resize: vertical;
+}
+
+.ocd-app .ocd-clampable {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ocd-app .ocd-clampable:hover {
+  color: var(--ont-link);
+}
+
+.ocd-app .ocd-clampable:focus-visible {
+  outline: none;
+  box-shadow: var(--ocd-focus-ring);
+  border-radius: 6px;
+}
+
+.ocd-app .ocd-clampable-expanded {
+  display: block;
+  -webkit-line-clamp: initial;
+  overflow: visible;
+}
+
+.ocd-app .ocd-roadmap-table .ocd-table-th,
+.ocd-app .ocd-roadmap-table .ocd-table-td {
+  padding: 8px 10px;
+  font-size: 12.5px;
+  line-height: 1.3;
+}
+
 .ocd-app .ocd-summary-chip {
   display: inline-flex;
   align-items: center;
@@ -922,6 +1079,18 @@
   color: var(--ont-muted);
   font-size: 12px;
   font-weight: 650;
+}
+
+.ocd-app .ocd-summary-chip-warn {
+  background: color-mix(in srgb, #d97706 16%, var(--ocd-surface));
+  border-color: color-mix(in srgb, #d97706 30%, var(--ont-border));
+  color: color-mix(in srgb, #d97706 78%, var(--ont-text));
+}
+
+.ocd-app .ocd-summary-chip-info {
+  background: var(--ocd-info-bg);
+  border-color: color-mix(in srgb, var(--ont-accent) 30%, var(--ont-border));
+  color: var(--ocd-info-text);
 }
 
 .ocd-app .ocd-resource-deprecate-fields {
@@ -966,6 +1135,14 @@
   max-width: 70%;
   margin: 0 auto 2rem auto;
   color: var(--ont-text);
+}
+
+.ocd-app .ocd-related-tools-band .ocd-title {
+  margin-bottom: 6px;
+}
+
+.ocd-app .ocd-related-tools-band p {
+  margin: 0;
 }
 
 .ocd-site-footer-notice {
@@ -1032,5 +1209,25 @@
 
   .ocd-app .ocd-detail-facts-label {
     width: 180px;
+  }
+
+  .ocd-app .ocd-candidate-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ocd-app .ocd-candidate-actions {
+    justify-content: flex-start;
+  }
+
+  .ocd-app .ocd-modal {
+    padding: 3vh 3vw;
+  }
+
+  .ocd-app .ocd-modal-dialog {
+    padding: 18px 18px 20px;
+  }
+
+  .ocd-app .ocd-modal-dialog .ocd-title {
+    font-size: 21px;
   }
 }
