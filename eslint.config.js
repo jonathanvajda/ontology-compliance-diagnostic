@@ -43,11 +43,17 @@ export default [
         HTMLElement: "readonly",
         HTMLInputElement: "readonly",
         HTMLSelectElement: "readonly",
+        HTMLTextAreaElement: "readonly",
         HTMLTableRowElement: "readonly",
+        IDBDatabase: "readonly",
+        IDBObjectStore: "readonly",
+        IDBRequest: "readonly",
+        IDBTransaction: "readonly",
         URL: "readonly",
         console: "readonly",
         document: "readonly",
         fetch: "readonly",
+        indexedDB: "readonly",
         localStorage: "readonly",
         window: "readonly"
       }
@@ -69,7 +75,17 @@ export default [
     languageOptions: {
       globals: {
         console: "readonly",
-        process: "readonly"
+        process: "readonly",
+        setTimeout: "readonly"
+      }
+    }
+  },
+  {
+    files: ["docs/queries/optional-manifest.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: {
+        DATA: "writable"
       }
     }
   }

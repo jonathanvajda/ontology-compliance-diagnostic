@@ -6,6 +6,7 @@ import {
   collectLabeledResources,
   evaluateAllQueries,
   evaluateQueriesAgainstStore,
+  extractExternalIriDependencies,
   OBO_IAO_0000114_IRI
 } from './engine.js';
 import {
@@ -177,12 +178,16 @@ export async function inspectStore(store, fileName, manifest, inspectionScope, o
       ontologyMetadataStore: primaryStore,
       onQueryProgress: options.onQueryProgress
     });
+  const ontologyMetadataWithDependencies = {
+    ...ontologyMetadata,
+    externalIriDependencies: extractExternalIriDependencies(primaryStore, store)
+  };
 
   return buildInspectionItem({
     fileName,
     ontologyIri,
     inspectedAt: new Date().toISOString(),
-    ontologyMetadata,
+    ontologyMetadata: ontologyMetadataWithDependencies,
     results,
     resources,
     resourceDetails,

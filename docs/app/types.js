@@ -311,6 +311,16 @@
  */
 
 /**
+ * One candidate external IRI dependency used by the primary ontology.
+ *
+ * @typedef {Object} ExternalIriDependency
+ * @property {string} iri
+ * @property {string} label
+ * @property {string} curatedIn
+ * @property {string[]} reasons
+ */
+
+/**
  * Extracted ontology metadata and run-level facts for one evaluated ontology.
  *
  * @typedef {Object} OntologyMetadata
@@ -325,6 +335,7 @@
  * @property {string[]} imports
  * @property {number} tripleCount
  * @property {number} labeledResourceCount
+ * @property {ExternalIriDependency[]} [externalIriDependencies]
  */
 
 /**

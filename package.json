@@ -1,10 +1,11 @@
 {
   "dependencies": {
-    "@comunica/query-sparql": "^4.5.0",
+    "@comunica/query-sparql": "^3.3.0",
     "n3": "^1.26.0"
   },
   "name": "ontology-compliance-diagnostic",
   "version": "1.0.0",
+  "type": "module",
   "description": "Reports the maturity of an ontology, assigning a curation status on an element and ontology level.",
   "main": "index.js",
   "directories": {

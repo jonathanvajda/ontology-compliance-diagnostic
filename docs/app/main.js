@@ -112,7 +112,6 @@ const editSessionContainer = document.getElementById('editSessionContainer');
 const ontologyReportContainer = document.getElementById('ontologyReportContainer');
 /** @type {HTMLElement | null} */
 const standardDetailContainer = document.getElementById('standardDetailContainer');
-/** @type {HTMLElement | null} */
 const dashboardContainer = document.getElementById('dashboardContainer');
 /** @type {HTMLElement | null} */
 const preflightContainer = document.getElementById('preflightContainer');
@@ -989,7 +988,7 @@ function extractResourceDetailFromEditOrReport(ontologyIri) {
   if (activeEditSession?.primaryOntology?.store && ontologyIri) {
     try {
       return extractResourceDetail(activeEditSession.primaryOntology.store, ontologyIri);
-    } catch (_error) {
+    } catch {
       return null;
     }
   }
