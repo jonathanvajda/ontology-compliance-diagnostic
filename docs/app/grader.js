@@ -40,7 +40,7 @@ export const CURATION_STATUS_IRIS = Object.freeze({
   METADATA_INCOMPLETE: 'http://purl.obolibrary.org/obo/IAO_0000123',
   METADATA_COMPLETE: 'http://purl.obolibrary.org/obo/IAO_0000120',
   PENDING_FINAL_VETTING: 'http://purl.obolibrary.org/obo/IAO_0000125',
-  REQUIRES_DISCUSSION: 'http://example.org/curation-status/requires-discussion',
+  REQUIRES_DISCUSSION: 'http://purl.obolibrary.org/obo/IAO_0000428',
   READY_FOR_RELEASE: 'http://purl.obolibrary.org/obo/IAO_0000122'
 });
 
